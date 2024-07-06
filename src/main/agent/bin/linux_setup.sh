@@ -3,7 +3,7 @@ set -ueo pipefail
 
 yum update -y
 
-yum install -y docker rsync python yum-utils jq
+yum install -y docker rsync python yum-utils jq make docker-compose
 
 username=agent
 if ! id "$username" &>/dev/null; then

@@ -19,6 +19,10 @@ if not os.path.exists(file_path):
         f.write(str(uuid.uuid4()))
 
     command_helper.command_local("""        
-        bash /scripts/rsync_local_remote.sh              
+        bash /scripts/rsync_local_remote.sh
+    """)
+
+    command_helper.command_remote("""        
+        bash /opt/agent/bin/linux_setup.sh
     """)
 

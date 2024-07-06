@@ -1,3 +1,5 @@
+import glob
+import json
 import os
 
 
@@ -48,27 +50,46 @@ def get_hosts(host_role_filter=None):
     return nodes
 
 
-def get_value(host, key):
+def get_tag_value(host, key):
     nodes = get_hosts()
     for host, roles in nodes.items():
         nodes[host] = {r.split(":")[0].strip(): r.split(":")[1].strip() for r in roles if ":" in r}
     return nodes.get(host).get(key)
 
 
-def get_host_and_roles(host_role_filter=None):
+def get_host_roles(host_role_filter=None):
     nodes = get_hosts(host_role_filter)
     for host, roles in nodes.items():
         nodes[host] = [r for r in roles if ":" not in r]
     return nodes
 
 
+def get_host_tags(host_role_filter=None):
+    nodes = get_hosts(host_role_filter)
+    for host, roles in nodes.items():
+        nodes[host] = {r.split(":")[0]: r.split(":")[1] for r in roles if ":" in r}
+    return nodes
+
+
 def get_host_one(role):
-    hosts = get_host_and_roles()
+    hosts = get_host_roles()
     filtered_hosts = [ip for ip, roles in hosts.items() if role in roles]
     if len(filtered_hosts) > 0:
         return filtered_hosts[0]
 
 
 def get_host_list(role):
-    hosts = get_host_and_roles()
+    hosts = get_host_roles()
     return list(set([ip for ip, roles in hosts.items() if role in roles]))
+
+
+def get_job_roles():
+    jobs = {}
+    for job in glob.glob("/workspace/jobs/*"):
+        metadata_path = os.path.join(job, "metadata.json")
+        if os.path.isdir(job) and os.path.isfile(metadata_path):
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+                name = metadata.get("name", "")
+                jobs[name] = set(metadata.get("roles"))
+    return jobs
