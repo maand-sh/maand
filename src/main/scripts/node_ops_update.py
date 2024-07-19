@@ -1,4 +1,3 @@
-import json
 import os
 import sys
 from pathlib import Path
@@ -16,16 +15,16 @@ def get_host_id():
 
 def transpile():
     host_id = get_host_id()
-    node_ip = os.getenv("NODE_IP")
+    node_ip = os.getenv("HOST")
 
     interface_name = variables.get_network_interface_name()
     cluster_id = variables.get_cluster_id()
 
     values = {
-        "$NODE_NAME": host_id,
-        "$INTERFACE_NAME": interface_name,
-        "$CLUSTER_ID": cluster_id,
-        "$NODE_IP": node_ip,
+        "NODE_NAME": host_id,
+        "INTERFACE_NAME": interface_name,
+        "CLUSTER_ID": cluster_id,
+        "NODE_IP": node_ip,
     }
 
     available_roles = set()
@@ -36,17 +35,19 @@ def transpile():
             available_roles.add(role)
 
     for role in available_roles:
-        key = f"${role}_NODES".upper()
+        key = f"{role}_NODES".upper()
         values[key] = ",".join(utils.get_host_list(role))
 
         for idx, host in enumerate(utils.get_host_list(role)):
-            key = f"${role}_{idx}".upper()
+            key = f"{role}_{idx}".upper()
             values[key] = host
+
+    values["ROLES"] = ",".join(available_roles)
 
     nodes = utils.get_host_tags()
     tags = nodes.get(node_ip)
     for k, v in tags.items():
-        key = f"${k}".upper()
+        key = f"{k}".upper()
         values[key] = v
 
     for ext in ["*.json", "*.service", "*.conf", "*.yml", "*.env", "*.token"]:
@@ -64,7 +65,7 @@ def transpile():
 
 def sync():
     cluster_id = variables.get_cluster_id()
-    host = os.getenv("NODE_IP")
+    host = os.getenv("HOST")
 
     command_helper.command_local("""
         bash /scripts/rsync_remote_local.sh

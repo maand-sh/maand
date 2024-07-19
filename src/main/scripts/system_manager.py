@@ -14,13 +14,13 @@ parser.add_argument("-o", "--operation", help="action", required=True)
 
 
 def run(work_item):
-    node_ip, command_group, operation, ignore_error = work_item
+    host, command_group, operation, ignore_error = work_item
     image = os.getenv("IMAGE_NAME")
     workspace = os.getenv("WORKSPACE")
 
-    name = f"""{command_group}-{node_ip.replace(".", "-")}"""
+    name = f"""{command_group}-{host.replace(".", "-")}"""
     r = command_helper.command_local(cmd=f"""
-        docker run --privileged -e NODE_IP={node_ip} -e NODE_OPS="1" -e WORKSPACE="{workspace}" -v {workspace}:/workspace -v /var/run/docker.sock:/var/run/docker.sock --name "{name}" {image} {operation}
+        docker run --privileged -e HOST={host} -e NODE_OPS="1" -e WORKSPACE="{workspace}" -v {workspace}:/workspace -v /var/run/docker.sock:/var/run/docker.sock --name "{name}" {image} {operation}
     """, return_error=True)
     if r.returncode != 0:
         raise Exception(r)
