@@ -1,3 +1,6 @@
-workspace
 .DS_Store
 .idea
+*.pem
+*.pub
+*.crt
+*.key

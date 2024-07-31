@@ -1,0 +1,19 @@
+{
+  "roles": ["opensearch"],
+  "certs": [
+    {
+      "admin": {
+        "pkcs8": true,
+        "subject": "/CN=opensearch-node.service.consul"
+      },
+      "api": {
+        "pkcs8": true,
+        "subject": "/CN=opensearch-node.service.consul"
+      },
+      "node": {
+        "pkcs8": true,
+        "subject": "/CN=opensearch-node.service.consul"
+      }
+    }
+  ]
+}
