@@ -1,95 +1,73 @@
+import functools
 import glob
 import json
+import logging
 import os
 
 
-def custom_sort_order(element):
-    custom_order_list = []
-    if element in custom_order_list:
-        return custom_order_list.index(element)
-    else:
-        return 99
+def get_agents(role_filter=None):
+    with open("/workspace/agents.json", "r") as f:
+        data = json.loads(f.read())
+
+    agents = {item.get("host"): item for item in data}
+
+    if role_filter:
+        agents = {agent_ip: agent for agent_ip, agent in agents.items() if set(role_filter) & set(agent.get("roles", []))}
+
+    return agents
 
 
-def flatten(nested_list):
-    flat_list = []
-    stack = [nested_list]
-
-    while stack:
-        current_element = stack.pop()
-
-        if isinstance(current_element, list):
-            stack.extend(reversed(current_element))
-        else:
-            flat_list.append(current_element)
-
-    return list(reversed(flat_list))
+def get_agent_and_roles(role_filter=None):
+    agents = get_agents(role_filter)
+    for agent_ip, agent in agents.items():
+        agents[agent_ip] = agent.get("roles", [])
+    return agents
 
 
-def get_hosts(host_role_filter=None):
-    with open("/workspace/hosts.txt", "r") as f:
-        filedata = f.read()
-
-    lines = [x.strip() for x in filedata.split("\n") if x.strip()]
-
-    nodes = {}
-    for line in lines:
-        s = line.split(" ")
-        if len(s) == 2:
-            nodes[s[0]] = s[1].split(",")
-        if len(s) == 1:
-            nodes[s[0]] = []
-
-    for host, roles in nodes.items():
-        roles = list(set(roles))
-        nodes[host] = sorted(roles, key=custom_sort_order)
-
-    if host_role_filter:
-        nodes = {host: roles for host, roles in nodes.items() if set(host_role_filter) & set(roles)}
-
-    return nodes
+def get_agent_and_tags(role_filter=None):
+    agents = get_agents(role_filter)
+    for host, agent in agents.items():
+        agents[host] = agent.get("tags", {})
+    return agents
 
 
-def get_tag_value(host, key):
-    nodes = get_hosts()
-    for host, roles in nodes.items():
-        nodes[host] = {r.split(":")[0].strip(): r.split(":")[1].strip() for r in roles if ":" in r}
-    return nodes.get(host).get(key)
+def get_agents_by_role(role):
+    hosts = get_agent_and_roles()
+    role_hosts = [ip for ip, roles in hosts.items() if role in roles]
+    return role_hosts
 
 
-def get_host_roles(host_role_filter=None):
-    nodes = get_hosts(host_role_filter)
-    for host, roles in nodes.items():
-        nodes[host] = [r for r in roles if ":" not in r]
-    return nodes
-
-
-def get_host_tags(host_role_filter=None):
-    nodes = get_hosts(host_role_filter)
-    for host, roles in nodes.items():
-        nodes[host] = {r.split(":")[0]: r.split(":")[1] for r in roles if ":" in r}
-    return nodes
-
-
-def get_host_one(role):
-    hosts = get_host_roles()
-    filtered_hosts = [ip for ip, roles in hosts.items() if role in roles]
-    if len(filtered_hosts) > 0:
-        return filtered_hosts[0]
-
-
-def get_host_list(role):
-    hosts = get_host_roles()
-    return list(set([ip for ip, roles in hosts.items() if role in roles]))
-
-
-def get_job_roles():
-    jobs = {}
-    for job in glob.glob("/workspace/jobs/*"):
-        metadata_path = os.path.join(job, "metadata.json")
-        if os.path.isdir(job) and os.path.isfile(metadata_path):
+def get_job_metadata(job_folder_name, base_path="/workspace/jobs/"):
+    for metadata_path in glob.glob(f"{base_path}/{job_folder_name}/manifest.json"):
+        if os.path.isfile(metadata_path):
             with open(metadata_path, "r") as f:
                 metadata = json.load(f)
-                name = metadata.get("name", "")
-                jobs[name] = set(metadata.get("roles"))
-    return jobs
+                return metadata
+    return {}
+
+
+@functools.cache
+def get_role_and_jobs():
+    roles = {}
+    for metadata_path in glob.glob("/workspace/jobs/*/manifest.json"):
+        if not os.path.isfile(metadata_path):
+            continue
+
+        with open(metadata_path, "r") as f:
+            metadata = json.load(f)
+            if "roles" not in metadata:
+                continue
+
+        for role in metadata["roles"]:
+            if role not in roles:
+                roles[role] = []
+            job_folder_name = os.path.basename(os.path.dirname(metadata_path))
+            roles[role].append(job_folder_name)
+
+    return roles
+
+
+@functools.cache
+def get_logger():
+    logging.basicConfig(level=logging.INFO)
+    return logging.getLogger(__name__)

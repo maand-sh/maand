@@ -7,5 +7,5 @@ if [ -z "$(ls -A /opt/agent/jobs/)" ]; then
 fi
 
 for job in /opt/agent/jobs/*/Makefile; do
-    make -C "$(dirname "$job")" build stop
+    make -C "$(dirname "$job")" build force-deploy
 done
