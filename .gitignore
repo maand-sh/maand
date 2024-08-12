@@ -4,3 +4,4 @@
 *.pub
 *.crt
 *.key
+__pycache__

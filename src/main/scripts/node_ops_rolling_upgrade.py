@@ -2,8 +2,8 @@ import time
 
 import command_helper
 import context_manager
-import node_ops_update
 import node_ops_run_module
+import node_ops_update
 
 context_manager.validate_cluster_id()
 

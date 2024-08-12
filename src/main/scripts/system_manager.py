@@ -1,7 +1,6 @@
 import argparse
 import multiprocessing
 import os
-import tempfile
 import uuid
 
 import command_helper
@@ -19,29 +18,25 @@ def run(work_item):
     image = os.getenv("IMAGE_NAME")
     workspace = os.getenv("WORKSPACE")
 
-    name = f"""{command_group}-{agent_ip.replace(".", "-")}"""
+    run_id = f"""{command_group}-{agent_ip.replace(".", "-")}"""
 
-    with open(f"/tmp/{name}.env", "w") as f:
+    with open(f"/tmp/{run_id}.env", "w") as f:
+        f.write(f"RUN_ID={run_id}\n")
         f.write(f"AGENT_IP={agent_ip}\n")
         f.write(f"WORKSPACE={workspace}\n")
         f.write(f"NODE_OPS=1\n")
-
         f.write(f"OPERATION={os.getenv("OPERATION")}\n")
-
         if os.getenv("MODULE"):
             f.write(f"MODULE={os.getenv("MODULE")}\n")
+    try:
+        command_helper.command_local(cmd=f"""
+            docker run --env-file /tmp/{run_id}.env -v {workspace}:/workspace -v /var/run/docker.sock:/var/run/docker.sock --name "{run_id}" {image} {operation}
+        """)
+    except Exception as e:
+        if not ignore_error:
+            raise e
 
-    r = command_helper.command_local(cmd=f"""
-        docker run --env-file /tmp/{name}.env -v {workspace}:/workspace -v /var/run/docker.sock:/var/run/docker.sock --name "{name}" {image} {operation}
-    """, return_error=True)
-
-    if r.returncode != 0:
-        raise Exception(r)
-    else:
-        output = command_helper.command_local(cmd=f"docker logs {name}", return_error=True).stdout.decode('utf-8')
-        if output:
-            print(output)
-        command_helper.command_local(cmd=f"docker rm {name}")
+    command_helper.command_local(cmd=f"docker rm {run_id} > /dev/null 2>&1")
 
 
 def main():
@@ -66,4 +61,5 @@ def main():
         pool.map(run, work_items)
 
 
-main()
+if __name__ == "__main__":
+    main()
