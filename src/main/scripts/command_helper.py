@@ -25,4 +25,4 @@ def command_remote(cmd, agent_ip=None):
     env = os.environ.copy()
     env.setdefault("AGENT_IP", agent_ip)
     return command_local(
-        f"ssh -o StrictHostKeyChecking=no -o LogLevel=error $SSH_USER@$AGENT_IP 'sh -s' < {file_path}", env=env)
+        f"ssh -o StrictHostKeyChecking=no -o LogLevel=error $SSH_USER@$AGENT_IP 'sudo sh -s' < {file_path}", env=env)

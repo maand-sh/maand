@@ -31,6 +31,10 @@ if [[ -z "$OPERATION" || -z "$SSH_USER" || -z "$SSH_KEY" || -z "$WORKSPACE" || -
   exit 1
 fi
 
+# validate permission for ssh key check if rsync and makefile is present
+# check /opt folder has permission to sync files
+
+chmod 600 /workspace/"${SSH_KEY}"
 ssh-add /workspace/"${SSH_KEY}" 2> /dev/null
 echo "StrictHostKeyChecking accept-new" >> /etc/ssh/ssh_config
 
