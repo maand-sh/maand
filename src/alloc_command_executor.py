@@ -51,7 +51,7 @@ def prepare_command(cursor, job, command):
     context_manager.export_env_bucket_update_seq(cursor)
     maand.copy_job_modules(cursor, job)
 
-    shutil.copy("/scripts/context.py", f"/modules/{job}/_modules/context.py")
+    shutil.copy("/maand/context.py", f"/modules/{job}/_modules/context.py")
     cursor.execute("SELECT job_name, name, depend_on_config FROM job_db.job_commands WHERE depend_on_job = ? AND depend_on_command = ?", (job, command))
     rows = cursor.fetchall()
     demands = []

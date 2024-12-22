@@ -48,7 +48,7 @@ def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs):
 
     bucket = agent_env.get("BUCKET", "")
     command_helper.command_remote(f"mkdir -p /opt/agent/{bucket}", env=agent_env)
-    command_helper.command_local("bash /scripts/rsync_upload.sh", env=agent_env)
+    command_helper.command_local("bash /maand/rsync_upload.sh", env=agent_env)
 
 
 def validate_agent_bucket(agent_ip, fail_if_no_bucket_id=True):

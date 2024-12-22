@@ -1,5 +1,5 @@
 import sys
-sys.path.append("/scripts")
+sys.path.append("/maand")
 
 import json
 import os
