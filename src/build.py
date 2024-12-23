@@ -6,7 +6,6 @@ import build_allocations
 import build_variables
 import build_certs
 import alloc_command_executor
-import os
 
 logger = utils.get_logger()
 
@@ -32,10 +31,12 @@ def build():
             build_allocations.build(cursor)
             build_variables.build(cursor)
             build_certs.build(cursor)
-            hook(cursor, "post")
+            db.commit()
         except Exception as e:
             db.rollback()
             raise e
+        hook(cursor, "post")
+        # todo : print undefined variables
 
 
 if __name__ == "__main__":

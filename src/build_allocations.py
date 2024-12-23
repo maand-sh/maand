@@ -51,10 +51,24 @@ def build_allocated_jobs(cursor):
 
     for agent_id, agent_ip in agents:
         cursor.execute("""
-                       SELECT j.name FROM job_db.job j JOIN job_db.job_labels jl WHERE jl.job_id = j.job_id AND EXISTS(
-                            SELECT 1 FROM agent a JOIN agent_labels al on a.agent_id = al.agent_id AND jl.label = al.label AND a.agent_ip = ?
-                       )
-                       """, (agent_ip,))
+            SELECT DISTINCT j.name
+            FROM job_db.job j
+            JOIN job_db.job_labels jl ON jl.job_id = j.job_id
+            JOIN agent_labels al ON al.label = jl.label
+            WHERE (
+                SELECT COUNT(DISTINCT jl_sub.label)
+                FROM job_db.job_labels jl_sub
+                WHERE jl_sub.job_id = j.job_id
+            ) = (
+                SELECT COUNT(DISTINCT al_sub.label)
+                FROM agent_labels al_sub
+                JOIN agent a ON al_sub.agent_id = a.agent_id
+                WHERE al_sub.label IN (
+                    SELECT jl_sub.label
+                    FROM job_db.job_labels jl_sub
+                    WHERE jl_sub.job_id = j.job_id
+                ) AND a.agent_ip = ?
+            );""", (agent_ip,))
 
         assigned_jobs = [row[0] for row in cursor.fetchall()]
 
@@ -98,7 +112,6 @@ def validate_resource_limit(cursor):
             job_cpu = float(kv_manager.get(cursor, namespace, "CPU") or "0")
             job_memory = float(kv_manager.get(cursor, namespace, "MEMORY") or "0")
 
-            print(min_memory_mb > max_memory_mb)
             if min_memory_mb > max_memory_mb:
                 raise Exception(
                     f"Memory allocation for job {job} is invalid. "
@@ -157,6 +170,7 @@ def validate_resource_limit(cursor):
         if msg:
             msg = ",".join(msg)
             raise Exception(f"port collision detected: {msg}")
+
 
 def build(cursor):
     build_allocated_jobs(cursor)

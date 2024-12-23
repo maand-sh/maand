@@ -1,5 +1,4 @@
 import argparse
-import copy
 import os
 from concurrent.futures import ThreadPoolExecutor, wait
 

@@ -5,12 +5,12 @@ import const
 import maand
 
 
-def statement(sql, no_rows_found_msg):
+def statement(sql, no_rows_found_msg, mode = "column"):
     with open("/tmp/sql.txt", "w") as f:
         f.write(f"ATTACH DATABASE '{const.JOBS_DB_PATH}' AS job_db;\n")
         f.write(f"ATTACH DATABASE '{const.KV_DB_PATH}' AS kv_db;\n")
         f.write(".header on\n")
-        f.write(".mode column\n")
+        f.write(f".mode {mode}\n")
         f.write(f"{sql}\n")
 
     with maand.get_db() as db:
@@ -26,7 +26,7 @@ def statement(sql, no_rows_found_msg):
 
 if __name__ == "__main__":
 
-    name = "info"
+    name = ""
     if len(sys.argv) > 1:
         name = sys.argv[1]
 
@@ -49,7 +49,14 @@ if __name__ == "__main__":
         statement("SELECT * FROM (SELECT (SELECT name FROM job WHERE job_id = jp.job_id) AS job , name, port FROM job_ports jp) t ORDER BY job, name", "no ports found")
 
     elif name == "info":
-        statement("SELECT bucket_id as bucket, update_seq FROM bucket", "no info found")
+        statement("SELECT bucket_id as bucket, update_seq, (SELECT (1) AS count FROM main.agent) AS 'number_of_agents', (SELECT (1) AS count FROM job_db.job) AS 'number_of_jobs' FROM bucket", "no info found")
 
     else:
-        print("cat allowed commands are only agents, jobs, allocations, alloc_commands, kv, ports and info")
+        print("Usage: maand cat <operation>")
+        print("Operations:")
+        print("  info                   Show bucket infomation")
+        print("  agents                 List agents")
+        print("  allocations            List allocations (agents vs jobs)")
+        print("  alloc_commands         List allocations commands")
+        print("  kv                     List key value")
+        print("  ports                  List ports")
