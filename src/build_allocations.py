@@ -92,13 +92,26 @@ def validate_resource_limit(cursor):
         total_allocated_memory = 0
         total_allocated_cpu = 0
         for job in jobs:
-            min_memory_mb, max_memory_mb, min_cpu, max_cpu = maand.get_job_resource_limits(cursor, job)
+            min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = maand.get_job_resource_limits(cursor, job)
 
             namespace = f"vars/job/{job}"
-            job_cpu = float(kv_manager.get(cursor, namespace, "CPU") or "0") or max_cpu
-            job_memory = float(kv_manager.get(cursor, namespace, "MEMORY") or "0") or max_memory_mb
+            job_cpu = float(kv_manager.get(cursor, namespace, "CPU") or "0")
+            job_memory = float(kv_manager.get(cursor, namespace, "MEMORY") or "0")
 
-            if min_memory_mb > 0 and job_memory <= min_memory_mb:
+            print(min_memory_mb > max_memory_mb)
+            if min_memory_mb > max_memory_mb:
+                raise Exception(
+                    f"Memory allocation for job {job} is invalid. "
+                    f"Minimum allowed: {min_memory_mb} MB, Maximum allowed: {max_memory_mb} MB."
+                )
+
+            if min_cpu_mhz > max_cpu_mhz:
+                raise Exception(
+                    f"CPU allocation for job {job} is invalid. "
+                    f"Minimum allowed: {min_cpu_mhz} MHZ, Maximum allowed: {max_cpu_mhz} MHZ."
+                )
+
+            if min_memory_mb > 0 and job_memory < min_memory_mb:
                 raise Exception(
                     f"Memory allocation for job {job} is invalid. "
                     f"Minimum allowed: {min_memory_mb} MB, Allocated: {job_memory} MB."
@@ -110,16 +123,16 @@ def validate_resource_limit(cursor):
                     f"Maximum allowed: {max_memory_mb} MB, Allocated: {job_memory} MB."
                 )
 
-            if min_cpu > 0 and job_cpu <= min_cpu:
+            if min_cpu_mhz > 0 and job_cpu < min_cpu_mhz:
                 raise Exception(
                     f"CPU allocation for job {job} is invalid. "
-                    f"Minimum allowed: {min_cpu} MHZ, Allocated: {job_cpu} MHZ."
+                    f"Minimum allowed: {min_cpu_mhz} MHZ, Allocated: {job_cpu} MHZ."
                 )
 
-            if max_cpu > 0 and job_cpu > max_cpu:
+            if max_cpu_mhz > 0 and job_cpu > max_cpu_mhz:
                 raise Exception(
                     f"CPU allocation for job {job} is invalid. "
-                    f"Maximum allowed: {max_cpu} MHZ, Allocated: {job_cpu} MHZ."
+                    f"Maximum allowed: {max_cpu_mhz} MHZ, Allocated: {job_cpu} MHZ."
                 )
 
             total_allocated_memory += job_memory
@@ -127,12 +140,12 @@ def validate_resource_limit(cursor):
 
             if total_allocated_memory > agent_memory_mb:
                 raise Exception(
-                    f"Agent {agent_ip} has insufficient memory. "
+                    f"Agent {agent_ip} has insufficient memory for job {job}. "
                     f"Available: {agent_memory_mb} MB, Required: {total_allocated_memory} MB."
                 )
             if total_allocated_cpu > agent_cpu:
                 raise Exception(
-                    f"Agent {agent_ip} has insufficient CPU. "
+                    f"Agent {agent_ip} has insufficient CPU for job {job}. "
                     f"Available: {agent_cpu} MHZ, Required: {total_allocated_cpu} MHZ."
                 )
 
