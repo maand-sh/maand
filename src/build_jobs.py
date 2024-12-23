@@ -48,9 +48,8 @@ def build_deployment_seq(cursor):
 
 
 def get_job_cluster_level_value(job):
-    path = "/bucket/workspace/maand.jobs.conf"
-    if not os.path.exists(path):
-        return {}
+    jobs_conf_path = utils.get_maand_jobs_conf()
+    path = f"/bucket/{jobs_conf_path}"
 
     config_parser = configparser.ConfigParser()
     config_parser.read(path)
@@ -230,7 +229,8 @@ def build_jobs(cursor, job, values):
 
 
 def build_maand_jobs_conf(cursor, job, values):
-    path = "/bucket/workspace/maand.jobs.conf"
+    jobs_conf_path = utils.get_maand_jobs_conf()
+    path = f"/bucket/{jobs_conf_path}"
     if not os.path.exists(path):
         return
 

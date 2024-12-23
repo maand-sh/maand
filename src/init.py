@@ -17,7 +17,8 @@ def build_maand_conf():
         "use_sudo": "1",
         "ssh_user": "agent",
         "ssh_key": "agent.key",
-        "certs_ttl": "60"
+        "certs_ttl": "60",
+        "jobs_conf_path": "workspace/maand.jobs.conf"
     }
 
     config_parser = configparser.ConfigParser()
@@ -37,6 +38,7 @@ def init():
 
         command_helper.command_local(f"mkdir -p {const.BUCKET_PATH}/{{workspace,secrets,logs,data}}")
         command_helper.command_local(f"touch {const.WORKSPACE_PATH}/agents.json")
+        command_helper.command_local(f"touch {const.WORKSPACE_PATH}/workspace/maand.jobs.conf")
 
         with maand.get_db() as db:
             cursor = db.cursor()

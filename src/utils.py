@@ -19,6 +19,14 @@ def get_maand_conf():
     return config_parser
 
 
+def get_maand_jobs_conf():
+    jobs_conf_path = "workspace/maand.jobs.conf"
+    maand_conf = get_maand_conf()
+    if maand_conf.has_option("default", "jobs_conf_path"):
+        jobs_conf_path = maand_conf.get("default", "jobs_conf_path")
+    return jobs_conf_path
+
+
 def split_list(input_list, chunk_size=3):
     return [
         input_list[i : i + chunk_size] for i in range(0, len(input_list), chunk_size)
