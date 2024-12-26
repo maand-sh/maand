@@ -1,5 +1,4 @@
 import re
-import argparse
 import configparser
 import subprocess
 from functools import cache
