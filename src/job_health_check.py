@@ -2,7 +2,7 @@ import time
 
 import alloc_command_executor
 import job_data
-import maand
+import maand_data
 import utils
 
 
@@ -19,7 +19,7 @@ def health_check(cursor, jobs_filter, wait, interval=5, times=10):
             job_commands = job_data.get_job_commands(cursor, job, 'health_check')
             for command in job_commands:
                 alloc_command_executor.prepare_command(cursor, job, command)
-                allocations = maand.get_allocations(cursor, job)
+                allocations = maand_data.get_allocations(cursor, job)
                 for agent_ip in allocations:
                     result = result and alloc_command_executor.execute_alloc_command(cursor, job, command, agent_ip, {})
             return result

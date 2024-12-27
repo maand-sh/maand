@@ -3,7 +3,7 @@ import sys
 
 import command_helper
 import const
-import maand
+import maand_data
 
 
 def split_list(input_list, chunk_size=3):
@@ -12,7 +12,7 @@ def split_list(input_list, chunk_size=3):
     ]
 
 def run(cursor, func, agents=None, concurrency=None, labels_filter=None, agents_filter=None):
-    agents = agents or maand.get_agents(cursor, labels_filter)
+    agents = agents or maand_data.get_agents(cursor, labels_filter)
 
     if agents_filter:
         agents = list(set(agents_filter) & set(agents))

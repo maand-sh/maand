@@ -6,7 +6,7 @@ import job_health_check
 import command_helper
 import const
 import context_manager
-import maand
+import maand_data
 import system_manager
 import utils
 
@@ -32,9 +32,9 @@ def get_args():
 def run_command(agent_ip):
     args = get_args()
     env = context_manager.get_agent_minimal_env(agent_ip)
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
-        jobs = maand.get_agent_jobs(cursor, agent_ip)
+        jobs = maand_data.get_agent_jobs(cursor, agent_ip)
 
         if args.health_check and not job_health_check.health_check(cursor, jobs, False, times=20, interval=5):
             utils.stop_the_world()
@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
     args = get_args()
 
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)

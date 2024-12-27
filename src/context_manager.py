@@ -4,7 +4,7 @@ import subprocess
 import command_helper
 import kv_manager
 import utils
-import maand
+import maand_data
 
 
 def get_agent_dir(agent_ip):
@@ -87,7 +87,7 @@ def validate_cluster_update_seq(agent_ip):
 
 
 def export_env_bucket_update_seq(cursor):
-    bucket = maand.get_bucket_id(cursor)
+    bucket = maand_data.get_bucket_id(cursor)
     os.environ.setdefault("BUCKET", bucket)
-    update_seq = maand.get_update_seq(cursor)
+    update_seq = maand_data.get_update_seq(cursor)
     os.environ.setdefault("UPDATE_SEQ", str(update_seq))

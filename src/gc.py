@@ -1,5 +1,5 @@
 import kv_manager
-import maand
+import maand_data
 
 
 def clean_agents(cursor):
@@ -10,7 +10,7 @@ def clean_agents(cursor):
 
 
 def clean():
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
         clean_agents(cursor)
         kv_manager.gc(cursor, -1)

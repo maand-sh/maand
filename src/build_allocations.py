@@ -1,4 +1,4 @@
-import maand
+import maand_data
 import kv_manager
 import utils
 import workspace
@@ -101,12 +101,12 @@ def validate_resource_limit(cursor):
     agents = cursor.fetchall()
 
     for agent_ip, agent_memory_mb, agent_cpu  in agents:
-        jobs = maand.get_agent_jobs(cursor, agent_ip).keys()
+        jobs = maand_data.get_agent_jobs(cursor, agent_ip).keys()
 
         total_allocated_memory = 0
         total_allocated_cpu = 0
         for job in jobs:
-            min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = maand.get_job_resource_limits(cursor, job)
+            min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = maand_data.get_job_resource_limits(cursor, job)
 
             namespace = f"vars/job/{job}"
             job_cpu = float(kv_manager.get(cursor, namespace, "CPU") or "0")

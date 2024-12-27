@@ -9,7 +9,7 @@ import command_helper
 import const
 import context_manager
 import kv_manager
-import maand
+import maand_data
 import system_manager
 import utils
 
@@ -59,7 +59,7 @@ def update_certificates(cursor, jobs, agent_ip):
         job_cert_kv_location = f"{job}/certs"
         namespace = f"certs/job/{agent_ip}"
 
-        job_certs = maand.get_job_certs_config(cursor, job)
+        job_certs = maand_data.get_job_certs_config(cursor, job)
 
         if job_certs:
             command_helper.command_local(f"mkdir -p {job_cert_location}")
@@ -116,40 +116,38 @@ def transpile(cursor, agent_ip, jobs):
 
 
 def sync(agent_ip):
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
         args = get_args()
         logger.debug("Starting sync process...")
         agent_dir = context_manager.get_agent_dir(agent_ip)
-        bucket_id = maand.get_bucket_id(cursor)
+        bucket_id = maand_data.get_bucket_id(cursor)
 
-        command_helper.command_local(
-            f"""
+        command_helper.command_local(f"""
             mkdir -p {agent_dir}/certs
             rsync {const.SECRETS_PATH}/ca.crt {agent_dir}/certs/
-        """
-        )
+        """)
 
-        agent_id = maand.get_agent_id(cursor, agent_ip)
+        agent_id = maand_data.get_agent_id(cursor, agent_ip)
         with open(f"{agent_dir}/agent.txt", "w") as f:
             f.write(agent_id)
 
         with open(f"{agent_dir}/bucket.txt", "w") as f:
             f.write(bucket_id)
 
-        update_seq = maand.get_update_seq(cursor)
+        update_seq = maand_data.get_update_seq(cursor)
         with open(f"{agent_dir}/update_seq.txt", "w") as f:
             f.write(str(update_seq))
 
-        agent_labels = maand.get_agent_labels(cursor, agent_ip)
+        agent_labels = maand_data.get_agent_labels(cursor, agent_ip)
         with open(f"{agent_dir}/labels.txt", "w") as f:
             f.writelines("\n".join(agent_labels))
 
         command_helper.command_local(f"mkdir -p {agent_dir}/bin")
         command_helper.command_local(f"rsync -r /maand/agent/bin/ {agent_dir}/bin/")
 
-        agent_jobs = maand.get_agent_jobs(cursor, agent_ip)
+        agent_jobs = maand_data.get_agent_jobs(cursor, agent_ip)
         with open(f"{agent_dir}/jobs.json", "w") as f:
             f.writelines(json.dumps(agent_jobs))
 
@@ -157,15 +155,15 @@ def sync(agent_ip):
             command_helper.command_local(f"mkdir -p {agent_dir}/jobs/")
 
             for job in agent_jobs:
-                maand.copy_job(cursor, job, agent_dir)
+                maand_data.copy_job(cursor, job, agent_dir)
 
         transpile(cursor, agent_ip, agent_jobs.keys())
         update_certificates(cursor, agent_jobs, agent_ip)
 
         command_helper.command_local(f"chown -R 1061:1062 {agent_dir}")
 
-        removed_jobs = maand.get_agent_removed_jobs(cursor, agent_ip)
-        disabled_jobs = maand.get_agent_disabled_jobs(cursor, agent_ip)
+        removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
+        disabled_jobs = maand_data.get_agent_disabled_jobs(cursor, agent_ip)
         jobs = list(agent_jobs.keys())
         if args.jobs:
             jobs = list(set(agent_jobs.keys()) & set(args.jobs))
@@ -191,7 +189,7 @@ def validate_agent_namespace(agent_ip):
 
 def update():
     args = get_args()
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)
@@ -199,9 +197,9 @@ def update():
         system_manager.run(cursor, command_helper.scan_agent)
         system_manager.run(cursor, validate_agent_namespace)
 
-        update_seq = maand.get_update_seq(cursor)
+        update_seq = maand_data.get_update_seq(cursor)
         next_update_seq = int(update_seq) + 1
-        maand.update_update_seq(cursor, next_update_seq)
+        maand_data.update_update_seq(cursor, next_update_seq)
 
         db.commit()
 

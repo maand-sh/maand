@@ -5,7 +5,7 @@ import subprocess
 import sys
 
 import context_manager
-import maand
+import maand_data
 import utils
 
 logger = utils.get_logger()
@@ -49,9 +49,9 @@ def execute_alloc_command(cursor, job, command, agent_ip, env):
 
 def prepare_command(cursor, job, command):
     context_manager.export_env_bucket_update_seq(cursor)
-    maand.copy_job_modules(cursor, job)
+    maand_data.copy_job_modules(cursor, job)
 
-    shutil.copy("/maand/context.py", f"/modules/{job}/_modules/context.py")
+    shutil.copy("/maand/maand.py", f"/modules/{job}/_modules/maand.py")
     cursor.execute("SELECT job_name, name, depend_on_config FROM job_db.job_commands WHERE depend_on_job = ? AND depend_on_command = ?", (job, command))
     rows = cursor.fetchall()
     demands = []
@@ -66,17 +66,17 @@ def main():
     command = os.environ.get("COMMAND")
     event = os.environ.get("EVENT", "direct")
 
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
-        commands = maand.get_job_commands(cursor, job, event)
+        commands = maand_data.get_job_commands(cursor, job, event)
         if command not in commands:
             raise Exception(f"job: {job}, command: {command}, event {event} not found")
 
         prepare_command(cursor, job, command)
 
         result = True
-        allocations = maand.get_allocations(cursor, job)
+        allocations = maand_data.get_allocations(cursor, job)
         for agent_ip in allocations:
             result = result and execute_alloc_command(cursor, job, command, agent_ip, {})
 

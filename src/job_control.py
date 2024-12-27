@@ -6,7 +6,7 @@ import alloc_command_executor
 import command_helper
 import context_manager
 import job_health_check
-import maand
+import maand_data
 
 
 def get_args_agents_jobs_health_check():
@@ -29,16 +29,16 @@ def get_args_agents_jobs_health_check():
 
 def run_target(target, job, allocations):
     args = get_args_agents_jobs_health_check()
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
-        job_commands = maand.get_job_commands(cursor, job, f"pre_{target}")
+        job_commands = maand_data.get_job_commands(cursor, job, f"pre_{target}")
         for command in job_commands:
             alloc_command_executor.prepare_command(cursor, job, command)
             for agent_ip in allocations:
                 alloc_command_executor.execute_alloc_command(cursor, job, command, agent_ip, {"TARGET": args.target})
 
-        job_commands = maand.get_job_commands(cursor, job, "job_control")
+        job_commands = maand_data.get_job_commands(cursor, job, "job_control")
         if len(job_commands) == 0:
             for agent_ip in allocations:
                 bucket = os.getenv("BUCKET")
@@ -57,7 +57,7 @@ def run_target(target, job, allocations):
         if args.job_health_check:
             job_health_check.health_check(cursor, [job], wait=True)
 
-        job_commands = maand.get_job_commands(cursor, job, f"post_{target}")
+        job_commands = maand_data.get_job_commands(cursor, job, f"post_{target}")
         for command in job_commands:
             alloc_command_executor.prepare_command(cursor, job, command)
             for agent_ip in allocations:
@@ -67,28 +67,28 @@ def run_target(target, job, allocations):
 def main():
     args = get_args_agents_jobs_health_check()
 
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)
-        max_deployment_seq = maand.get_max_deployment_seq(cursor)
+        max_deployment_seq = maand_data.get_max_deployment_seq(cursor)
 
         for seq in range(0, max_deployment_seq + 1):
-            jobs = maand.get_jobs(cursor, deployment_seq=seq)
+            jobs = maand_data.get_jobs(cursor, deployment_seq=seq)
             if args.jobs:
                 jobs = list(set(jobs) & set(args.jobs))
 
             job_allocations = {}
             for job in jobs:
-                allocations = maand.get_allocations(cursor, job)
+                allocations = maand_data.get_allocations(cursor, job)
                 if args.agents:
                     allocations = list(set(allocations) & set(args.agents))
 
                 if args.target != "stop":
                     allocations = [
                         agent_ip for agent_ip in allocations
-                        if job in maand.get_agent_jobs(cursor, agent_ip).keys()
-                        and maand.get_agent_jobs(cursor, agent_ip)[job].get("disabled") == 0
+                        if job in maand_data.get_agent_jobs(cursor, agent_ip).keys()
+                        and maand_data.get_agent_jobs(cursor, agent_ip)[job].get("disabled") == 0
                     ]
 
                 if allocations:

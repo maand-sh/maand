@@ -2,7 +2,7 @@ import argparse
 
 import command_helper
 import context_manager
-import maand
+import maand_data
 import system_manager
 
 def get_args():
@@ -26,7 +26,7 @@ def run_command(agent_ip):
 if __name__ == "__main__":
     args = get_args()
 
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)

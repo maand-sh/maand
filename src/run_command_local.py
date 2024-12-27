@@ -4,7 +4,7 @@ import os
 import command_helper
 import const
 import context_manager
-import maand
+import maand_data
 import system_manager
 
 
@@ -26,7 +26,7 @@ def get_args():
 
 
 def run_command(agent_ip):
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
         env = context_manager.get_agent_env(cursor, agent_ip)
         command_helper.capture_command_local(f"sh {const.WORKSPACE_PATH}/command.sh", env=env, prefix=agent_ip)
@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     args = get_args()
 
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)

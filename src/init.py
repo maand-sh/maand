@@ -6,7 +6,7 @@ import cert_provider
 import command_helper
 import const
 import kv_manager
-import maand
+import maand_data
 import utils
 
 logger = utils.get_logger()
@@ -39,10 +39,10 @@ def init():
         command_helper.command_local(f"touch {const.WORKSPACE_PATH}/agents.json")
         command_helper.command_local(f"touch {const.WORKSPACE_PATH}/maand.jobs.conf")
 
-        with maand.get_db() as db:
+        with maand_data.get_db() as db:
             cursor = db.cursor()
-            maand.setup_maand_database(cursor)
-            maand.setup_job_database(cursor)
+            maand_data.setup_maand_database(cursor)
+            maand_data.setup_job_database(cursor)
             kv_manager.setup_kv_database(cursor)
 
             with open(f"{const.WORKSPACE_PATH}/agents.json", "r") as f:
@@ -54,7 +54,7 @@ def init():
 
             if not os.path.isfile(f'{const.BUCKET_PATH}/secrets/ca.key'):
                 cert_provider.generate_ca_private()
-                bucket_id = maand.get_bucket_id(cursor)
+                bucket_id = maand_data.get_bucket_id(cursor)
                 cert_provider.generate_ca_public(bucket_id, 3650)
 
             command_helper.command_local("chmod -R 755 /bucket")

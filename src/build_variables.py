@@ -6,7 +6,7 @@ from dotenv import dotenv_values
 
 import const
 import kv_manager
-import maand
+import maand_data
 
 
 def build_env(cursor, path):
@@ -24,17 +24,17 @@ def build_env(cursor, path):
 
 
 def build_agent_variables(cursor):
-    agents = maand.get_agents(cursor, labels_filter=None)
+    agents = maand_data.get_agents(cursor, labels_filter=None)
 
     for agent_ip in agents:
-        labels = maand.get_agent_labels(cursor, agent_ip=None)
-        agent_labels = maand.get_agent_labels(cursor, agent_ip=agent_ip)
+        labels = maand_data.get_agent_labels(cursor, agent_ip=None)
+        agent_labels = maand_data.get_agent_labels(cursor, agent_ip=agent_ip)
 
         values = {}
         for label in labels:
             key_nodes = f"{label}_nodes".upper()
 
-            agents = maand.get_agents(cursor, [label])
+            agents = maand_data.get_agents(cursor, [label])
             values[key_nodes] = ",".join(agents)
 
             key = f"{label}_length".upper()
@@ -65,11 +65,11 @@ def build_agent_variables(cursor):
 
         values["LABELS"] = ",".join(sorted(agent_labels))
 
-        agent_tags = maand.get_agent_tags(cursor, agent_ip)
+        agent_tags = maand_data.get_agent_tags(cursor, agent_ip)
         for key, value in agent_tags.items():
             values[key] = value
 
-        agent_memory, agent_cpu = maand.get_agent_available_resources(cursor, agent_ip)
+        agent_memory, agent_cpu = maand_data.get_agent_available_resources(cursor, agent_ip)
         if agent_memory != "0.0":
             values["AGENT_MEMORY"] = agent_memory
         if agent_cpu != "0.0":

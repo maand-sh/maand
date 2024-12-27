@@ -7,7 +7,8 @@ import const
 import utils
 import context_manager
 import kv_manager
-import maand
+import maand_data
+import hashlib
 
 
 def get_cert_if_available(cursor, file_path, namespace, key):
@@ -24,9 +25,28 @@ def put_cert(cursor, file_path, namespace, key):
         kv_manager.put(cursor, namespace, key, content)
 
 
+def get_ca_file_hash():
+    with open("/bucket/secrets/ca.crt", "r") as f:
+        data = f.read()
+        return hashlib.md5(data.encode('utf-8')).hexdigest()
+
+
+def build_ca_hash(cursor):
+    current_md5_hash = maand_data.get_ca_md5_hash(cursor)
+    new_md5_hash = get_ca_file_hash()
+    if current_md5_hash != new_md5_hash:
+        cursor.execute("UPDATE bucket SET ca_md5_hash = ?", (new_md5_hash,))
+        return True
+    return False
+
+
 def build_agent_certs(cursor):
-    bucket_id = maand.get_bucket_id(cursor)
-    agents = maand.get_agents(cursor, labels_filter=None)
+    bucket_id = maand_data.get_bucket_id(cursor)
+    agents = maand_data.get_agents(cursor, labels_filter=None)
+
+    current_md5_hash = maand_data.get_ca_md5_hash(cursor)
+    new_md5_hash = get_ca_file_hash()
+    update_certs = current_md5_hash != new_md5_hash
 
     for agent_ip in agents:
 
@@ -37,9 +57,10 @@ def build_agent_certs(cursor):
         namespace = f"certs/{agent_ip}"
         agent_cert_path = f"{agent_cert_location}/agent"
 
-        get_cert_if_available(cursor, f"{agent_cert_path}.key", namespace, "certs/agent.key")
-        get_cert_if_available(cursor, f"{agent_cert_path}.crt", namespace, "certs/agent.crt")
-        get_cert_if_available(cursor, f"{agent_cert_path}.pem", namespace, "certs/agent.pem")
+        if not update_certs:
+            get_cert_if_available(cursor, f"{agent_cert_path}.key", namespace, "certs/agent.key")
+            get_cert_if_available(cursor, f"{agent_cert_path}.crt", namespace, "certs/agent.crt")
+            get_cert_if_available(cursor, f"{agent_cert_path}.pem", namespace, "certs/agent.pem")
 
         found = (os.path.isfile(f"{agent_cert_path}.key") and os.path.isfile(f"{agent_cert_path}.crt")
                  and os.path.isfile(f"{agent_cert_path}.pem"))
@@ -57,10 +78,14 @@ def build_agent_certs(cursor):
 
 
 def build_job_certs(cursor):
-    bucket_id = maand.get_bucket_id(cursor)
-    agents = maand.get_agents(cursor, labels_filter=None)
-    jobs = maand.get_jobs(cursor)
+    bucket_id = maand_data.get_bucket_id(cursor)
+    agents = maand_data.get_agents(cursor, labels_filter=None)
+    jobs = maand_data.get_jobs(cursor)
     config_parser = utils.get_maand_conf()
+
+    current_md5_hash = maand_data.get_ca_md5_hash(cursor)
+    new_md5_hash = get_ca_file_hash()
+    update_certs = current_md5_hash != new_md5_hash
 
     for agent_ip in agents:
         for job in jobs:
@@ -69,12 +94,11 @@ def build_job_certs(cursor):
             job_cert_kv_location = f"{job}/certs"
             namespace = f"certs/job/{agent_ip}"
 
-            job_certs = maand.get_job_certs_config(cursor, job)
+            job_certs = maand_data.get_job_certs_config(cursor, job)
 
-            update_certs = False
-            if job_certs:
+            if not update_certs and job_certs:
                 current_hash = kv_manager.get(cursor, namespace, f"{job_cert_kv_location}/md5.hash")
-                new_hash = maand.get_job_md5_hash(cursor, job)
+                new_hash = maand_data.get_job_md5_hash(cursor, job)
                 if current_hash != new_hash:
                     kv_manager.put(cursor, namespace, f"{job_cert_kv_location}/md5.hash", new_hash)
                     update_certs = True
@@ -84,15 +108,16 @@ def build_job_certs(cursor):
                 name = cert.get("name")
                 job_cert_path = f"{job_cert_location}/{name}"
 
-                get_cert_if_available(cursor, f"{job_cert_path}.key", namespace, f"{job_cert_kv_location}/{name}.key")
-                get_cert_if_available(cursor, f"{job_cert_path}.crt", namespace, f"{job_cert_kv_location}/{name}.crt")
-                get_cert_if_available(cursor, f"{job_cert_path}.pem", namespace, f"{job_cert_kv_location}/{name}.pem")
+                if not update_certs:
+                    get_cert_if_available(cursor, f"{job_cert_path}.key", namespace, f"{job_cert_kv_location}/{name}.key")
+                    get_cert_if_available(cursor, f"{job_cert_path}.crt", namespace, f"{job_cert_kv_location}/{name}.crt")
+                    get_cert_if_available(cursor, f"{job_cert_path}.pem", namespace, f"{job_cert_kv_location}/{name}.pem")
 
                 found = (os.path.isfile(f"{job_cert_path}.key") and os.path.isfile(f"{job_cert_path}.crt"))
                 if cert.get("pkcs8", False):
                     found = found and os.path.isfile(f"{job_cert_path}.pem")
 
-                if update_certs or not found or cert_provider.is_certificate_expiring_soon(f"{job_cert_path}.crt"):
+                if not found or cert_provider.is_certificate_expiring_soon(f"{job_cert_path}.crt"):
                     ttl = config_parser.get("default", "certs_ttl") or 60
                     cert_provider.generate_site_private(name, job_cert_location)
                     if cert.get("pkcs8", 0) == 1:
@@ -114,4 +139,5 @@ def build_job_certs(cursor):
 def build(cursor):
     build_agent_certs(cursor)
     build_job_certs(cursor)
+    build_ca_hash(cursor)
     command_helper.command_local(f"rm -f {const.SECRETS_PATH}/ca.srl")

@@ -2,7 +2,7 @@ import sys
 
 import command_helper
 import const
-import maand
+import maand_data
 
 
 def statement(sql, no_rows_found_msg, mode = "column"):
@@ -13,7 +13,7 @@ def statement(sql, no_rows_found_msg, mode = "column"):
         f.write(f".mode {mode}\n")
         f.write(f"{sql}\n")
 
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
         cursor.execute(sql)
         if len(cursor.fetchall()) == 0:

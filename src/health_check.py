@@ -2,7 +2,7 @@ import argparse
 import sys
 
 import job_health_check
-import maand
+import maand_data
 import context_manager
 
 if __name__ == '__main__':
@@ -15,7 +15,7 @@ if __name__ == '__main__':
     if args.jobs:
         args.jobs = args.jobs.split(',')
 
-    with maand.get_db() as db:
+    with maand_data.get_db() as db:
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)

@@ -7,7 +7,7 @@ import uuid
 import const
 import job_data
 import kv_manager
-import maand
+import maand_data
 import utils
 import workspace
 import jsonschema
@@ -202,7 +202,7 @@ def build_jobs(cursor, job, values):
         depend_on = command_obj.get("depend_on", {})
         if executed_on:
             depend_on_job = depend_on.get("job")
-            jobs = maand.get_jobs(cursor)
+            jobs = maand_data.get_jobs(cursor)
             if depend_on_job and depend_on_job not in jobs:
                 logger.error(f"{depend_on_job} job not found: command: {command}, depend on job: {depend_on_job}")
             depend_on_command = depend_on.get("command")
@@ -269,9 +269,9 @@ def build(cursor):
     for job in missing_jobs:
         delete_job(cursor, job)
 
-    agents = maand.get_agents(cursor, labels_filter=None)
+    agents = maand_data.get_agents(cursor, labels_filter=None)
     for agent_ip in agents:
-        agent_removed_jobs = maand.get_agent_removed_jobs(cursor, agent_ip)
+        agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
         for job in agent_removed_jobs:
             for namespace in [f"job/{job}", f"vars/job/{job}"]:
                 deleted_keys = kv_manager.get_keys(cursor, namespace)
