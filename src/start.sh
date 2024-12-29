@@ -6,7 +6,7 @@ if [ -z "${1+x}" ]; then
   echo "Operations:"
   echo "  init                          Initialize the bucket"
   echo "  build                         Build bucket"
-  echo "  update                        Update agents"
+  echo "  deploy                        deploy jobs"
   echo "  uptime                        Check connectivity or uptime"
   echo "  run_command                   Run a command on the agents"
   echo "  run_command_local             Run a command locally"
@@ -45,6 +45,9 @@ case "$OPERATION" in
     ;;
   "update")
     run_python_script "update.py" "$@"
+    ;;
+  "deploy")
+    run_python_script "deploy.py" "$@"
     ;;
   "job")
     run_python_script "job_control.py" "$@"

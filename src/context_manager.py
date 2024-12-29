@@ -5,6 +5,7 @@ import command_helper
 import kv_manager
 import utils
 import maand_data
+import uuid
 
 
 def get_agent_dir(agent_ip):
@@ -32,23 +33,23 @@ def get_agent_env(cursor, agent_ip):
     return env
 
 
-def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs):
+def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs, update_jobs_json=False):
     agent_env = get_agent_minimal_env(agent_ip)
-    lines = []
 
+    lines = []
     for job in jobs:
         lines.append(f"+ jobs/{job}\n")
     for job in agent_removed_jobs:
         lines.append(f"+ jobs/{job}\n")
-
     lines.append("- jobs/*\n")
 
-    with open(f"/tmp/{agent_ip}_rsync_rules.txt", "w") as f:
+    file_id = str(uuid.uuid4())
+    with open(f"/tmp/{file_id}.txt", "w") as f:
         f.writelines(lines)
 
     bucket = agent_env.get("BUCKET", "")
     command_helper.command_remote(f"mkdir -p /opt/agent/{bucket}", env=agent_env)
-    command_helper.command_local("bash /maand/rsync_upload.sh", env=agent_env)
+    command_helper.command_local(f"bash /maand/rsync_upload.sh {file_id}", env=agent_env)
 
 
 def validate_agent_bucket(agent_ip, fail_if_no_bucket_id=True):

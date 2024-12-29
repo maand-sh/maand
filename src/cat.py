@@ -37,7 +37,7 @@ if __name__ == "__main__":
         statement("SELECT DISTINCT job_id, name, version, (CASE WHEN (SELECT COUNT(1) FROM agent_jobs aj WHERE j.name = aj.job AND aj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled, deployment_seq, (SELECT GROUP_CONCAT(label) FROM job_db.job_labels jl WHERE jl.job_id = j.job_id) as labels FROM job_db.job j ORDER BY deployment_seq, name", "no jobs found")
 
     elif name == "allocations":
-        statement("SELECT a.agent_ip, aj.job, aj.disabled, aj.removed FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id LEFT JOIN job_db.job j ON j.name = aj.job ORDER BY aj.job", "no allocations found")
+        statement("SELECT a.agent_ip, aj.job, aj.disabled, aj.removed, (CASE WHEN current_md5_hash = previous_md5_hash THEN 0 ELSE 1 END) as hash_changed FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id LEFT JOIN job_db.job j ON j.name = aj.job ORDER BY aj.job", "no allocations found")
 
     elif name == "alloc_commands":
         statement("SELECT job_name, name as command_name, executed_on, depend_on_job, depend_on_command, depend_on_config  FROM job_commands ORDER BY job_name, name", "no commands found")
