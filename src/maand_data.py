@@ -149,3 +149,8 @@ def get_removed_allocations(cursor, job):
     cursor.execute("SELECT a.agent_ip FROM agent_jobs aj JOIN agent a ON a.agent_id = aj.agent_id WHERE aj.removed = 1 AND aj.job = ?", (job,))
     rows = cursor.fetchall()
     return [row[0] for row in rows]
+
+def get_disabled_allocations(cursor, job):
+    cursor.execute("SELECT a.agent_ip FROM agent_jobs aj JOIN agent a ON a.agent_id = aj.agent_id WHERE aj.disabled = 1 AND aj.job = ?", (job,))
+    rows = cursor.fetchall()
+    return [row[0] for row in rows]

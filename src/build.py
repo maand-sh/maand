@@ -10,17 +10,19 @@ import alloc_command_executor
 logger = utils.get_logger()
 
 
-def hook(cursor, when):
-    target = "build"
+def post_build_hook(cursor):
+    target = "post_build"
     jobs = maand_data.get_jobs(cursor)
     for job in jobs:
         maand_data.copy_job_modules(cursor, job)
         allocations = maand_data.get_allocations(cursor, job)
-        job_commands = maand_data.get_job_commands(cursor, job, f"{when}_{target}")
+        job_commands = maand_data.get_job_commands(cursor, job, target)
         for command in job_commands:
             alloc_command_executor.prepare_command(cursor, job, command)
             for agent_ip in allocations:
-                alloc_command_executor.execute_alloc_command(cursor, job, command, agent_ip, {"TARGET": target})
+                r = alloc_command_executor.execute_alloc_command(cursor, job, command, agent_ip, {"TARGET": target})
+                if not r:
+                    raise Exception(f"error job: {job}, allocation: {agent_ip}, command: {command}, error: failed with error code")
 
 def build():
     with maand_data.get_db() as db:
@@ -35,7 +37,7 @@ def build():
         except Exception as e:
             db.rollback()
             raise e
-        hook(cursor, "post")
+        post_build_hook(cursor)
         # todo : print undefined variables
 
 

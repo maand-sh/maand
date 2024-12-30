@@ -131,7 +131,7 @@ def build_jobs(cursor, job, values):
                                 "items": {
                                     "type": "string",
                                     "allOf": [
-                                        {"pattern": "^(direct|job_control|health_check|pre_build|post_build|pre_[a-zA-Z0-9_]+|post_[a-zA-Z0-9_]+)$"}
+                                        {"pattern": "^(direct|health_check|post_build|pre_deploy|post_deploy|job_control)$"}
                                     ]
                                 }
                             },

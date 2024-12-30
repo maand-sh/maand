@@ -7,6 +7,7 @@ import sys
 import context_manager
 import maand_data
 import utils
+import command_helper
 
 logger = utils.get_logger()
 
