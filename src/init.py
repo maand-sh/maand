@@ -7,6 +7,7 @@ import command_helper
 import const
 import kv_manager
 import maand_data
+import job_data
 import utils
 
 logger = utils.get_logger()
@@ -42,7 +43,7 @@ def init():
         with maand_data.get_db() as db:
             cursor = db.cursor()
             maand_data.setup_maand_database(cursor)
-            maand_data.setup_job_database(cursor)
+            job_data.setup_job_database(cursor)
             kv_manager.setup_kv_database(cursor)
 
             with open(f"{const.WORKSPACE_PATH}/agents.json", "r") as f:

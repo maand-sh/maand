@@ -3,6 +3,7 @@ from jsonschema import Draft202012Validator
 
 import kv_manager
 import maand_data
+import job_data
 import utils
 import workspace
 
@@ -71,6 +72,7 @@ def build_allocated_jobs(cursor):
             );""", (agent_ip,))
 
         assigned_jobs = [row[0] for row in cursor.fetchall()]
+        print(assigned_jobs)
 
         for job in assigned_jobs:
             disabled = agent_ip in disabled_agents
@@ -111,7 +113,7 @@ def validate_resource_limit(cursor):
         total_allocated_memory = 0
         total_allocated_cpu = 0
         for job in jobs:
-            min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = maand_data.get_job_resource_limits(cursor, job)
+            min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = job_data.get_job_resource_limits(cursor, job)
 
             namespace = f"vars/job/{job}"
             job_cpu = float(kv_manager.get(cursor, namespace, "CPU") or "0")

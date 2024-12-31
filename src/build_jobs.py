@@ -169,7 +169,6 @@ def build_jobs(cursor, job, values):
     version = manifest.get("version", "unknown")
     commands = manifest.get("commands")
 
-    labels.append(job)
     labels = list(set(labels))
 
     job_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(job)))

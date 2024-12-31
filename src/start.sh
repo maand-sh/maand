@@ -43,9 +43,6 @@ case "$OPERATION" in
   "build")
     run_python_script "build.py"
     ;;
-  "update")
-    run_python_script "update.py" "$@"
-    ;;
   "deploy")
     run_python_script "deploy.py" "$@"
     ;;

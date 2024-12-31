@@ -112,15 +112,12 @@ def calculate_dir_md5(folder_path):
     return hash_md5.hexdigest()
 
 
-def update_allocation(job, allocation_ip):
-    with maand_data.get_db() as db:
-        cursor = db.cursor()
-
+def prepare_allocation(cursor, job, allocation_ip):
         agent_dir = context_manager.get_agent_dir(allocation_ip)
         agent_jobs = maand_data.get_agent_jobs(cursor, allocation_ip)
         if job in agent_jobs:
             command_helper.command_local(f"mkdir -p {agent_dir}/jobs/")
-            maand_data.copy_job(cursor, job, agent_dir)
+            job_data.copy_job(cursor, job, agent_dir)
 
         transpile(cursor, allocation_ip, job)
         update_certificates(cursor, job, allocation_ip)

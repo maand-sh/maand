@@ -28,7 +28,7 @@ def has_custom_job_control(cursor, job):
 
 
 def get_max_deployment_seq(cursor):
-    cursor.execute("SELECT max(deployment_seq) FROM job_db.job")
+    cursor.execute("SELECT ifnull(max(deployment_seq), 0) AS max_deployment_seq FROM job_db.job")
     row = cursor.fetchone()
     return row[0]
 
