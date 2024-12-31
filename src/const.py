@@ -1,4 +1,3 @@
-
 BUCKET_PATH = "/bucket"
 CONF_PATH = "/bucket/maand.conf"
 WORKSPACE_PATH = "/bucket/workspace"

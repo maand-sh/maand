@@ -1,6 +1,6 @@
-import os
 import base64
 import hashlib
+import os
 from copy import deepcopy
 from pathlib import Path
 from string import Template
@@ -10,6 +10,7 @@ import const
 import context_manager
 import kv_manager
 import maand_data
+import job_data
 import utils
 
 logger = utils.get_logger()
@@ -30,7 +31,7 @@ def update_certificates(cursor, job, agent_ip):
     job_cert_kv_location = f"{job}/certs"
     namespace = f"certs/job/{agent_ip}"
 
-    job_certs = maand_data.get_job_certs_config(cursor, job)
+    job_certs = job_data.get_job_certs_config(cursor, job)
 
     if job_certs:
         command_helper.command_local(f"mkdir -p {job_cert_location}")
@@ -125,4 +126,6 @@ def update_allocation(job, allocation_ip):
         update_certificates(cursor, job, allocation_ip)
 
         md5_hash = calculate_dir_md5(f"{agent_dir}/jobs/{job}")
-        cursor.execute("UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)", (md5_hash, job, allocation_ip,))
+        cursor.execute(
+            "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)",
+            (md5_hash, job, allocation_ip,))

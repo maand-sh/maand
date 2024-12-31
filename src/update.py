@@ -173,10 +173,14 @@ def sync(agent_ip):
         agent_env = context_manager.get_agent_minimal_env(agent_ip)
 
         if removed_jobs:
-            command_helper.capture_command_remote(f"test -f /opt/agent/{bucket_id}/bin/runner.py && python3 /opt/agent/{bucket_id}/bin/runner.py {bucket_id} stop --jobs {','.join(removed_jobs)}", env=agent_env, prefix=agent_ip)
+            command_helper.capture_command_remote(
+                f"test -f /opt/agent/{bucket_id}/bin/runner.py && python3 /opt/agent/{bucket_id}/bin/runner.py {bucket_id} stop --jobs {','.join(removed_jobs)}",
+                env=agent_env, prefix=agent_ip)
 
         if disabled_jobs:
-            command_helper.capture_command_remote(f"test -f /opt/agent/{bucket_id}/bin/runner.py && python3 /opt/agent/{bucket_id}/bin/runner.py {bucket_id} stop --jobs {','.join(disabled_jobs)}", env=agent_env, prefix=agent_ip)
+            command_helper.capture_command_remote(
+                f"test -f /opt/agent/{bucket_id}/bin/runner.py && python3 /opt/agent/{bucket_id}/bin/runner.py {bucket_id} stop --jobs {','.join(disabled_jobs)}",
+                env=agent_env, prefix=agent_ip)
 
         context_manager.rsync_upload_agent_files(agent_ip, jobs, removed_jobs)
 

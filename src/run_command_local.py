@@ -45,4 +45,5 @@ if __name__ == "__main__":
         system_manager.run(cursor, command_helper.scan_agent)
         if not args.no_check:
             system_manager.run(cursor, context_manager.validate_cluster_update_seq)
-        system_manager.run(cursor, run_command, concurrency=args.concurrency, labels_filter=args.labels, agents_filter=args.agents)
+        system_manager.run(cursor, run_command, concurrency=args.concurrency, labels_filter=args.labels,
+                           agents_filter=args.agents)

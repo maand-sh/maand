@@ -1,10 +1,10 @@
-import maand_data
-import kv_manager
-import utils
-import workspace
-
 import jsonschema
 from jsonschema import Draft202012Validator
+
+import kv_manager
+import maand_data
+import utils
+import workspace
 
 logger = utils.get_logger()
 
@@ -42,7 +42,7 @@ def build_allocated_jobs(cursor):
         }
     }
 
-    jsonschema.validate(instance=disabled, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER,)
+    jsonschema.validate(instance=disabled, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER, )
 
     disabled_jobs = disabled.get("jobs", {})
     disabled_agents = disabled.get("agents", [])
@@ -83,9 +83,11 @@ def build_allocated_jobs(cursor):
             cursor.execute("SELECT * FROM agent_jobs WHERE job = ? AND agent_id = ?", (job, agent_id,))
             row = cursor.fetchone()
             if row:
-                cursor.execute("UPDATE agent_jobs SET disabled = ?, removed = 0 WHERE job = ? AND agent_id = ?", (disabled, job, agent_id,))
+                cursor.execute("UPDATE agent_jobs SET disabled = ?, removed = 0 WHERE job = ? AND agent_id = ?",
+                               (disabled, job, agent_id,))
             else:
-                cursor.execute("INSERT INTO agent_jobs (job, agent_id, disabled, removed) VALUES (?, ?, ?, 0)", (job, agent_id, disabled))
+                cursor.execute("INSERT INTO agent_jobs (job, agent_id, disabled, removed) VALUES (?, ?, ?, 0)",
+                               (job, agent_id, disabled))
 
         cursor.execute("SELECT job FROM agent_jobs WHERE agent_id = ?", (agent_id,))
         all_assigned_jobs = [row[0] for row in cursor.fetchall()]
@@ -93,14 +95,17 @@ def build_allocated_jobs(cursor):
         for job in removed_jobs:
             cursor.execute(f"UPDATE agent_jobs SET removed = 1 WHERE job = ? AND agent_id = ?", (job, agent_id,))
 
-        cursor.execute("UPDATE agent_jobs SET disabled = 1 WHERE agent_id IN (SELECT agent_id FROM agent WHERE agent_ip = ? AND detained = 1)",(agent_ip,))
+        cursor.execute(
+            "UPDATE agent_jobs SET disabled = 1 WHERE agent_id IN (SELECT agent_id FROM agent WHERE agent_ip = ? AND detained = 1)",
+            (agent_ip,))
 
 
 def validate_resource_limit(cursor):
-    cursor.execute("SELECT agent_ip, CAST(agent_memory_mb AS FLOAT) AS agent_memory_mb, CAST(agent_cpu AS FLOAT) AS agent_cpu FROM agent")
+    cursor.execute(
+        "SELECT agent_ip, CAST(agent_memory_mb AS FLOAT) AS agent_memory_mb, CAST(agent_cpu AS FLOAT) AS agent_cpu FROM agent")
     agents = cursor.fetchall()
 
-    for agent_ip, agent_memory_mb, agent_cpu  in agents:
+    for agent_ip, agent_memory_mb, agent_cpu in agents:
         jobs = maand_data.get_agent_jobs(cursor, agent_ip).keys()
 
         total_allocated_memory = 0
@@ -162,7 +167,8 @@ def validate_resource_limit(cursor):
                     f"Available: {agent_cpu} MHZ, Required: {total_allocated_cpu} MHZ."
                 )
 
-        cursor.execute("SELECT GROUP_CONCAT(job) AS jobs, port FROM (SELECT (SELECT name AS job FROM job WHERE job_id = jp.job_id) AS job, name, port FROM job_ports jp WHERE port IN (SELECT port FROM job_ports GROUP BY port HAVING COUNT(port) > 1)) GROUP BY port;")
+        cursor.execute(
+            "SELECT GROUP_CONCAT(job) AS jobs, port FROM (SELECT (SELECT name AS job FROM job WHERE job_id = jp.job_id) AS job, name, port FROM job_ports jp WHERE port IN (SELECT port FROM job_ports GROUP BY port HAVING COUNT(port) > 1)) GROUP BY port;")
         rows = cursor.fetchall()
         msg = []
         for (jobs, port,) in rows:

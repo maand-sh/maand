@@ -7,6 +7,7 @@ import command_helper
 import context_manager
 import job_health_check
 import maand_data
+import job_data
 
 
 def get_args_agents_jobs_health_check():
@@ -32,32 +33,35 @@ def run_target(target, job, allocations):
     with maand_data.get_db() as db:
         cursor = db.cursor()
 
-        job_commands = maand_data.get_job_commands(cursor, job, f"pre_{target}")
+        job_commands = job_data.get_job_commands(cursor, job, f"pre_{target}")
         for command in job_commands:
             alloc_command_executor.prepare_command(cursor, job, command)
             for agent_ip in allocations:
                 alloc_command_executor.execute_alloc_command(cursor, job, command, agent_ip, {"TARGET": args.target})
 
-        job_commands = maand_data.get_job_commands(cursor, job, "job_control")
+        job_commands = job_data.get_job_commands(cursor, job, "job_control")
         if len(job_commands) == 0:
             for agent_ip in allocations:
                 bucket = os.getenv("BUCKET")
                 agent_env = context_manager.get_agent_minimal_env(agent_ip)
-                command_helper.capture_command_remote(f"python3 /opt/agent/{bucket}/bin/runner.py {bucket} {target} --jobs {job}", env=agent_env, prefix=agent_ip)
+                command_helper.capture_command_remote(
+                    f"python3 /opt/agent/{bucket}/bin/runner.py {bucket} {target} --jobs {job}", env=agent_env,
+                    prefix=agent_ip)
                 if args.alloc_health_check:
                     job_health_check.health_check(cursor, [job], wait=True)
         else:
             alloc_command_executor.prepare_command(cursor, job, "job_control")
             for command in job_commands:
                 for agent_ip in allocations:
-                    alloc_command_executor.execute_alloc_command(cursor, job, command, agent_ip, {"TARGET": args.target})
+                    alloc_command_executor.execute_alloc_command(cursor, job, command, agent_ip,
+                                                                 {"TARGET": args.target})
                     if args.alloc_health_check:
                         job_health_check.health_check(cursor, [job], wait=True)
 
         if args.job_health_check:
             job_health_check.health_check(cursor, [job], wait=True)
 
-        job_commands = maand_data.get_job_commands(cursor, job, f"post_{target}")
+        job_commands = job_data.get_job_commands(cursor, job, f"post_{target}")
         for command in job_commands:
             alloc_command_executor.prepare_command(cursor, job, command)
             for agent_ip in allocations:
@@ -71,10 +75,10 @@ def main():
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)
-        max_deployment_seq = maand_data.get_max_deployment_seq(cursor)
+        max_deployment_seq = job_data.get_max_deployment_seq(cursor)
 
         for seq in range(0, max_deployment_seq + 1):
-            jobs = maand_data.get_jobs(cursor, deployment_seq=seq)
+            jobs = job_data.get_jobs(cursor, deployment_seq=seq)
             if args.jobs:
                 jobs = list(set(jobs) & set(args.jobs))
 
@@ -88,7 +92,7 @@ def main():
                     allocations = [
                         agent_ip for agent_ip in allocations
                         if job in maand_data.get_agent_jobs(cursor, agent_ip).keys()
-                        and maand_data.get_agent_jobs(cursor, agent_ip)[job].get("disabled") == 0
+                           and maand_data.get_agent_jobs(cursor, agent_ip)[job].get("disabled") == 0
                     ]
 
                 if allocations:

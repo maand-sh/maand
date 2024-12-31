@@ -39,7 +39,7 @@ def get_job_files(job_name):
 
 def get_disabled_jobs():
     if not os.path.exists(f"{const.WORKSPACE_PATH}/disabled.json"):
-        return {"jobs":{}, "agents":[]}
+        return {"jobs": {}, "agents": []}
 
     with open(f"{const.WORKSPACE_PATH}/disabled.json", "r") as f:
         return json.load(f)

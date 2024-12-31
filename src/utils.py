@@ -1,5 +1,5 @@
-import re
 import configparser
+import re
 import subprocess
 from functools import cache
 
@@ -8,8 +8,10 @@ from log_manager import LoggerManager
 
 log_manager = LoggerManager()
 
+
 def get_logger(ns="maand"):
     return log_manager.get_logger(ns)
+
 
 @cache
 def get_maand_conf():
@@ -28,7 +30,7 @@ def get_maand_jobs_conf():
 
 def split_list(input_list, chunk_size=3):
     return [
-        input_list[i : i + chunk_size] for i in range(0, len(input_list), chunk_size)
+        input_list[i: i + chunk_size] for i in range(0, len(input_list), chunk_size)
     ]
 
 
@@ -58,12 +60,11 @@ def extract_size_in_mb(size_string):
     return size_in_mb
 
 
-
 def extract_cpu_frequency_in_mhz(freq_string):
     unit_to_mhz = {
-        "MHZ": 1,          # Megahertz
-        "GHZ": 10**3,      # Gigahertz to MHz
-        "THZ": 10**6,      # Terahertz to MHz
+        "MHZ": 1,  # Megahertz
+        "GHZ": 10 ** 3,  # Gigahertz to MHz
+        "THZ": 10 ** 6,  # Terahertz to MHz
     }
 
     if isinstance(freq_string, (int, float)):
@@ -83,7 +84,6 @@ def extract_cpu_frequency_in_mhz(freq_string):
 
     frequency_in_mhz = frequency * unit_to_mhz[unit]
     return frequency_in_mhz
-
 
 
 def stop_the_world():

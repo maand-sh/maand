@@ -1,10 +1,12 @@
 import uuid
-import utils
-import workspace
-import kv_manager
-import maand_data
+
 import jsonschema
 from jsonschema import Draft202012Validator
+
+import kv_manager
+import maand_data
+import utils
+import workspace
 
 logger = utils.get_logger()
 
@@ -45,7 +47,7 @@ def build_agents(cursor):
         }
     }
 
-    jsonschema.validate(instance=agents, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER,)
+    jsonschema.validate(instance=agents, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER, )
 
     for index, agent in enumerate(agents):
         agent_ip = agent.get("host")
@@ -62,9 +64,13 @@ def build_agents(cursor):
             agent_id = str(uuid.uuid4())
 
         if row:
-            cursor.execute("UPDATE agent SET agent_memory_mb = ?, agent_cpu = ?, position = ?, detained = 0 WHERE agent_id = ?", (agent_memory, agent_cpu, index, agent_id, ))
+            cursor.execute(
+                "UPDATE agent SET agent_memory_mb = ?, agent_cpu = ?, position = ?, detained = 0 WHERE agent_id = ?",
+                (agent_memory, agent_cpu, index, agent_id,))
         else:
-            cursor.execute("INSERT INTO agent (agent_id, agent_ip, agent_memory_mb, agent_cpu, detained, position) VALUES (?, ?, ?, ?, 0, ?)", (agent_id, agent_ip, agent_memory, agent_cpu, index,))
+            cursor.execute(
+                "INSERT INTO agent (agent_id, agent_ip, agent_memory_mb, agent_cpu, detained, position) VALUES (?, ?, ?, ?, 0, ?)",
+                (agent_id, agent_ip, agent_memory, agent_cpu, index,))
 
         cursor.execute("DELETE FROM agent_labels WHERE agent_id = ?", (agent_id,))
         labels = agent.get("labels", [])
@@ -89,7 +95,7 @@ def build_agents(cursor):
     agents_ip = {row[0] for row in rows}
 
     for agent_ip in agents_ip:
-        for namespace in [ f"certs/{agent_ip}", f"vars/{agent_ip}"]:
+        for namespace in [f"certs/{agent_ip}", f"vars/{agent_ip}"]:
             keys = kv_manager.get_keys(cursor, namespace)
             for key in keys:
                 kv_manager.delete(cursor, namespace, key)

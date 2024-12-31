@@ -5,6 +5,7 @@ import context_manager
 import maand_data
 import system_manager
 
+
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--agents', default="")
@@ -19,9 +20,11 @@ def get_args():
 
     return args
 
+
 def run_command(agent_ip):
     agent_env = context_manager.get_agent_minimal_env(agent_ip)
     command_helper.capture_command_remote("uptime", env=agent_env, prefix=agent_ip)
+
 
 if __name__ == "__main__":
     args = get_args()

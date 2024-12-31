@@ -6,8 +6,8 @@ import sys
 
 import context_manager
 import maand_data
+import job_data
 import utils
-import command_helper
 
 logger = utils.get_logger()
 
@@ -50,14 +50,16 @@ def execute_alloc_command(cursor, job, command, agent_ip, env):
 
 def prepare_command(cursor, job, command):
     context_manager.export_env_bucket_update_seq(cursor)
-    maand_data.copy_job_modules(cursor, job)
+    job_data.copy_job_modules(cursor, job)
 
     shutil.copy("/maand/maand.py", f"/modules/{job}/_modules/maand.py")
-    cursor.execute("SELECT job_name, name, depend_on_config FROM job_db.job_commands WHERE depend_on_job = ? AND depend_on_command = ?", (job, command))
+    cursor.execute(
+        "SELECT job_name, name, depend_on_config FROM job_db.job_commands WHERE depend_on_job = ? AND depend_on_command = ?",
+        (job, command))
     rows = cursor.fetchall()
     demands = []
     for depend_on_job, depend_on_command, depend_on_config in rows:
-        demands.append({"job": depend_on_job, "command": depend_on_command, "config": json.loads(depend_on_config) })
+        demands.append({"job": depend_on_job, "command": depend_on_command, "config": json.loads(depend_on_config)})
     with open(f"/modules/{job}/_modules/demands.json", "w") as f:
         f.write(json.dumps(demands))
 
@@ -70,7 +72,7 @@ def main():
     with maand_data.get_db() as db:
         cursor = db.cursor()
 
-        commands = maand_data.get_job_commands(cursor, job, event)
+        commands = job_data.get_job_commands(cursor, job, event)
         if command not in commands:
             raise Exception(f"job: {job}, command: {command}, event {event} not found")
 

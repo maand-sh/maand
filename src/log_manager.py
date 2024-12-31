@@ -58,5 +58,6 @@ class LoggerManager:
 # Create a single global instance
 log_manager = LoggerManager()
 
+
 def get_log_manager():
     return log_manager

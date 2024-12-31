@@ -1,11 +1,11 @@
 import os
 import subprocess
+import uuid
 
 import command_helper
 import kv_manager
-import utils
 import maand_data
-import uuid
+import utils
 
 
 def get_agent_dir(agent_ip):
@@ -57,7 +57,8 @@ def validate_agent_bucket(agent_ip, fail_if_no_bucket_id=True):
     try:
         agent_env = get_agent_minimal_env(agent_ip)
         bucket = os.environ.get("BUCKET")
-        res = command_helper.command_remote(f"ls /opt/agent/{bucket}", agent_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        res = command_helper.command_remote(f"ls /opt/agent/{bucket}", agent_env, stdout=subprocess.PIPE,
+                                            stderr=subprocess.PIPE)
         if fail_if_no_bucket_id and res.returncode != 0:
             raise Exception(f"agent {agent_ip} : bucket not found.")
     except Exception as e:
@@ -71,7 +72,8 @@ def validate_update_seq(agent_ip):
         agent_env = get_agent_minimal_env(agent_ip)
         update_seq = os.environ.get("UPDATE_SEQ")
         bucket_id = os.environ.get("BUCKET")
-        res = command_helper.command_remote(f"cat /opt/agent/{bucket_id}/update_seq.txt", agent_env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        res = command_helper.command_remote(f"cat /opt/agent/{bucket_id}/update_seq.txt", agent_env,
+                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if res.returncode == 1:
             raise Exception(f"{agent_ip} : {res.stderr}")
         agent_update_seq = res.stdout.decode("utf-8")

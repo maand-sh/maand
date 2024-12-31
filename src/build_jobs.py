@@ -4,23 +4,26 @@ import json
 import os
 import uuid
 
+import jsonschema
+from jsonschema import Draft202012Validator
+
 import const
 import job_data
 import kv_manager
 import maand_data
 import utils
 import workspace
-import jsonschema
-from jsonschema import Draft202012Validator
 
 logger = utils.get_logger()
 
 
 def delete_job(cursor, job):
     cursor.execute("DELETE FROM job_db.job_ports WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)", (job,))
-    cursor.execute("DELETE FROM job_db.job_labels WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)", (job,))
+    cursor.execute("DELETE FROM job_db.job_labels WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)",
+                   (job,))
     cursor.execute("DELETE FROM job_db.job_certs WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)", (job,))
-    cursor.execute("DELETE FROM job_db.job_commands WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)", (job,))
+    cursor.execute("DELETE FROM job_db.job_commands WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)",
+                   (job,))
     cursor.execute("DELETE FROM job_db.job_files WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)", (job,))
     cursor.execute("DELETE FROM job_db.job WHERE name = ?", (job,))
 
@@ -60,7 +63,7 @@ def get_job_cluster_level_value(job):
         keys = config_parser.options(name)
         for key in keys:
             key = key.upper()
-            value =  config_parser.get(name, key)
+            value = config_parser.get(name, key)
             job_kv[key] = value
 
     if "MEMORY" in job_kv:
@@ -131,7 +134,8 @@ def build_jobs(cursor, job, values):
                                 "items": {
                                     "type": "string",
                                     "allOf": [
-                                        {"pattern": "^(direct|health_check|post_build|pre_deploy|post_deploy|job_control)$"}
+                                        {
+                                            "pattern": "^(direct|health_check|post_build|pre_deploy|post_deploy|job_control)$"}
                                     ]
                                 }
                             },
@@ -156,7 +160,7 @@ def build_jobs(cursor, job, values):
 
     manifest = workspace.get_job_manifest(job)
 
-    jsonschema.validate(instance=manifest, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER,)
+    jsonschema.validate(instance=manifest, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER, )
 
     files = workspace.get_job_files(job)
 
@@ -165,16 +169,24 @@ def build_jobs(cursor, job, values):
     version = manifest.get("version", "unknown")
     commands = manifest.get("commands")
 
+    labels.append(job)
+    labels = list(set(labels))
+
     job_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(job)))
-    min_memory_limit = float(utils.extract_size_in_mb(manifest.get("resources", {}).get("memory", {}).get("min", "0 MB")))
-    max_memory_limit = float(utils.extract_size_in_mb(manifest.get("resources", {}).get("memory", {}).get("max", "0 MB")))
-    min_cpu_limit = float(utils.extract_cpu_frequency_in_mhz(manifest.get("resources", {}).get("cpu", {}).get("min", "0 MHZ")))
-    max_cpu_limit = float(utils.extract_cpu_frequency_in_mhz(manifest.get("resources", {}).get("cpu", {}).get("max", "0 MHZ")))
+    min_memory_limit = float(
+        utils.extract_size_in_mb(manifest.get("resources", {}).get("memory", {}).get("min", "0 MB")))
+    max_memory_limit = float(
+        utils.extract_size_in_mb(manifest.get("resources", {}).get("memory", {}).get("max", "0 MB")))
+    min_cpu_limit = float(
+        utils.extract_cpu_frequency_in_mhz(manifest.get("resources", {}).get("cpu", {}).get("min", "0 MHZ")))
+    max_cpu_limit = float(
+        utils.extract_cpu_frequency_in_mhz(manifest.get("resources", {}).get("cpu", {}).get("max", "0 MHZ")))
     ports = manifest.get("resources", {}).get("ports", {})
     certs_hash = hashlib.md5(json.dumps(certs).encode()).hexdigest()
 
-    cursor.execute("INSERT INTO job_db.job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash, deployment_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
-                    (job_id, job, version, min_memory_limit, max_memory_limit, min_cpu_limit, max_cpu_limit, certs_hash))
+    cursor.execute(
+        "INSERT INTO job_db.job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash, deployment_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        (job_id, job, version, min_memory_limit, max_memory_limit, min_cpu_limit, max_cpu_limit, certs_hash))
 
     values["MIN_MEMORY_LIMIT"] = str(min_memory_limit)
     values["MAX_MEMORY_LIMIT"] = str(max_memory_limit)
@@ -195,21 +207,22 @@ def build_jobs(cursor, job, values):
             pkcs8 = config.get("pkcs8", 0)
             subject = config.get("subject", "")
             cursor.execute("INSERT INTO job_db.job_certs (job_id, name, pkcs8, subject) VALUES (?, ?, ?, ?)",
-                            (job_id, name, pkcs8, subject,))
+                           (job_id, name, pkcs8, subject,))
 
     for command, command_obj in commands.items():
         executed_on = command_obj.get("executed_on", ["direct"])
         depend_on = command_obj.get("depend_on", {})
         if executed_on:
             depend_on_job = depend_on.get("job")
-            jobs = maand_data.get_jobs(cursor)
+            jobs = job_data.get_jobs(cursor)
             if depend_on_job and depend_on_job not in jobs:
                 logger.error(f"{depend_on_job} job not found: command: {command}, depend on job: {depend_on_job}")
             depend_on_command = depend_on.get("command")
             depend_on_config = json.dumps(depend_on.get("config", {}))
             for on in executed_on:
-                cursor.execute("INSERT INTO job_db.job_commands (job_id, job_name, name, executed_on, depend_on_job, depend_on_command, depend_on_config) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                (job_id, job, command, on, depend_on_job, depend_on_command, depend_on_config))
+                cursor.execute(
+                    "INSERT INTO job_db.job_commands (job_id, job_name, name, executed_on, depend_on_job, depend_on_command, depend_on_config) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (job_id, job, command, on, depend_on_job, depend_on_command, depend_on_config))
         else:
             logger.error(f"The commands must include an 'executed_on'. job: {job}, command: {command}")
 
@@ -220,7 +233,7 @@ def build_jobs(cursor, job, values):
             with open(f"{const.WORKSPACE_PATH}/jobs/{file}", 'rb') as f:
                 content = f.read()
         cursor.execute("INSERT INTO job_db.job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)",
-                        (job_id, file, content, isdir))
+                       (job_id, file, content, isdir))
 
     for name, port in ports.items():
         name = name.upper()

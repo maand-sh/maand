@@ -1,17 +1,19 @@
 import argparse
-import os
-import json
-import const
 import base64
-import system_manager
-import kv_manager
-import update_job
+import json
+import os
+from itertools import chain
+
 import alloc_command_executor
 import command_helper
+import const
 import context_manager
 import job_health_check
+import kv_manager
 import maand_data
-from itertools import chain
+import job_data
+import system_manager
+import update_job
 
 
 def get_args():
@@ -27,12 +29,13 @@ def run_target(target, job, allocations, alloc_health_check_flag=False, job_heal
     with maand_data.get_db() as db:
         cursor = db.cursor()
 
+        available_allocations = maand_data.get_allocations(cursor, job)
         # Run pre-target commands
-        pre_commands = maand_data.get_job_commands(cursor, job, "pre_deploy")
-        execute_commands(cursor, pre_commands, job, allocations, target)
+        pre_commands = job_data.get_job_commands(cursor, job, "pre_deploy")
+        execute_commands(cursor, pre_commands, job, available_allocations, target)
 
         # Run main job control or default action
-        job_control_commands = maand_data.get_job_commands(cursor, job, "job_control")
+        job_control_commands = job_data.get_job_commands(cursor, job, "job_control")
         if job_control_commands:
             execute_commands(cursor, job_control_commands, job, allocations, target, alloc_health_check_flag)
         else:
@@ -43,8 +46,8 @@ def run_target(target, job, allocations, alloc_health_check_flag=False, job_heal
             job_health_check.health_check(cursor, [job], wait=True)
 
         # Run post-target commands
-        post_commands = maand_data.get_job_commands(cursor, job, "post_deploy")
-        execute_commands(cursor, post_commands, job, allocations, target)
+        post_commands = job_data.get_job_commands(cursor, job, "post_deploy")
+        execute_commands(cursor, post_commands, job, available_allocations, target)
 
 
 def execute_commands(cursor, commands, job, allocations, target, alloc_health_check=False):
@@ -89,9 +92,9 @@ def handle_disabled_stopped_allocs(job):
         allocs.extend(disabled_allocations)
         db.commit()
 
-    if counts['removed'] == counts['total']: # job removed
+    if counts['removed'] == counts['total']:  # job removed
         run_target("stop", job, allocs, alloc_health_check_flag=False, job_health_check_flag=False)
-    elif counts['removed'] > 0: # few alloctions removed
+    elif counts['removed'] > 0:  # few alloctions removed
         run_target("stop", job, allocs, alloc_health_check_flag=True, job_health_check_flag=False)
 
 
@@ -104,9 +107,9 @@ def handle_new_updated_allocs(job):
         changed_allocations = maand_data.get_changed_allocations(cursor, job)
         db.commit()
 
-    if counts['new'] > 0: # allocs added
+    if counts['new'] > 0:  # allocs added
         run_target("start", job, new_allocations, alloc_health_check_flag=False, job_health_check_flag=True)
-    elif counts['changed'] < counts["total"]: # few alloc modified
+    elif counts['changed'] < counts["total"]:  # few alloc modified
         run_target("restart", job, changed_allocations, alloc_health_check_flag=True, job_health_check_flag=False)
     else:
         run_target("restart", job, allocations, alloc_health_check_flag=True, job_health_check_flag=False)
@@ -192,12 +195,12 @@ def run_deploy(jobs):
 
     for job, allocations in job_allocations.items():
         for allocation_ip in allocations:
-            update_job.update_allocation(job, allocation_ip) # copy files to agent dir
+            update_job.update_allocation(job, allocation_ip)  # copy files to agent dir
 
     for agent_ip in jobs_agents:
         agent_jobs = maand_data.get_agent_jobs(cursor, agent_ip)
         agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
-        context_manager.rsync_upload_agent_files(agent_ip, agent_jobs.keys(), agent_removed_jobs) # update changes
+        context_manager.rsync_upload_agent_files(agent_ip, agent_jobs.keys(), agent_removed_jobs)  # update changes
 
     for job in jobs:
         handle_new_updated_allocs(job)
@@ -213,9 +216,9 @@ def main():
         system_manager.run(cursor, command_helper.scan_agent)
         context_manager.export_env_bucket_update_seq(cursor)
 
-        max_deployment_seq = maand_data.get_max_deployment_seq(cursor)
+        max_deployment_seq = job_data.get_max_deployment_seq(cursor)
         for seq in range(max_deployment_seq + 1):
-            jobs = maand_data.get_jobs(cursor, deployment_seq=seq)
+            jobs = job_data.get_jobs(cursor, deployment_seq=seq)
             if args.jobs:
                 jobs = list(set(jobs) & set(args.jobs))
 

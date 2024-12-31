@@ -1,14 +1,15 @@
 import base64
+import hashlib
 import os
 
 import cert_provider
 import command_helper
 import const
-import utils
 import context_manager
 import kv_manager
 import maand_data
-import hashlib
+import job_data
+import utils
 
 
 def get_cert_if_available(cursor, file_path, namespace, key):
@@ -16,7 +17,7 @@ def get_cert_if_available(cursor, file_path, namespace, key):
     if content:
         content = base64.b64decode(content)
         with open(file_path, "wb") as f:
-             f.write(content)
+            f.write(content)
 
 
 def put_cert(cursor, file_path, namespace, key):
@@ -80,7 +81,7 @@ def build_agent_certs(cursor):
 def build_job_certs(cursor):
     bucket_id = maand_data.get_bucket_id(cursor)
     agents = maand_data.get_agents(cursor, labels_filter=None)
-    jobs = maand_data.get_jobs(cursor)
+    jobs = job_data.get_jobs(cursor)
     config_parser = utils.get_maand_conf()
 
     current_md5_hash = maand_data.get_ca_md5_hash(cursor)
@@ -94,11 +95,11 @@ def build_job_certs(cursor):
             job_cert_kv_location = f"{job}/certs"
             namespace = f"certs/job/{agent_ip}"
 
-            job_certs = maand_data.get_job_certs_config(cursor, job)
+            job_certs = job_data.get_job_certs_config(cursor, job)
 
             if not update_certs and job_certs:
                 current_hash = kv_manager.get(cursor, namespace, f"{job_cert_kv_location}/md5.hash")
-                new_hash = maand_data.get_job_md5_hash(cursor, job)
+                new_hash = job_data.get_job_md5_hash(cursor, job)
                 if current_hash != new_hash:
                     kv_manager.put(cursor, namespace, f"{job_cert_kv_location}/md5.hash", new_hash)
                     update_certs = True
@@ -109,9 +110,12 @@ def build_job_certs(cursor):
                 job_cert_path = f"{job_cert_location}/{name}"
 
                 if not update_certs:
-                    get_cert_if_available(cursor, f"{job_cert_path}.key", namespace, f"{job_cert_kv_location}/{name}.key")
-                    get_cert_if_available(cursor, f"{job_cert_path}.crt", namespace, f"{job_cert_kv_location}/{name}.crt")
-                    get_cert_if_available(cursor, f"{job_cert_path}.pem", namespace, f"{job_cert_kv_location}/{name}.pem")
+                    get_cert_if_available(cursor, f"{job_cert_path}.key", namespace,
+                                          f"{job_cert_kv_location}/{name}.key")
+                    get_cert_if_available(cursor, f"{job_cert_path}.crt", namespace,
+                                          f"{job_cert_kv_location}/{name}.crt")
+                    get_cert_if_available(cursor, f"{job_cert_path}.pem", namespace,
+                                          f"{job_cert_kv_location}/{name}.pem")
 
                 found = (os.path.isfile(f"{job_cert_path}.key") and os.path.isfile(f"{job_cert_path}.crt"))
                 if cert.get("pkcs8", False):
