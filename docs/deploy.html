@@ -10,13 +10,13 @@
 <link rel="preload" as="style" href="./_observablehq/theme-near-midnight.d49e655d.css">
 <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" crossorigin>
 <link rel="stylesheet" type="text/css" href="./_observablehq/theme-near-midnight.d49e655d.css">
-<link rel="modulepreload" href="./_observablehq/client.de0b474c.js">
+<link rel="modulepreload" href="./_observablehq/client.c8b258ba.js">
 <link rel="modulepreload" href="./_observablehq/runtime.9393ab6d.js">
-<link rel="modulepreload" href="./_observablehq/stdlib.95bfbf7e.js">
+<link rel="modulepreload" href="./_observablehq/stdlib.30061640.js">
 <link rel="icon" href="./_file/observable.1af93621.png" type="image/png" sizes="32x32">
 <script type="module">
 
-import "./_observablehq/client.de0b474c.js";
+import "./_observablehq/client.c8b258ba.js";
 
 </script>
 </head>
@@ -35,8 +35,8 @@ import "./_observablehq/client.de0b474c.js";
     <li class="observablehq-link"><a href="./agent_setup">2. Agent Setup</a></li>
     <li class="observablehq-link"><a href="./run_command">3. Maand run_command</a></li>
     <li class="observablehq-link"><a href="./build">4. Maand build</a></li>
-    <li class="observablehq-link observablehq-link-active"><a href="./update">5. Maand update</a></li>
-    <li class="observablehq-link"><a href="./assign_roles">6. Assign Roles</a></li>
+    <li class="observablehq-link observablehq-link-active"><a href="./deploy">5. Maand deploy</a></li>
+    <li class="observablehq-link"><a href="./assign_labels">6. Assign Labels</a></li>
     <li class="observablehq-link"><a href="./job_setup">7. Job Setup</a></li>
     <li class="observablehq-link"><a href="./job_control">8. Job Control</a></li>
     <li class="observablehq-link"><a href="./add_health_check">9. Health Check</a></li>
@@ -62,18 +62,18 @@ import "./_observablehq/client.de0b474c.js";
 <nav>
 <div>Contents</div>
 <ol>
-<li class="observablehq-secondary-link"><a href="#update-command">Update Command</a></li>
+<li class="observablehq-secondary-link"><a href="#deploy-command">Deploy Command</a></li>
 <li class="observablehq-secondary-link"><a href="#verify">Verify</a></li>
 </ol>
 </nav>
 </aside>
 <main id="observablehq-main" class="observablehq">
-<h1 id="update" tabindex="-1"><a class="observablehq-header-anchor" href="#update">Update</a></h1>
-<p>The <code>maand update</code> command apply changes to the remote agents by synchronizing files.</p>
+<h1 id="deploy" tabindex="-1"><a class="observablehq-header-anchor" href="#deploy">Deploy</a></h1>
+<p>The <code>maand deploy</code> command apply changes to the remote agents by synchronizing files.</p>
 <hr>
-<h2 id="update-command" tabindex="-1"><a class="observablehq-header-anchor" href="#update-command">Update Command</a></h2>
+<h2 id="deploy-command" tabindex="-1"><a class="observablehq-header-anchor" href="#deploy-command">Deploy Command</a></h2>
 <p>To propagate changes to all agents, use:</p>
-<pre data-language="shell"><code class="language-shell"><span class="hljs-meta prompt_">$ </span><span class="language-bash">maand update</span>
+<pre data-language="shell"><code class="language-shell"><span class="hljs-meta prompt_">$ </span><span class="language-bash">maand deploy</span>
 </code></pre>
 <p>This command uses <code>rsync</code> to copy the necessary files to each agent.</p>
 <hr>
@@ -94,7 +94,6 @@ import "./_observablehq/client.de0b474c.js";
     │   ├── agent.key
     │   ├── agent.pem
     │   └── ca.crt
-    ├── context.env
     ├── jobs.json
     ├── roles.txt
     └── update_seq.txt
@@ -103,8 +102,8 @@ import "./_observablehq/client.de0b474c.js";
 </code></pre>
 </main>
 <footer id="observablehq-footer">
-<nav><a rel="prev" href="./build"><span>4. Maand build</span></a><a rel="next" href="./assign_roles"><span>6. Assign Roles</span></a></nav>
-<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2024-11-28T23:59:30">Nov 28, 2024</a>.</div>
+<nav><a rel="prev" href="./build"><span>4. Maand build</span></a><a rel="next" href="./assign_labels"><span>6. Assign Labels</span></a></nav>
+<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2025-01-01T13:25:36">Jan 1, 2025</a>.</div>
 </footer>
 </div>
 </body>

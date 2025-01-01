@@ -10,13 +10,13 @@
 <link rel="preload" as="style" href="./_observablehq/theme-near-midnight.d49e655d.css">
 <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" crossorigin>
 <link rel="stylesheet" type="text/css" href="./_observablehq/theme-near-midnight.d49e655d.css">
-<link rel="modulepreload" href="./_observablehq/client.de0b474c.js">
+<link rel="modulepreload" href="./_observablehq/client.c8b258ba.js">
 <link rel="modulepreload" href="./_observablehq/runtime.9393ab6d.js">
-<link rel="modulepreload" href="./_observablehq/stdlib.95bfbf7e.js">
+<link rel="modulepreload" href="./_observablehq/stdlib.30061640.js">
 <link rel="icon" href="./_file/observable.1af93621.png" type="image/png" sizes="32x32">
 <script type="module">
 
-import "./_observablehq/client.de0b474c.js";
+import "./_observablehq/client.c8b258ba.js";
 
 </script>
 </head>
@@ -35,8 +35,8 @@ import "./_observablehq/client.de0b474c.js";
     <li class="observablehq-link"><a href="./agent_setup">2. Agent Setup</a></li>
     <li class="observablehq-link observablehq-link-active"><a href="./run_command">3. Maand run_command</a></li>
     <li class="observablehq-link"><a href="./build">4. Maand build</a></li>
-    <li class="observablehq-link"><a href="./update">5. Maand update</a></li>
-    <li class="observablehq-link"><a href="./assign_roles">6. Assign Roles</a></li>
+    <li class="observablehq-link"><a href="./deploy">5. Maand deploy</a></li>
+    <li class="observablehq-link"><a href="./assign_labels">6. Assign Labels</a></li>
     <li class="observablehq-link"><a href="./job_setup">7. Job Setup</a></li>
     <li class="observablehq-link"><a href="./job_control">8. Job Control</a></li>
     <li class="observablehq-link"><a href="./add_health_check">9. Health Check</a></li>
@@ -75,16 +75,22 @@ import "./_observablehq/client.de0b474c.js";
 <p>Commands are added to the <code>command.sh</code> file in the <code>workspace</code> folder.</p>
 <h4 id="example-folder-structure" tabindex="-1"><a class="observablehq-header-anchor" href="#example-folder-structure">Example Folder Structure</a></h4>
 <pre data-language="plaintext"><code class="language-plaintext">.
-....
-|-- maand.conf
-|-- secrets
-|   |-- ca.crt
-|   `-- ca.key
-`-- workspace
-    |-- agents.json
-    |-- command.sh   &lt;====
-    |-- secrets.env
-    `-- variables.env
+├── data
+│&nbsp;&nbsp; ├── jobs.db
+│&nbsp;&nbsp; ├── kv.db
+│&nbsp;&nbsp; └── maand.db
+├── logs
+│&nbsp;&nbsp; └── maand.log
+├── maand.conf
+├── secrets
+│&nbsp;&nbsp; ├── ca.crt
+│&nbsp;&nbsp; └── ca.key
+└── workspace
+    ├── agents.json
+    ├── command.sh  &lt;==============================
+    └── maand.jobs.conf
+
+5 directories, 9 files
 </code></pre>
 <hr>
 <h3 id="define-commands" tabindex="-1"><a class="observablehq-header-anchor" href="#define-commands"><strong>Define Commands</strong></a></h3>
@@ -130,7 +136,7 @@ tmpfs                           7.8G     0  7.8G   0% /dev/shm
 </main>
 <footer id="observablehq-footer">
 <nav><a rel="prev" href="./agent_setup"><span>2. Agent Setup</span></a><a rel="next" href="./build"><span>4. Maand build</span></a></nav>
-<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2024-11-28T23:59:30">Nov 28, 2024</a>.</div>
+<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2025-01-01T13:25:36">Jan 1, 2025</a>.</div>
 </footer>
 </div>
 </body>

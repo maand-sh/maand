@@ -10,13 +10,13 @@
 <link rel="preload" as="style" href="./_observablehq/theme-near-midnight.d49e655d.css">
 <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" crossorigin>
 <link rel="stylesheet" type="text/css" href="./_observablehq/theme-near-midnight.d49e655d.css">
-<link rel="modulepreload" href="./_observablehq/client.de0b474c.js">
+<link rel="modulepreload" href="./_observablehq/client.c8b258ba.js">
 <link rel="modulepreload" href="./_observablehq/runtime.9393ab6d.js">
-<link rel="modulepreload" href="./_observablehq/stdlib.95bfbf7e.js">
+<link rel="modulepreload" href="./_observablehq/stdlib.30061640.js">
 <link rel="icon" href="./_file/observable.1af93621.png" type="image/png" sizes="32x32">
 <script type="module">
 
-import "./_observablehq/client.de0b474c.js";
+import "./_observablehq/client.c8b258ba.js";
 
 </script>
 </head>
@@ -35,8 +35,8 @@ import "./_observablehq/client.de0b474c.js";
     <li class="observablehq-link"><a href="./agent_setup">2. Agent Setup</a></li>
     <li class="observablehq-link"><a href="./run_command">3. Maand run_command</a></li>
     <li class="observablehq-link"><a href="./build">4. Maand build</a></li>
-    <li class="observablehq-link"><a href="./update">5. Maand update</a></li>
-    <li class="observablehq-link"><a href="./assign_roles">6. Assign Roles</a></li>
+    <li class="observablehq-link"><a href="./deploy">5. Maand deploy</a></li>
+    <li class="observablehq-link"><a href="./assign_labels">6. Assign Labels</a></li>
     <li class="observablehq-link"><a href="./job_setup">7. Job Setup</a></li>
     <li class="observablehq-link"><a href="./job_control">8. Job Control</a></li>
     <li class="observablehq-link"><a href="./add_health_check">9. Health Check</a></li>
@@ -64,30 +64,27 @@ import "./_observablehq/client.de0b474c.js";
 </aside>
 <main id="observablehq-main" class="observablehq">
 <h1 id="maand" tabindex="-1"><a class="observablehq-header-anchor" href="#maand">Maand</a></h1>
-<p>Maand is a lightweight, <strong>agentless orchestration framework</strong> for managing tasks across Linux machines. It uses <strong>SSH</strong> for communication, requiring no additional software on agents, ensuring simple and efficient task execution.</p>
-<hr>
-<h3 id="inspiration" tabindex="-1"><a class="observablehq-header-anchor" href="#inspiration"><strong>Inspiration</strong></a></h3>
-<p>Named after the Indian classical <em>raaga Maand</em>, it embodies structured flow and harmony, facilitating seamless orchestration across systems.</p>
+<p>Maand is a lightweight, <strong>agentless orchestration framework</strong> for managing workloads across Linux machines. It uses <strong>SSH</strong> for communication, requiring no additional software on agents, ensuring simple and efficient task management.</p>
 <hr>
 <h3 id="key-concepts" tabindex="-1"><a class="observablehq-header-anchor" href="#key-concepts"><strong>Key Concepts</strong></a></h3>
 <ul>
 <li><strong>Agent</strong>: A Linux machine identified by its <strong>IP address</strong> and <strong>roles</strong>, defined in <code>agents.json</code>. Maand communicates via SSH.</li>
 <li><strong>Job</strong>: A directory with a <code>manifest.json</code> (configuration) and <code>Makefile</code> (actions like <code>start</code>, <code>stop</code>). Supports binaries, Docker, and systemd tasks.</li>
-<li><strong>Role</strong>: Labels linking jobs and agents, enabling dynamic task assignment and static service discovery.</li>
+<li><strong>Labels</strong>: Labels linking jobs and agents, enabling workload assignment and static service discovery.</li>
 <li><strong>Bucket</strong>: Logical grouping of related jobs for better organization.</li>
 </ul>
 <hr>
 <h3 id="highlights" tabindex="-1"><a class="observablehq-header-anchor" href="#highlights"><strong>Highlights</strong></a></h3>
 <ul>
 <li><strong>Agentless</strong>: No installations on target machines; uses SSH.</li>
-<li><strong>Versatile</strong>: Handles binaries, Docker, and systemd services.</li>
-<li><strong>Static Service Discovery</strong>: Maps roles to IPs for dynamic yet consistent configurations.</li>
+<li><strong>Versatile</strong>: Handles any kind of workloads (binaries, Docker, and systemd services).</li>
+<li><strong>Static Service Discovery</strong>: Maps labels to IPs for dynamic yet consistent configurations.</li>
 <li><strong>Simple Setup</strong>: Lightweight, easy to configure, and highly flexible.</li>
 </ul>
 </main>
 <footer id="observablehq-footer">
 <nav><a rel="next" href="./maand_init"><span>1. Maand init</span></a></nav>
-<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2024-11-28T23:59:30">Nov 28, 2024</a>.</div>
+<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2025-01-01T13:25:36">Jan 1, 2025</a>.</div>
 </footer>
 </div>
 </body>

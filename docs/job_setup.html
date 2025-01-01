@@ -10,13 +10,13 @@
 <link rel="preload" as="style" href="./_observablehq/theme-near-midnight.d49e655d.css">
 <link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" crossorigin>
 <link rel="stylesheet" type="text/css" href="./_observablehq/theme-near-midnight.d49e655d.css">
-<link rel="modulepreload" href="./_observablehq/client.de0b474c.js">
+<link rel="modulepreload" href="./_observablehq/client.c8b258ba.js">
 <link rel="modulepreload" href="./_observablehq/runtime.9393ab6d.js">
-<link rel="modulepreload" href="./_observablehq/stdlib.95bfbf7e.js">
+<link rel="modulepreload" href="./_observablehq/stdlib.30061640.js">
 <link rel="icon" href="./_file/observable.1af93621.png" type="image/png" sizes="32x32">
 <script type="module">
 
-import "./_observablehq/client.de0b474c.js";
+import "./_observablehq/client.c8b258ba.js";
 
 </script>
 </head>
@@ -35,8 +35,8 @@ import "./_observablehq/client.de0b474c.js";
     <li class="observablehq-link"><a href="./agent_setup">2. Agent Setup</a></li>
     <li class="observablehq-link"><a href="./run_command">3. Maand run_command</a></li>
     <li class="observablehq-link"><a href="./build">4. Maand build</a></li>
-    <li class="observablehq-link"><a href="./update">5. Maand update</a></li>
-    <li class="observablehq-link"><a href="./assign_roles">6. Assign Roles</a></li>
+    <li class="observablehq-link"><a href="./deploy">5. Maand deploy</a></li>
+    <li class="observablehq-link"><a href="./assign_labels">6. Assign Labels</a></li>
     <li class="observablehq-link observablehq-link-active"><a href="./job_setup">7. Job Setup</a></li>
     <li class="observablehq-link"><a href="./job_control">8. Job Control</a></li>
     <li class="observablehq-link"><a href="./add_health_check">9. Health Check</a></li>
@@ -100,29 +100,29 @@ import "./_observablehq/client.de0b474c.js";
 <h2 id="add-job-files" tabindex="-1"><a class="observablehq-header-anchor" href="#add-job-files"><strong>Add Job Files</strong></a></h2>
 <ol>
 <li>
-<p><strong><code>manifest.json</code></strong><br>
+<p><strong><code>manifest.json</code></strong>
 Define the roles the job applies to:</p>
 <pre data-language="json"><code class="language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"roles"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
+  <span class="hljs-attr">"labels"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
     <span class="hljs-string">"agent"</span>
   <span class="hljs-punctuation">]</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
 </li>
 <li>
-<p><strong><code>Makefile</code></strong><br>
+<p><strong><code>Makefile</code></strong>
 Define job commands to manage the task:</p>
 <pre data-language="makefile"><code class="language-makefile"><span class="hljs-section">start:</span>
 	docker-compose up -d --remove-orphans
-	
+
 <span class="hljs-section">stop:</span>
 	docker-compose down
-	
+
 <span class="hljs-section">restart: stop start</span>
 </code></pre>
 </li>
 <li>
-<p><strong><code>docker-compose.yaml</code></strong><br>
+<p><strong><code>docker-compose.yaml</code></strong>
 Configuration for running <code>node_exporter</code>:</p>
 <pre data-language="yaml"><code class="language-yaml"><span class="hljs-attr">services:</span>
   <span class="hljs-attr">node_exporter:</span>
@@ -151,7 +151,7 @@ Configuration for running <code>node_exporter</code>:</p>
 <pre data-language="bash"><code class="language-bash">$ maand <span class="hljs-built_in">cat</span> <span class="hljs-built_in">jobs</span>
 </code></pre>
 <p>Example output:</p>
-<pre data-language="plaintext"><code class="language-plaintext">job_id                                name           disabled  deployment_seq  roles
+<pre data-language="plaintext"><code class="language-plaintext">job_id                                name           disabled  deployment_seq  labels
 ------------------------------------  -------------  --------  --------------  -----
 a255d9cb-7286-59f1-8775-8a0544503891  node_exporter  0         0               agent
 </code></pre>
@@ -163,9 +163,9 @@ a255d9cb-7286-59f1-8775-8a0544503891  node_exporter  0         0               a
 <p>Example output:</p>
 <pre data-language="plaintext"><code class="language-plaintext">agent_ip       job            disabled  removed
 -------------  -------------  --------  -------
-10.27.221.181  node_exporter  0         0      
-10.27.221.144  node_exporter  0         0      
-10.27.221.170  node_exporter  0         0    
+10.27.221.181  node_exporter  0         0
+10.27.221.144  node_exporter  0         0
+10.27.221.170  node_exporter  0         0
 </code></pre>
 </li>
 </ol>
@@ -197,14 +197,14 @@ a255d9cb-7286-59f1-8775-8a0544503891  node_exporter  0         0               a
 <hr>
 <h3 id="key-notes" tabindex="-1"><a class="observablehq-header-anchor" href="#key-notes"><strong>Key Notes</strong></a></h3>
 <ul>
-<li><strong>Roles</strong>: Ensure the job's <code>manifest.json</code> roles match the agents' roles in <code>agents.json</code>.</li>
+<li><strong>Labels</strong>: Ensure the job's <code>manifest.json</code> roles match the agents' labels in <code>agents.json</code>.</li>
 <li><strong>Update After Changes</strong>: Always run <code>maand build</code> and <code>maand update</code> after modifying job files or configurations.</li>
 <li><strong>File Locations</strong>: Deployed jobs reside under <code>/opt/agent</code> on each agent.</li>
 </ul>
 </main>
 <footer id="observablehq-footer">
-<nav><a rel="prev" href="./assign_roles"><span>6. Assign Roles</span></a><a rel="next" href="./job_control"><span>8. Job Control</span></a></nav>
-<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2024-11-28T23:59:30">Nov 28, 2024</a>.</div>
+<nav><a rel="prev" href="./assign_labels"><span>6. Assign Labels</span></a><a rel="next" href="./job_control"><span>8. Job Control</span></a></nav>
+<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2025-01-01T13:25:36">Jan 1, 2025</a>.</div>
 </footer>
 </div>
 </body>
