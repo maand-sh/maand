@@ -5,8 +5,8 @@ import subprocess
 import sys
 
 import context_manager
-import maand_data
 import job_data
+import maand_data
 import utils
 
 logger = utils.get_logger()

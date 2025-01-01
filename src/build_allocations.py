@@ -1,9 +1,9 @@
 import jsonschema
 from jsonschema import Draft202012Validator
 
+import job_data
 import kv_manager
 import maand_data
-import job_data
 import utils
 import workspace
 
@@ -72,7 +72,6 @@ def build_allocated_jobs(cursor):
             );""", (agent_ip,))
 
         assigned_jobs = [row[0] for row in cursor.fetchall()]
-        print(assigned_jobs)
 
         for job in assigned_jobs:
             disabled = agent_ip in disabled_agents

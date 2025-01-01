@@ -8,10 +8,10 @@ import alloc_command_executor
 import command_helper
 import const
 import context_manager
+import job_data
 import job_health_check
 import kv_manager
 import maand_data
-import job_data
 import system_manager
 import update_job
 
@@ -188,18 +188,19 @@ def main():
         next_update_seq = int(update_seq) + 1
         maand_data.update_update_seq(cursor, next_update_seq)
 
+        db.commit()
+
         max_deployment_seq = job_data.get_max_deployment_seq(cursor)
         for seq in range(max_deployment_seq + 1):
             jobs = job_data.get_jobs(cursor, deployment_seq=seq)
             if args.jobs:
                 jobs = list(set(jobs) & set(args.jobs))
+
             update(cursor, jobs)
             db.commit()
 
             for job in jobs:
                 handle_new_updated_allocations(cursor, job)
-
-
 
 
 if __name__ == "__main__":

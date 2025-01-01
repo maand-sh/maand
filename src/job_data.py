@@ -62,7 +62,7 @@ def get_job_resource_limits(cursor, job):
     cursor.execute("SELECT min_memory_mb, max_memory_mb, min_cpu, max_cpu FROM job_db.job WHERE name = ?", (job,))
     min_memory_mb, max_memory_mb, min_cpu, max_cpu = cursor.fetchone()
     min_memory_mb, max_memory_mb, min_cpu, max_cpu = (
-    float(min_memory_mb), float(max_memory_mb), float(min_cpu), float(max_cpu),)
+        float(min_memory_mb), float(max_memory_mb), float(min_cpu), float(max_cpu),)
     return (min_memory_mb, max_memory_mb, min_cpu, max_cpu,)
 
 

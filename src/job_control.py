@@ -5,9 +5,9 @@ from concurrent.futures import ThreadPoolExecutor, wait
 import alloc_command_executor
 import command_helper
 import context_manager
+import job_data
 import job_health_check
 import maand_data
-import job_data
 
 
 def get_args_agents_jobs_health_check():

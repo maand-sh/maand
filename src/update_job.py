@@ -8,9 +8,9 @@ from string import Template
 import command_helper
 import const
 import context_manager
+import job_data
 import kv_manager
 import maand_data
-import job_data
 import utils
 
 logger = utils.get_logger()
@@ -113,16 +113,16 @@ def calculate_dir_md5(folder_path):
 
 
 def prepare_allocation(cursor, job, allocation_ip):
-        agent_dir = context_manager.get_agent_dir(allocation_ip)
-        agent_jobs = maand_data.get_agent_jobs(cursor, allocation_ip)
-        if job in agent_jobs:
-            command_helper.command_local(f"mkdir -p {agent_dir}/jobs/")
-            job_data.copy_job(cursor, job, agent_dir)
+    agent_dir = context_manager.get_agent_dir(allocation_ip)
+    agent_jobs = maand_data.get_agent_jobs(cursor, allocation_ip)
+    if job in agent_jobs:
+        command_helper.command_local(f"mkdir -p {agent_dir}/jobs/")
+        job_data.copy_job(cursor, job, agent_dir)
 
-        transpile(cursor, allocation_ip, job)
-        update_certificates(cursor, job, allocation_ip)
+    transpile(cursor, allocation_ip, job)
+    update_certificates(cursor, job, allocation_ip)
 
-        md5_hash = calculate_dir_md5(f"{agent_dir}/jobs/{job}")
-        cursor.execute(
-            "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)",
-            (md5_hash, job, allocation_ip,))
+    md5_hash = calculate_dir_md5(f"{agent_dir}/jobs/{job}")
+    cursor.execute(
+        "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)",
+        (md5_hash, job, allocation_ip,))

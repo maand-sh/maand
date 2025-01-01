@@ -5,9 +5,9 @@ import sys
 import cert_provider
 import command_helper
 import const
+import job_data
 import kv_manager
 import maand_data
-import job_data
 import utils
 
 logger = utils.get_logger()
