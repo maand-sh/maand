@@ -42,7 +42,7 @@ if __name__ == "__main__":
 
     elif name == "allocations":
         statement(
-            "SELECT a.agent_ip, aj.job, aj.disabled, aj.removed, (CASE WHEN current_md5_hash = previous_md5_hash THEN 0 ELSE 1 END) as hash_changed FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id LEFT JOIN job_db.job j ON j.name = aj.job ORDER BY aj.job",
+            "SELECT a.agent_ip, aj.job, aj.disabled, aj.removed FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id LEFT JOIN job_db.job j ON j.name = aj.job ORDER BY aj.job",
             "no allocations found")
 
     elif name == "alloc_commands":

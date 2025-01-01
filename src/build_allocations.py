@@ -107,7 +107,7 @@ def validate_resource_limit(cursor):
     agents = cursor.fetchall()
 
     for agent_ip, agent_memory_mb, agent_cpu in agents:
-        jobs = maand_data.get_agent_jobs(cursor, agent_ip).keys()
+        jobs = maand_data.get_agent_jobs(cursor, agent_ip)
 
         total_allocated_memory = 0
         total_allocated_cpu = 0

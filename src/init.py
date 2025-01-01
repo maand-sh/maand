@@ -38,7 +38,6 @@ def init():
 
         command_helper.command_local(f"mkdir -p {const.BUCKET_PATH}/{{workspace,secrets,logs,data}}")
         command_helper.command_local(f"touch {const.WORKSPACE_PATH}/agents.json")
-        command_helper.command_local(f"touch {const.WORKSPACE_PATH}/maand.jobs.conf")
 
         with maand_data.get_db() as db:
             cursor = db.cursor()

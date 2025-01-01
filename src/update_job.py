@@ -122,7 +122,4 @@ def prepare_allocation(cursor, job, allocation_ip):
     transpile(cursor, allocation_ip, job)
     update_certificates(cursor, job, allocation_ip)
 
-    md5_hash = calculate_dir_md5(f"{agent_dir}/jobs/{job}")
-    cursor.execute(
-        "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)",
-        (md5_hash, job, allocation_ip,))
+    return calculate_dir_md5(f"{agent_dir}/jobs/{job}")
