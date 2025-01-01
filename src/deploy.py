@@ -39,29 +39,42 @@ def handle_disabled_stopped_allocations(cursor, job):
     allocations.extend(disabled_allocations)
 
     if counts['removed'] == counts['total']:  # job removed
-        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=False,
-                               job_health_check_flag=False)
+        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=False, job_health_check_flag=False)
+        update_allocation_hash(job, allocations)
     elif counts['removed'] > 0:  # few allocations removed
-        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=True,
-                               job_health_check_flag=False)
+        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=True, job_health_check_flag=False)
+        update_allocation_hash(job, allocations)
 
 
-def handle_new_updated_allocations(cursor, job):
-    counts = maand_data.get_allocation_counts(cursor, job)
+def update_allocation_hash(job, allocations):
+    with maand_data.get_db() as db:
+        cursor = db.cursor()
 
-    allocations = maand_data.get_allocations(cursor, job)
-    new_allocations = maand_data.get_new_allocations(cursor, job)
-    changed_allocations = maand_data.get_changed_allocations(cursor, job)
+        for agent_ip in allocations:
+            agent_dir = context_manager.get_agent_dir(agent_ip)
+            md5_hash = update_job.calculate_dir_md5(f"{agent_dir}/jobs/{job}")
+            cursor.execute(
+                "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash "
+                "WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)", (md5_hash, job, agent_ip,))
+
+def handle_new_updated_allocations(job):
+    with maand_data.get_db() as db:
+        cursor = db.cursor()
+
+        counts = maand_data.get_allocation_counts(cursor, job)
+        allocations = maand_data.get_allocations(cursor, job)
+        new_allocations = maand_data.get_new_allocations(cursor, job)
+        changed_allocations = maand_data.get_changed_allocations(cursor, job)
 
     if counts['new'] > 0:  # allocations added
-        job_control.run_target("start", "deploy", job, new_allocations, alloc_health_check_flag=False,
-                               job_health_check_flag=True)
+        job_control.run_target("start", "deploy", job, new_allocations, alloc_health_check_flag=False, job_health_check_flag=True)
+        update_allocation_hash(job, new_allocations)
     elif counts['changed'] < counts["total"]:  # few allocations modified
-        job_control.run_target("restart", "deploy", job, changed_allocations, alloc_health_check_flag=True,
-                               job_health_check_flag=False)
+        job_control.run_target("restart", "deploy", job, changed_allocations, alloc_health_check_flag=True, job_health_check_flag=False)
+        update_allocation_hash(job, changed_allocations)
     else:
-        job_control.run_target("restart", "deploy", job, allocations, alloc_health_check_flag=True,
-                               job_health_check_flag=False)
+        job_control.run_target("restart", "deploy", job, allocations, alloc_health_check_flag=True, job_health_check_flag=False)
+        update_allocation_hash(job, allocations)
 
 
 def handle_agent_files(cursor, agent_ip):
@@ -111,25 +124,25 @@ def handle_agent_files(cursor, agent_ip):
     command_helper.command_local(f"rsync -r /maand/agent/bin/ {agent_dir}/bin/")
 
 
-def update(cursor, jobs):
-    agents = maand_data.get_agents(cursor, labels_filter=None)
+def update(jobs):
+    with maand_data.get_db() as db:
+        cursor = db.cursor()
 
-    job_hash = {}
-    for agent_ip in agents:
-        handle_agent_files(cursor, agent_ip)
+        agents = maand_data.get_agents(cursor, labels_filter=None)
+        for agent_ip in agents:
+            handle_agent_files(cursor, agent_ip)
 
-        agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
-        agent_disabled_jobs = maand_data.get_agent_disabled_jobs(cursor, agent_ip)
-        stopped_jobs = set(jobs) & set(chain(agent_removed_jobs, agent_disabled_jobs))
-        for job in stopped_jobs:
-            handle_disabled_stopped_allocations(cursor, job)
+            agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
+            agent_disabled_jobs = maand_data.get_agent_disabled_jobs(cursor, agent_ip)
+            stopped_jobs = set(jobs) & set(chain(agent_removed_jobs, agent_disabled_jobs))
 
-        for job in jobs:
-            md5_hash = update_job.prepare_allocation(cursor, job, agent_ip)  # copy files to agent dir
-            job_hash[job] = md5_hash
-        context_manager.rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs)  # update changes
+            for job in stopped_jobs:
+                handle_disabled_stopped_allocations(cursor, job)
 
-    return job_hash
+            for job in jobs:
+                update_job.prepare_allocation(cursor, job, agent_ip)  # copy files to agent dir
+
+            context_manager.rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs)  # update changes
 
 
 def main():
@@ -153,19 +166,11 @@ def main():
             jobs = job_data.get_jobs(cursor, deployment_seq=seq)
             if args.jobs:
                 jobs = list(set(jobs) & set(args.jobs))
-            job_hash = update(cursor, jobs)
-            db.commit()
+
+            update(jobs)
 
             for job in jobs:
-                handle_new_updated_allocations(cursor, job)
-
-                agents = maand_data.get_allocations(cursor, job)
-                md5_hash = job_hash.get(job, None)
-                for agent_ip in agents:
-                    cursor.execute(
-                        "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)",
-                        (md5_hash, job, agent_ip,))
-
+                handle_new_updated_allocations(job)
 
 if __name__ == "__main__":
     main()

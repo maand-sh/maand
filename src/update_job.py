@@ -121,5 +121,3 @@ def prepare_allocation(cursor, job, allocation_ip):
 
     transpile(cursor, allocation_ip, job)
     update_certificates(cursor, job, allocation_ip)
-
-    return calculate_dir_md5(f"{agent_dir}/jobs/{job}")
