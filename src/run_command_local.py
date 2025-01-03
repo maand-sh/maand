@@ -13,6 +13,7 @@ def get_args():
     parser.add_argument('--agents', default="")
     parser.add_argument('--labels', default="")
     parser.add_argument('--concurrency', default="4", type=int)
+    parser.add_argument('--cmd', default="")
     parser.add_argument('--no-check', action='store_true')
     parser.set_defaults(no_check=False)
     args = parser.parse_args()
@@ -33,10 +34,13 @@ def run_command(agent_ip):
 
 
 if __name__ == "__main__":
+    args = get_args()
+    if args.cmd:
+        with open(f"{const.WORKSPACE_PATH}/command.sh", "w") as f:
+            f.write(args.cmd)
+
     if not os.path.exists(f"{const.WORKSPACE_PATH}/command.sh"):
         raise Exception("No command file found")
-
-    args = get_args()
 
     with maand_data.get_db() as db:
         cursor = db.cursor()
