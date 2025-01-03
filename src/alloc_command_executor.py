@@ -52,7 +52,7 @@ def prepare_command(cursor, job, command):
     context_manager.export_env_bucket_update_seq(cursor)
     job_data.copy_job_modules(cursor, job)
 
-    shutil.copy("/maand/maand.py", f"/modules/{job}/_modules/maand.py")
+    shutil.copy("/maand/stdlib.py", f"/modules/{job}/_modules/stdlib.py")
     cursor.execute(
         "SELECT job_name, name, depend_on_config FROM job_db.job_commands WHERE depend_on_job = ? AND depend_on_command = ?",
         (job, command))
