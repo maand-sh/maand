@@ -10,7 +10,6 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--agents', default="")
     parser.add_argument('--labels', default="")
-    parser.set_defaults(no_check=False)
     args = parser.parse_args()
 
     if args.agents:

@@ -56,10 +56,10 @@ def process_templates(cursor, values, job):
     agent_dir = context_manager.get_agent_dir(agent_ip)
 
     values = deepcopy(values)
-    job_namespace = f"vars/job/{job}"
-    job_keys = kv_manager.get_keys(cursor, job_namespace)
-    for key in job_keys:
-        values[key] = kv_manager.get(cursor, job_namespace, key)
+    for job_namespace in [ f"vars/job/{job}", f"job/{job}"]:
+        job_keys = kv_manager.get_keys(cursor, job_namespace)
+        for key in job_keys:
+            values[key] = kv_manager.get(cursor, job_namespace, key)
 
     logger.debug("Processing templates...")
     for ext in ["*.json", "*.service", "*.conf", "*.yml", "*.yaml", "*.env", "*.txt"]:

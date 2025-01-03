@@ -193,10 +193,14 @@ def build_jobs(cursor, job, values):
     values["MAX_CPU_LIMIT"] = str(max_cpu_limit)
 
     if "MEMORY" not in values:
-        values["MEMORY"] = max_memory_limit
+        values["MEMORY"] = str(max_memory_limit)
 
     if "CPU" not in values:
-        values["CPU"] = max_cpu_limit
+        values["CPU"] = str(max_cpu_limit)
+
+    for k in ["MIN_MEMORY_LIMIT", "MAX_MEMORY_LIMIT", "MIN_CPU_LIMIT", "MAX_CPU_LIMIT", "MEMORY", "CPU"]:
+        if k in values and values[k] == "0.0":
+            del values[k]
 
     for label in labels:
         cursor.execute("INSERT INTO job_db.job_labels (job_id, label) VALUES (?, ?)", (job_id, label,))
