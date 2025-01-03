@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 RSYNC_PATH="rsync"
 if [[ "$USE_SUDO" -eq 1 ]]; then
@@ -22,5 +23,5 @@ RSYNC_OPTIONS=" \
   --filter='merge /tmp/$RULE_FILE.txt' \
 "
 
-rsync_command="rsync -v --rsync-path=\"$RSYNC_PATH\" $RSYNC_OPTIONS --rsh=\"ssh -i /bucket/$SSH_KEY\" $AGENT_DIR/ $SSH_USER@$AGENT_IP:/opt/agent/$BUCKET"
+rsync_command="rsync -v --rsync-path=\"$RSYNC_PATH\" $RSYNC_OPTIONS --rsh=\"ssh -o BatchMode=true -o ConnectTimeout=10 -i /bucket/$SSH_KEY\" $AGENT_DIR/ $SSH_USER@$AGENT_IP:/opt/agent/$BUCKET"
 bash -c "$rsync_command" > /dev/null

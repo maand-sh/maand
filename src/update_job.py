@@ -3,7 +3,6 @@ import hashlib
 import os
 from copy import deepcopy
 from pathlib import Path
-from string import Template
 
 import jinja2
 import command_helper
@@ -67,7 +66,7 @@ def process_templates(cursor, values, job):
             try:
                 with open(f, "r") as file:
                     data = file.read()
-                content = jinja2.Template(data).render(values)
+                content = jinja2.Template(data, undefined=jinja2.StrictUndefined).render(values)
                 if content != data:
                     with open(f, "w") as file:
                         file.write(content)

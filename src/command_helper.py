@@ -56,7 +56,7 @@ def capture_command_remote(cmd, env, prefix):
     file_path = f"/tmp/{file_id}"
     sh = "sh" if not use_sudo else "sudo sh"
     return capture_command_local(
-        f"ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
+        f"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
         env=env, prefix=prefix, )
 
 
@@ -69,7 +69,7 @@ def command_remote(cmd, env=None, stdout=None, stderr=None):
     file_path = f"/tmp/{file_id}"
     sh = "sh" if not use_sudo else "sudo sh"
     return command_local(
-        f"ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
+        f"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
         env=env, stdout=stdout, stderr=stderr)
 
 
@@ -77,7 +77,7 @@ def command_file_remote(file_path, env=None, stdout=None, stderr=None):
     use_sudo = env.get("USE_SUDO", "0") == "1"
     sh = "sh" if not use_sudo else "sudo sh"
     return command_local(
-        f"ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
+        f"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
         env=env, stdout=stdout, stderr=stderr)
 
 
@@ -85,7 +85,7 @@ def capture_command_file_remote(file_path, env, prefix):
     use_sudo = env.get("USE_SUDO", "0") == "1"
     sh = "sh" if not use_sudo else "sudo sh"
     return capture_command_local(
-        f"ssh -q -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
+        f"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
         env, prefix)
 
 
