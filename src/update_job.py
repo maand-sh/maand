@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 from string import Template
 
+import jinja2
 import command_helper
 import const
 import context_manager
@@ -51,26 +52,22 @@ def update_certificates(cursor, job, agent_ip):
 
 
 def process_templates(cursor, values, job):
-    values = deepcopy(values)
-    for k, v in values.items():
-        values[k] = v.replace("$$", "$")
     agent_ip = values["AGENT_IP"]
     agent_dir = context_manager.get_agent_dir(agent_ip)
+
+    values = deepcopy(values)
+    job_namespace = f"vars/job/{job}"
+    job_keys = kv_manager.get_keys(cursor, job_namespace)
+    for key in job_keys:
+        values[key] = kv_manager.get(cursor, job_namespace, key)
+
     logger.debug("Processing templates...")
     for ext in ["*.json", "*.service", "*.conf", "*.yml", "*.yaml", "*.env", "*.txt"]:
-        values = deepcopy(values)
-
-        job_namespace = f"vars/job/{job}"
-        job_keys = kv_manager.get_keys(cursor, job_namespace)
-        for key in job_keys:
-            values[key] = kv_manager.get(cursor, job_namespace, key)
-
         for f in Path(f"{agent_dir}/jobs/{job}").rglob(ext):
             try:
                 with open(f, "r") as file:
                     data = file.read()
-                template = Template(data)
-                content = template.substitute(values)
+                content = jinja2.Template(data).render(values)
                 if content != data:
                     with open(f, "w") as file:
                         file.write(content)
@@ -102,6 +99,7 @@ def calculate_dir_md5(folder_path):
     """Calculate a combined MD5 checksum for all files in a folder."""
     if not os.path.exists(folder_path):
         return None
+
     hash_md5 = hashlib.md5()
     for root, _, files in os.walk(folder_path):
         for file in sorted(files):  # Sort to ensure consistent order

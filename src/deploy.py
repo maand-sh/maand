@@ -46,35 +46,42 @@ def handle_disabled_stopped_allocations(cursor, job):
         update_allocation_hash(job, allocations)
 
 
-def update_allocation_hash(job, allocations):
+def  update_allocation_hash(job, allocations):
     with maand_data.get_db() as db:
         cursor = db.cursor()
-
         for agent_ip in allocations:
             agent_dir = context_manager.get_agent_dir(agent_ip)
             md5_hash = update_job.calculate_dir_md5(f"{agent_dir}/jobs/{job}")
             cursor.execute(
                 "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash "
                 "WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)", (md5_hash, job, agent_ip,))
+        db.commit()
 
 def handle_new_updated_allocations(job):
     with maand_data.get_db() as db:
         cursor = db.cursor()
-
-        counts = maand_data.get_allocation_counts(cursor, job)
         allocations = maand_data.get_allocations(cursor, job)
+        update_allocation_hash(job, allocations)
+        counts = maand_data.get_allocation_counts(cursor, job)
         new_allocations = maand_data.get_new_allocations(cursor, job)
         changed_allocations = maand_data.get_changed_allocations(cursor, job)
+        db.rollback()
 
     if counts['new'] > 0:  # allocations added
-        job_control.run_target("start", "deploy", job, new_allocations, alloc_health_check_flag=False, job_health_check_flag=True)
-        update_allocation_hash(job, new_allocations)
+        job_control.run_target("start", "deploy", job, new_allocations,
+                               alloc_health_check_flag=False, job_health_check_flag=True)
     elif counts['changed'] < counts["total"]:  # few allocations modified
-        job_control.run_target("restart", "deploy", job, changed_allocations, alloc_health_check_flag=True, job_health_check_flag=False)
-        update_allocation_hash(job, changed_allocations)
+        job_control.run_target("restart", "deploy", job, changed_allocations,
+                               alloc_health_check_flag=True, job_health_check_flag=False)
     else:
-        job_control.run_target("restart", "deploy", job, allocations, alloc_health_check_flag=True, job_health_check_flag=False)
+        job_control.run_target("restart", "deploy", job, allocations,
+                               alloc_health_check_flag=True, job_health_check_flag=False)
+
+    with maand_data.get_db() as db:
+        cursor = db.cursor()
+        allocations = maand_data.get_allocations(cursor, job)
         update_allocation_hash(job, allocations)
+        db.commit()
 
 
 def handle_agent_files(cursor, agent_ip):
