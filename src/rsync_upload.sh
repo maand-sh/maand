@@ -27,8 +27,5 @@ RSYNC_OPTIONS=" \
   --compress      \
 "
 
-echo
-echo "updating file for $AGENT_IP"
-
 rsync_command="rsync -v --rsync-path=\"$RSYNC_PATH\" $RSYNC_OPTIONS --rsh=\"ssh -o BatchMode=true -o ConnectTimeout=10 -i /bucket/$SSH_KEY\" $AGENT_DIR/ $SSH_USER@$AGENT_IP:/opt/agent/$BUCKET"
-bash -c "$rsync_command"> /dev/null
+bash -c "$rsync_command" > /dev/null
