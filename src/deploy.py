@@ -40,28 +40,26 @@ def handle_disabled_stopped_allocations(cursor, job):
 
     if counts['removed'] == counts['total']:  # job removed
         job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=False, job_health_check_flag=False)
-        update_allocation_hash(job, allocations)
+        update_allocation_hash(cursor, job, allocations)
     elif counts['removed'] > 0:  # few allocations removed
         job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=True, job_health_check_flag=False)
-        update_allocation_hash(job, allocations)
+        update_allocation_hash(cursor, job, allocations)
 
 
-def  update_allocation_hash(job, allocations):
-    with maand_data.get_db() as db:
-        cursor = db.cursor()
-        for agent_ip in allocations:
-            agent_dir = context_manager.get_agent_dir(agent_ip)
-            md5_hash = update_job.calculate_dir_md5(f"{agent_dir}/jobs/{job}")
-            cursor.execute(
-                "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash "
-                "WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)", (md5_hash, job, agent_ip,))
-        db.commit()
+def  update_allocation_hash(cursor, job, allocations):
+    for agent_ip in allocations:
+        agent_dir = context_manager.get_agent_dir(agent_ip)
+        md5_hash = update_job.calculate_dir_md5(f"{agent_dir}/jobs/{job}")
+        cursor.execute(
+            "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash "
+            "WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)", (md5_hash, job, agent_ip,))
+
 
 def handle_new_updated_allocations(job):
     with maand_data.get_db() as db:
         cursor = db.cursor()
         allocations = maand_data.get_allocations(cursor, job)
-        update_allocation_hash(job, allocations)
+        update_allocation_hash(cursor, job, allocations)
         counts = maand_data.get_allocation_counts(cursor, job)
         new_allocations = maand_data.get_new_allocations(cursor, job)
         changed_allocations = maand_data.get_changed_allocations(cursor, job)
@@ -80,7 +78,7 @@ def handle_new_updated_allocations(job):
     with maand_data.get_db() as db:
         cursor = db.cursor()
         allocations = maand_data.get_allocations(cursor, job)
-        update_allocation_hash(job, allocations)
+        update_allocation_hash(cursor, job, allocations)
         db.commit()
 
 
@@ -145,6 +143,8 @@ def update(jobs):
 
             for job in stopped_jobs:
                 handle_disabled_stopped_allocations(cursor, job)
+
+            db.commit()
 
             for job in jobs:
                 update_job.prepare_allocation(cursor, job, agent_ip)  # copy files to agent dir
