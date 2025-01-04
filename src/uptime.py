@@ -1,6 +1,6 @@
 import argparse
 
-import command_helper
+import command_manager
 import context_manager
 import maand_data
 import system_manager
@@ -22,7 +22,7 @@ def get_args():
 
 def run_command(agent_ip):
     agent_env = context_manager.get_agent_minimal_env(agent_ip)
-    command_helper.capture_command_remote("uptime", env=agent_env, prefix=agent_ip)
+    command_manager.capture_command_remote("uptime", env=agent_env, prefix=agent_ip)
 
 
 if __name__ == "__main__":
@@ -32,5 +32,5 @@ if __name__ == "__main__":
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)
-        system_manager.run(cursor, command_helper.scan_agent, labels_filter=args.labels, agents_filter=args.agents)
+        system_manager.run(cursor, command_manager.scan_agent, labels_filter=args.labels, agents_filter=args.agents)
         system_manager.run(cursor, run_command, labels_filter=args.labels, agents_filter=args.agents)

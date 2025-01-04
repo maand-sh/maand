@@ -3,7 +3,7 @@ import hashlib
 import os
 
 import cert_provider
-import command_helper
+import command_manager
 import const
 import context_manager
 import job_data
@@ -53,7 +53,7 @@ def build_agent_certs(cursor):
 
         agent_dir = context_manager.get_agent_dir(agent_ip)
         agent_cert_location = f"{agent_dir}/certs"
-        command_helper.command_local(f"mkdir -p {agent_cert_location}")
+        command_manager.command_local(f"mkdir -p {agent_cert_location}")
 
         namespace = f"certs/agent/{agent_ip}"
         agent_cert_path = f"{agent_cert_location}/agent"
@@ -105,7 +105,7 @@ def build_job_certs(cursor):
                     update_certs = True
 
             for cert in job_certs:
-                command_helper.command_local(f"mkdir -p {job_cert_location}")
+                command_manager.command_local(f"mkdir -p {job_cert_location}")
                 name = cert.get("name")
                 job_cert_path = f"{job_cert_location}/{name}"
 
@@ -131,7 +131,7 @@ def build_job_certs(cursor):
                     cert_provider.generate_site_csr(name, subj, job_cert_location)
                     subject_alt_name = cert.get("subject_alt_name", f"DNS.1:localhost,IP.1:127.0.0.1,IP.2:{agent_ip}")
                     cert_provider.generate_site_public(name, subject_alt_name, ttl, job_cert_location)
-                    command_helper.command_local(f"rm -f {job_cert_path}.csr")
+                    command_manager.command_local(f"rm -f {job_cert_path}.csr")
 
                     put_cert(cursor, f"{job_cert_path}.key", namespace, f"{job_cert_kv_location}/{name}.key")
                     put_cert(cursor, f"{job_cert_path}.crt", namespace, f"{job_cert_kv_location}/{name}.crt")
@@ -144,4 +144,4 @@ def build(cursor):
     build_agent_certs(cursor)
     build_job_certs(cursor)
     build_ca_hash(cursor)
-    command_helper.command_local(f"rm -f {const.SECRETS_PATH}/ca.srl")
+    command_manager.command_local(f"rm -f {const.SECRETS_PATH}/ca.srl")

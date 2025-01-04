@@ -1,7 +1,7 @@
 import multiprocessing
 import sys
 
-import command_helper
+import command_manager
 import const
 import maand_data
 
@@ -18,7 +18,7 @@ def run(cursor, func, agents=None, concurrency=None, labels_filter=None, agents_
     if agents_filter:
         agents = list(set(agents_filter) & set(agents))
 
-    command_helper.command_local(f"mkdir -p {const.LOGS_FOLDER}")
+    command_manager.command_local(f"mkdir -p {const.LOGS_FOLDER}")
     for agent in agents:
         with open(f"{const.LOGS_FOLDER}/{agent}.log", "w") as log_file:
             log_file.flush()

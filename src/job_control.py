@@ -3,7 +3,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, wait
 
 import alloc_command_executor
-import command_helper
+import command_manager
 import context_manager
 import job_data
 import job_health_check
@@ -66,7 +66,7 @@ def execute_default_action(job, allocations, target, alloc_health_check):
     bucket = os.getenv("BUCKET")
     for agent_ip in allocations:
         agent_env = context_manager.get_agent_minimal_env(agent_ip)
-        command_helper.capture_command_remote(
+        command_manager.capture_command_remote(
             f"python3 /opt/agent/{bucket}/bin/runner.py {bucket} {target} --jobs {job}",
             env=agent_env, prefix=agent_ip
         )

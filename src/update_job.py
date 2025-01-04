@@ -5,7 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import jinja2
-import command_helper
+import command_manager
 import const
 import context_manager
 import job_data
@@ -34,8 +34,8 @@ def update_certificates(cursor, job, agent_ip):
     job_certs = job_data.get_job_certs_config(cursor, job)
 
     if job_certs:
-        command_helper.command_local(f"mkdir -p {job_cert_location}")
-        command_helper.command_local(
+        command_manager.command_local(f"mkdir -p {job_cert_location}")
+        command_manager.command_local(
             f"cp -f {const.SECRETS_PATH}/ca.crt {job_cert_location}/"
         )
 
@@ -113,7 +113,7 @@ def prepare_allocation(cursor, job, allocation_ip):
     agent_dir = context_manager.get_agent_dir(allocation_ip)
     agent_jobs = maand_data.get_agent_jobs(cursor, allocation_ip)
     if job in agent_jobs:
-        command_helper.command_local(f"mkdir -p {agent_dir}/jobs/")
+        command_manager.command_local(f"mkdir -p {agent_dir}/jobs/")
         job_data.copy_job(cursor, job, agent_dir)
 
     transpile(cursor, allocation_ip, job)

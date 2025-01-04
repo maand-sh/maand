@@ -6,7 +6,7 @@ import json
 import os
 import maand_data
 import kv_manager
-import command_helper
+import command_manager
 
 def get_db():
     return maand_data.get_db()
@@ -21,5 +21,5 @@ def get_demands():
 def get_kv_manager():
     return kv_manager
 
-def get_commandor():
-    return command_helper
+def get_command_manager():
+    return command_manager

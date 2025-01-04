@@ -1,6 +1,6 @@
 import sys
 
-import command_helper
+import command_manager
 import const
 import maand_data
 
@@ -19,7 +19,7 @@ def statement(sql, no_rows_found_msg, mode="column"):
         if len(cursor.fetchall()) == 0:
             print(no_rows_found_msg)
         else:
-            command_helper.command_local(f"""
+            command_manager.command_local(f"""
                 sqlite3 {const.MAAND_DB_PATH} < /tmp/sql.txt
             """)
 

@@ -2,7 +2,7 @@ import argparse
 import os
 import time
 
-import command_helper
+import command_manager
 import const
 import context_manager
 import job_health_check
@@ -40,7 +40,7 @@ def run_command(agent_ip):
 
         if args.health_check and not job_health_check.health_check(cursor, jobs, False, times=20, interval=5):
             utils.stop_the_world()
-        command_helper.capture_command_file_remote(f"{const.WORKSPACE_PATH}/command.sh", env, prefix=agent_ip)
+        command_manager.capture_command_file_remote(f"{const.WORKSPACE_PATH}/command.sh", env, prefix=agent_ip)
         time.sleep(5)
         if args.health_check and not job_health_check.health_check(cursor, jobs, True, times=20, interval=5):
             utils.stop_the_world()
@@ -59,7 +59,7 @@ if __name__ == "__main__":
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)
-        system_manager.run(cursor, command_helper.scan_agent)
+        system_manager.run(cursor, command_manager.scan_agent)
 
         if not args.no_check:
             system_manager.run(cursor, context_manager.validate_cluster_update_seq)

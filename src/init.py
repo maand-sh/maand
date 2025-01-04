@@ -3,7 +3,7 @@ import os
 import sys
 
 import cert_provider
-import command_helper
+import command_manager
 import const
 import job_data
 import kv_manager
@@ -36,10 +36,10 @@ def init():
         if os.path.isfile(const.MAAND_DB_PATH):
             raise Exception("bucket is already initialized")
 
-        command_helper.command_local(f"mkdir -p {const.BUCKET_PATH}/{{workspace,secrets,logs,data}}")
-        command_helper.command_local(f"touch {const.WORKSPACE_PATH}/agents.json")
+        command_manager.command_local(f"mkdir -p {const.BUCKET_PATH}/{{workspace,secrets,logs,data}}")
+        command_manager.command_local(f"touch {const.WORKSPACE_PATH}/agents.json")
 
-        with maand_data.get_db() as db:
+        with maand_data.get_db(fail_if_not_found=False) as db:
             cursor = db.cursor()
             maand_data.setup_maand_database(cursor)
             job_data.setup_job_database(cursor)
@@ -48,7 +48,7 @@ def init():
             with open(f"{const.WORKSPACE_PATH}/agents.json", "r") as f:
                 data = f.read().strip()
                 if len(data) == 0:
-                    command_helper.command_local(f"echo '[]' > {const.WORKSPACE_PATH}/agents.json")
+                    command_manager.command_local(f"echo '[]' > {const.WORKSPACE_PATH}/agents.json")
 
             build_maand_conf()
 
@@ -57,8 +57,8 @@ def init():
                 bucket_id = maand_data.get_bucket_id(cursor)
                 cert_provider.generate_ca_public(bucket_id, 3650)
 
-            command_helper.command_local("chmod -R 755 /bucket")
-            command_helper.command_local("chmod -R 600 /bucket/secrets/*")
+            command_manager.command_local("chmod -R 755 /bucket")
+            command_manager.command_local("chmod -R 600 /bucket/secrets/*")
 
             db.commit()
 

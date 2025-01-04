@@ -2,7 +2,7 @@ import os
 import subprocess
 import uuid
 
-import command_helper
+import command_manager
 import kv_manager
 import maand_data
 import utils
@@ -48,8 +48,8 @@ def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs, update_jobs_jso
         f.writelines(lines)
 
     bucket = agent_env.get("BUCKET", "")
-    command_helper.command_remote(f"mkdir -p /opt/agent/{bucket}", env=agent_env)
-    r = command_helper.command_local(f"bash /maand/rsync_upload.sh {file_id}", env=agent_env)
+    command_manager.command_remote(f"mkdir -p /opt/agent/{bucket}", env=agent_env)
+    r = command_manager.command_local(f"bash /maand/rsync_upload.sh {file_id}", env=agent_env)
     if r.returncode != 0:
         raise Exception(f"failed to upload files, agent_ip: {agent_ip}")
 
@@ -59,7 +59,7 @@ def validate_agent_bucket(agent_ip, fail_if_no_bucket_id=True):
     try:
         agent_env = get_agent_minimal_env(agent_ip)
         bucket = os.environ.get("BUCKET")
-        res = command_helper.command_remote(f"ls /opt/agent/{bucket}", agent_env, stdout=subprocess.PIPE,
+        res = command_manager.command_remote(f"ls /opt/agent/{bucket}", agent_env, stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE)
         if fail_if_no_bucket_id and res.returncode != 0:
             raise Exception(f"agent {agent_ip} : bucket not found.")
@@ -74,7 +74,7 @@ def validate_update_seq(agent_ip):
         agent_env = get_agent_minimal_env(agent_ip)
         update_seq = os.environ.get("UPDATE_SEQ")
         bucket_id = os.environ.get("BUCKET")
-        res = command_helper.command_remote(f"cat /opt/agent/{bucket_id}/update_seq.txt", agent_env,
+        res = command_manager.command_remote(f"cat /opt/agent/{bucket_id}/update_seq.txt", agent_env,
                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if res.returncode == 1:
             raise Exception(f"{agent_ip} : {res.stderr}")

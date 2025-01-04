@@ -3,7 +3,7 @@ import base64
 import json
 from itertools import chain
 
-import command_helper
+import command_manager
 import const
 import context_manager
 import job_control
@@ -86,7 +86,7 @@ def handle_agent_files(cursor, agent_ip):
     agent_dir = context_manager.get_agent_dir(agent_ip)
     bucket_id = maand_data.get_bucket_id(cursor)
 
-    command_helper.command_local(f"""
+    command_manager.command_local(f"""
         mkdir -p {agent_dir}/certs
         rsync {const.SECRETS_PATH}/ca.crt {agent_dir}/certs/
     """)
@@ -125,8 +125,8 @@ def handle_agent_files(cursor, agent_ip):
     with open(f"{agent_dir}/jobs.json", "w") as f:
         f.writelines(json.dumps(agent_jobs))
 
-    command_helper.command_local(f"mkdir -p {agent_dir}/bin")
-    command_helper.command_local(f"rsync -r /maand/agent/bin/ {agent_dir}/bin/")
+    command_manager.command_local(f"mkdir -p {agent_dir}/bin")
+    command_manager.command_local(f"rsync -r /maand/agent/bin/ {agent_dir}/bin/")
 
 
 def update(jobs):
@@ -159,7 +159,7 @@ def main():
         cursor = db.cursor()
 
         # Update agents and system environment
-        system_manager.run(cursor, command_helper.scan_agent)
+        system_manager.run(cursor, command_manager.scan_agent)
         context_manager.export_env_bucket_update_seq(cursor)
 
         update_seq = maand_data.get_update_seq(cursor)
