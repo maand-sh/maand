@@ -95,15 +95,15 @@ def handle_agent_files(cursor, agent_ip):
     agent_cert_location = f"{agent_dir}/certs"
     agent_cert_path = f"{agent_cert_location}/{name}"
     agent_cert_kv_path = f"certs/{name}"
-
+    agent_kv_namespace = f"certs/agent/{agent_ip}"
     write_cert(
-        cursor, f"{agent_cert_path}.key", f"certs/{agent_ip}", f"{agent_cert_kv_path}.key"
+        cursor, f"{agent_cert_path}.key", agent_kv_namespace, f"{agent_cert_kv_path}.key"
     )
     write_cert(
-        cursor, f"{agent_cert_path}.crt", f"certs/{agent_ip}", f"{agent_cert_kv_path}.crt"
+        cursor, f"{agent_cert_path}.crt", agent_kv_namespace, f"{agent_cert_kv_path}.crt"
     )
     write_cert(
-        cursor, f"{agent_cert_path}.pem", f"certs/{agent_ip}", f"{agent_cert_kv_path}.pem"
+        cursor, f"{agent_cert_path}.pem", agent_kv_namespace, f"{agent_cert_kv_path}.pem"
     )
 
     agent_id = maand_data.get_agent_id(cursor, agent_ip)

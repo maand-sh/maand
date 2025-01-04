@@ -55,7 +55,7 @@ def build_agent_certs(cursor):
         agent_cert_location = f"{agent_dir}/certs"
         command_helper.command_local(f"mkdir -p {agent_cert_location}")
 
-        namespace = f"certs/{agent_ip}"
+        namespace = f"certs/agent/{agent_ip}"
         agent_cert_path = f"{agent_cert_location}/agent"
 
         if not update_certs:

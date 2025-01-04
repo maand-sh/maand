@@ -37,10 +37,10 @@ def build():
             build_variables.build(cursor)
             build_certs.build(cursor)
             db.commit()
+            post_build_hook(cursor)
         except Exception as e:
             db.rollback()
             raise e
-        post_build_hook(cursor)
         # todo : print undefined variables
 
 

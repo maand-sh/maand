@@ -19,7 +19,7 @@ def build_agent_tags(cursor, agent_id, agent_ip, agent):
         value = str(value)
         cursor.execute("INSERT INTO agent_tags (agent_id, key, value) VALUES (?, ?, ?)", (agent_id, key, value,))
 
-    namespace = f"vars/{agent_ip}"
+    namespace = f"vars/agent/{agent_ip}"
     available_memory, available_cpu = maand_data.get_agent_available_resources(cursor, agent_ip)
     if available_memory != "0.0":
         kv_manager.put(cursor, namespace, "AGENT_MEMORY", available_memory)
@@ -95,7 +95,7 @@ def build_agents(cursor):
     agents_ip = {row[0] for row in rows}
 
     for agent_ip in agents_ip:
-        for namespace in [f"certs/{agent_ip}", f"vars/{agent_ip}"]:
+        for namespace in [f"certs/agent/{agent_ip}", f"vars/agent/{agent_ip}", f"agent/{agent_ip}"]:
             keys = kv_manager.get_keys(cursor, namespace)
             for key in keys:
                 kv_manager.delete(cursor, namespace, key)

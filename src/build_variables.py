@@ -75,7 +75,7 @@ def build_agent_variables(cursor):
         if agent_cpu != "0.0":
             values["AGENT_CPU"] = agent_cpu
 
-        namespace = f"vars/{agent_ip}"
+        namespace = f"vars/agent/{agent_ip}"
         for key, value in values.items():
             kv_manager.put(cursor, namespace, key, str(value))
 
