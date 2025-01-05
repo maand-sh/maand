@@ -10,6 +10,13 @@ def get_agents():
         return json.loads(f.read())
 
 
+def get_labels():
+    labels = []
+    for agent in get_agents():
+        labels.extend(agent.get("labels", []))
+    return list(set(labels))
+
+
 def get_jobs():
     jobs = []
     for manifest_path in glob.glob(f"{const.WORKSPACE_PATH}/jobs/*/manifest.json"):

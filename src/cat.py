@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     elif name == "kv":
         statement(
-            "SELECT * FROM (SELECT key, CASE WHEN LENGTH(value) > 50 THEN substr(value, 1, 50) || '...' ELSE value END as value, namespace, max(version) as version, ttl, created_date, deleted FROM kv_db.key_value GROUP BY key, namespace) t ORDER BY namespace, key, version",
+            "SELECT * FROM (SELECT key, CASE WHEN LENGTH(value) > 50 THEN substr(value, 1, 50) || '...' ELSE value END as value, namespace, max(version) as version, ttl, created_date, deleted FROM kv_db.key_value GROUP BY key, namespace) t ORDER BY namespace, key",
             "no key values found")
 
     elif name == "ports":
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     else:
         print("Usage: maand cat <operation>")
         print("Operations:")
-        print("  info                   Show bucket infomation")
+        print("  info                   Show bucket information")
         print("  agents                 List agents")
         print("  allocations            List allocations (agents vs jobs)")
         print("  alloc_commands         List allocations commands")

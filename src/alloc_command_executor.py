@@ -6,7 +6,6 @@ import sys
 
 import context_manager
 import job_data
-import kv_manager
 import maand_data
 import utils
 
@@ -19,10 +18,9 @@ def execute_alloc_command(cursor, job, command, agent_ip, env):
     for k, v in env.items():
         allocation_env[k] = v
 
-    for job_namespace in [ f"vars/job/{job}", f"job/{job}"]:
-        job_keys = kv_manager.get_keys(cursor, job_namespace)
-        for key in job_keys:
-            allocation_env[key] = kv_manager.get(cursor, job_namespace, key)
+    values = context_manager.get_job_env(cursor, job)
+    for k, v in values.items():
+        allocation_env[k] = v
 
     for key, value in os.environ.items():
         if key.startswith("MAAND_"):

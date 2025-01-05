@@ -46,7 +46,6 @@ def build_agents(cursor):
             "required": ["host"]
         }
     }
-
     jsonschema.validate(instance=agents, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER, )
 
     for index, agent in enumerate(agents):

@@ -74,7 +74,8 @@ def get_job_cluster_level_value(job):
     return job_kv
 
 
-def build_jobs(cursor, job, values):
+def build_jobs(cursor, job):
+    values = {}
     delete_job(cursor, job)
 
     schema = {
@@ -184,23 +185,14 @@ def build_jobs(cursor, job, values):
     certs_hash = hashlib.md5(json.dumps(certs).encode()).hexdigest()
 
     cursor.execute(
-        "INSERT INTO job_db.job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash, deployment_seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        "INSERT INTO job_db.job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash, deployment_seq) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
         (job_id, job, version, min_memory_limit, max_memory_limit, min_cpu_limit, max_cpu_limit, certs_hash))
 
-    values["MIN_MEMORY_LIMIT"] = str(min_memory_limit)
-    values["MAX_MEMORY_LIMIT"] = str(max_memory_limit)
-    values["MIN_CPU_LIMIT"] = str(min_cpu_limit)
-    values["MAX_CPU_LIMIT"] = str(max_cpu_limit)
-
-    if "MEMORY" not in values:
-        values["MEMORY"] = str(max_memory_limit)
-
-    if "CPU" not in values:
-        values["CPU"] = str(max_cpu_limit)
-
-    for k in ["MIN_MEMORY_LIMIT", "MAX_MEMORY_LIMIT", "MIN_CPU_LIMIT", "MAX_CPU_LIMIT", "MEMORY", "CPU"]:
-        if k in values and values[k] == "0.0":
-            del values[k]
+    values["MIN_MEMORY_LIMIT"] = min_memory_limit
+    values["MAX_MEMORY_LIMIT"] = max_memory_limit
+    values["MIN_CPU_LIMIT"] = min_cpu_limit
+    values["MAX_CPU_LIMIT"] = max_cpu_limit
 
     for label in labels:
         cursor.execute("INSERT INTO job_db.job_labels (job_id, label) VALUES (?, ?)", (job_id, label,))
@@ -243,8 +235,11 @@ def build_jobs(cursor, job, values):
         cursor.execute("INSERT INTO job_db.job_ports (job_id, name, port) VALUES (?, ?, ?)", (job_id, name, port,))
         values[name] = port
 
+    return values
 
-def build_maand_jobs_conf(cursor, job, values):
+
+def build_maand_jobs_conf(job):
+    values = {}
     jobs_conf_path = utils.get_maand_jobs_conf()
     path = f"/bucket/{jobs_conf_path}"
     if not os.path.exists(path):
@@ -255,7 +250,55 @@ def build_maand_jobs_conf(cursor, job, values):
 
     kv = get_job_cluster_level_value(job)
     for key, value in kv.items():
-        values[key] = str(value)
+        values[key] = value
+    return values
+
+
+def manage_kv(cursor, namespace, values):
+    for key, value in values.items():
+        kv_manager.put(cursor, namespace, key, str(value))
+
+    keys = values.keys()
+    keys = [key.upper() for key in keys]
+    all_keys = kv_manager.get_keys(cursor, namespace)
+    missing_keys = list(set(all_keys) ^ set(keys))
+    for key in missing_keys:
+        kv_manager.delete(cursor, namespace, key)
+
+
+def cleanup_polluted_memory_cpu_settings(job_variables, values):
+    if not job_variables.get("MEMORY"):
+        job_variables["MEMORY"] = values.get("MAX_MEMORY_LIMIT")
+    if not job_variables.get("CPU"):
+        job_variables["CPU"] = values.get("MAX_CPU_LIMIT")
+
+    found_memory_settings = False
+    for k in ["MIN_MEMORY_LIMIT", "MAX_MEMORY_LIMIT", "MEMORY"]:
+        if k in values and values[k] != 0.0:
+            found_memory_settings = True
+        if k in job_variables and job_variables[k] != 0.0:
+            found_memory_settings = True
+
+    found_cpu_settings = False
+    for k in ["MIN_CPU_LIMIT", "MAX_CPU_LIMIT", "CPU"]:
+        if k in values and values[k] != 0.0:
+            found_cpu_settings = True
+        if k in job_variables and job_variables[k] != 0.0:
+            found_cpu_settings = True
+
+    if not found_memory_settings:
+        for k in ["MIN_MEMORY_LIMIT", "MAX_MEMORY_LIMIT", "MEMORY"]:
+            if k in values:
+                del values[k]
+            if k in job_variables:
+                del job_variables[k]
+
+    if not found_cpu_settings:
+        for k in ["MIN_CPU_LIMIT", "MAX_CPU_LIMIT", "CPU"]:
+            if k in values:
+                del values[k]
+            if k in job_variables:
+                del job_variables[k]
 
 
 def build(cursor):
@@ -263,21 +306,14 @@ def build(cursor):
 
     jobs = workspace.get_jobs()
     for job in jobs:
-        values = {}
-        build_maand_jobs_conf(cursor, job, values)
-        build_jobs(cursor, job, values)
+        values = build_jobs(cursor, job) or {}
+        job_variables = build_maand_jobs_conf(job) or {}
         build_deployment_seq(cursor)
 
-        kv_namespace = f"vars/job/{job}"
-        for key, value in values.items():
-            kv_manager.put(cursor, kv_namespace, key, str(value))
+        cleanup_polluted_memory_cpu_settings(job_variables, values)
 
-        keys = values.keys()
-        keys = [key.upper() for key in keys]
-        all_keys = kv_manager.get_keys(cursor, kv_namespace)
-        missing_keys = list(set(all_keys) ^ set(keys))
-        for key in missing_keys:
-            kv_manager.delete(cursor, kv_namespace, key)
+        manage_kv(cursor, f"vars/job/{job}", values)
+        manage_kv(cursor, f"{job}.variables", job_variables)
 
     cursor.execute("SELECT name FROM job_db.job")
     all_jobs = [row[0] for row in cursor.fetchall()]
@@ -289,7 +325,7 @@ def build(cursor):
     for agent_ip in agents:
         agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
         for job in agent_removed_jobs:
-            for namespace in [f"job/{job}", f"vars/job/{job}"]:
+            for namespace in [f"job/{job}", f"vars/job/{job}", f"{job}.variables"]:
                 deleted_keys = kv_manager.get_keys(cursor, namespace)
                 for key in deleted_keys:
                     kv_manager.delete(cursor, namespace, key)

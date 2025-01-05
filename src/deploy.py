@@ -39,14 +39,16 @@ def handle_disabled_stopped_allocations(cursor, job):
     allocations.extend(disabled_allocations)
 
     if counts['removed'] == counts['total']:  # job removed
-        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=False, job_health_check_flag=False)
+        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=False,
+                               job_health_check_flag=False)
         update_allocation_hash(cursor, job, allocations)
     elif counts['removed'] > 0:  # few allocations removed
-        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=True, job_health_check_flag=False)
+        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=True,
+                               job_health_check_flag=False)
         update_allocation_hash(cursor, job, allocations)
 
 
-def  update_allocation_hash(cursor, job, allocations):
+def update_allocation_hash(cursor, job, allocations):
     for agent_ip in allocations:
         agent_dir = context_manager.get_agent_dir(agent_ip)
         md5_hash = update_job.calculate_dir_md5(f"{agent_dir}/jobs/{job}")
@@ -178,6 +180,7 @@ def main():
 
             for job in jobs:
                 handle_new_updated_allocations(job)
+
 
 if __name__ == "__main__":
     main()

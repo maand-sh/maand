@@ -114,7 +114,7 @@ def validate_resource_limit(cursor):
         for job in jobs:
             min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = job_data.get_job_resource_limits(cursor, job)
 
-            namespace = f"vars/job/{job}"
+            namespace = f"{job}.variables"
             job_cpu = float(kv_manager.get(cursor, namespace, "CPU") or "0")
             job_memory = float(kv_manager.get(cursor, namespace, "MEMORY") or "0")
 
@@ -130,25 +130,25 @@ def validate_resource_limit(cursor):
                     f"Minimum allowed: {min_cpu_mhz} MHZ, Maximum allowed: {max_cpu_mhz} MHZ."
                 )
 
-            if min_memory_mb > 0 and job_memory < min_memory_mb:
+            if min_memory_mb > 0 and min_memory_mb > job_memory:
                 raise Exception(
                     f"Memory allocation for job {job} is invalid. "
                     f"Minimum allowed: {min_memory_mb} MB, Allocated: {job_memory} MB."
                 )
 
-            if max_memory_mb > 0 and job_memory > max_memory_mb:
+            if max_memory_mb > 0 and max_memory_mb < job_memory:
                 raise Exception(
                     f"Memory allocation for job {job} is invalid. "
                     f"Maximum allowed: {max_memory_mb} MB, Allocated: {job_memory} MB."
                 )
 
-            if min_cpu_mhz > 0 and job_cpu < min_cpu_mhz:
+            if min_cpu_mhz > 0 and min_cpu_mhz > job_cpu:
                 raise Exception(
                     f"CPU allocation for job {job} is invalid. "
                     f"Minimum allowed: {min_cpu_mhz} MHZ, Allocated: {job_cpu} MHZ."
                 )
 
-            if max_cpu_mhz > 0 and job_cpu > max_cpu_mhz:
+            if max_cpu_mhz > 0 and max_cpu_mhz < job_cpu:
                 raise Exception(
                     f"CPU allocation for job {job} is invalid. "
                     f"Maximum allowed: {max_cpu_mhz} MHZ, Allocated: {job_cpu} MHZ."

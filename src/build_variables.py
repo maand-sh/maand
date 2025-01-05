@@ -17,8 +17,9 @@ def build_env(cursor, path):
         key = key.upper()
         kv_manager.put(cursor, namespace, key, value)
 
+    available_keys = [k.upper() for k in key_values.keys()]
     all_keys = kv_manager.get_keys(cursor, namespace)
-    missing_keys = list(set(all_keys) ^ set(key_values.keys()))
+    missing_keys = list(set(all_keys) ^ set(available_keys))
     for key in missing_keys:
         kv_manager.delete(cursor, namespace, key)
 

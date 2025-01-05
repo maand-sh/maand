@@ -37,6 +37,14 @@ def get(cursor, namespace, key):
     return row[0] if row else None
 
 
+def get_metadata(cursor, namespace, key):
+    cursor.execute(
+        'SELECT value, version FROM kv_db.key_value WHERE namespace = ? AND key = ? AND version = (SELECT max(version) FROM kv_db.key_value WHERE namespace = ? AND key = ?) AND deleted = 0',
+        (namespace, key, namespace, key))
+    row = cursor.fetchone()
+    return (row[0], row[1],) if row else None
+
+
 def delete(cursor, namespace, key):
     cursor.execute(
         'INSERT INTO kv_db.key_value (key, value, namespace, version, ttl, created_date, deleted) SELECT key, value, namespace, max(version) + 1 as version, ttl, created_date, 1 FROM kv_db.key_value WHERE namespace = ? AND key = ? GROUP BY key, namespace',

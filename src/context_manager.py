@@ -26,11 +26,20 @@ def get_agent_minimal_env(agent_ip):
 
 def get_agent_env(cursor, agent_ip):
     env = get_agent_minimal_env(agent_ip)
-    for ns in ["variables.env", "secrets.env", "ports.env", f"vars/agent/{agent_ip}"]:
+    for ns in ["variables.env", f"vars/agent/{agent_ip}"]:
         keys = kv_manager.get_keys(cursor, ns)
         for key in keys:
             env[key] = kv_manager.get(cursor, ns, key)
     return env
+
+
+def get_job_env(cursor, job):
+    values = {}
+    for job_namespace in [f"job/{job}", f"vars/job/{job}", f"{job}.variables"]:
+        job_keys = kv_manager.get_keys(cursor, job_namespace)
+        for key in job_keys:
+            values[key] = kv_manager.get(cursor, job_namespace, key)
+    return values
 
 
 def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs, update_jobs_json=False):
@@ -60,7 +69,7 @@ def validate_agent_bucket(agent_ip, fail_if_no_bucket_id=True):
         agent_env = get_agent_minimal_env(agent_ip)
         bucket = os.environ.get("BUCKET")
         res = command_manager.command_remote(f"ls /opt/agent/{bucket}", agent_env, stdout=subprocess.PIPE,
-                                            stderr=subprocess.PIPE)
+                                             stderr=subprocess.PIPE)
         if fail_if_no_bucket_id and res.returncode != 0:
             raise Exception(f"agent {agent_ip} : bucket not found.")
     except Exception as e:
@@ -75,7 +84,7 @@ def validate_update_seq(agent_ip):
         update_seq = os.environ.get("UPDATE_SEQ")
         bucket_id = os.environ.get("BUCKET")
         res = command_manager.command_remote(f"cat /opt/agent/{bucket_id}/update_seq.txt", agent_env,
-                                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if res.returncode == 1:
             raise Exception(f"{agent_ip} : {res.stderr}")
         agent_update_seq = res.stdout.decode("utf-8")

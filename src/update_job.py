@@ -5,6 +5,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import jinja2
+
 import command_manager
 import const
 import context_manager
@@ -55,7 +56,7 @@ def process_templates(cursor, values, job):
     agent_dir = context_manager.get_agent_dir(agent_ip)
 
     values = deepcopy(values)
-    for job_namespace in [ f"vars/job/{job}", f"job/{job}"]:
+    for job_namespace in [f"vars/job/{job}", f"job/{job}"]:
         job_keys = kv_manager.get_keys(cursor, job_namespace)
         for key in job_keys:
             values[key] = kv_manager.get(cursor, job_namespace, key)

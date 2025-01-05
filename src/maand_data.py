@@ -6,7 +6,9 @@ import const
 
 
 def get_db(fail_if_not_found=True):
-    if fail_if_not_found and (not os.path.exists(const.MAAND_DB_PATH) or not os.path.exists(const.JOBS_DB_PATH) or not os.path.exists(const.KV_DB_PATH)):
+    if fail_if_not_found and (
+            not os.path.exists(const.MAAND_DB_PATH) or not os.path.exists(const.JOBS_DB_PATH) or not os.path.exists(
+            const.KV_DB_PATH)):
         raise Exception("maand is not initialized")
     db = sqlite3.connect(const.MAAND_DB_PATH)
     db.execute(f"ATTACH DATABASE '{const.JOBS_DB_PATH}' AS job_db;")
@@ -57,6 +59,7 @@ def get_agent_jobs(cursor, agent_ip):
         (agent_ip,))
     rows = cursor.fetchall()
     return [row[0] for row in rows]
+
 
 def get_agent_jobs_and_status(cursor, agent_ip):
     cursor.execute(
