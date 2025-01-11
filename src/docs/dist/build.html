@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="generator" content="Observable Framework v1.13.0">
+<title>Maand Build | Maand</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" crossorigin>
+<link rel="preload" as="style" href="./_observablehq/theme-near-midnight.d49e655d.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" crossorigin>
+<link rel="stylesheet" type="text/css" href="./_observablehq/theme-near-midnight.d49e655d.css">
+<link rel="modulepreload" href="./_observablehq/client.de0b474c.js">
+<link rel="modulepreload" href="./_observablehq/runtime.9393ab6d.js">
+<link rel="modulepreload" href="./_observablehq/stdlib.95bfbf7e.js">
+<link rel="icon" href="./_file/observable.1af93621.png" type="image/png" sizes="32x32">
+<script type="module">
+
+import "./_observablehq/client.de0b474c.js";
+
+</script>
+</head>
+<body>
+<input id="observablehq-sidebar-toggle" type="checkbox" title="Toggle sidebar">
+<label id="observablehq-sidebar-backdrop" for="observablehq-sidebar-toggle"></label>
+<nav id="observablehq-sidebar">
+  <ol>
+    <label id="observablehq-sidebar-close" for="observablehq-sidebar-toggle"></label>
+    <li class="observablehq-link"><a href="./">Maand</a></li>
+  </ol>
+  <section class="observablehq-section-active">
+    <summary>Guide</summary>
+    <ol>
+    <li class="observablehq-link"><a href="./maand_init">1. Maand init</a></li>
+    <li class="observablehq-link"><a href="./agent_setup">2. Agent Setup</a></li>
+    <li class="observablehq-link"><a href="./run_command">3. Maand run_command</a></li>
+    <li class="observablehq-link observablehq-link-active"><a href="./build">4. Maand build</a></li>
+    <li class="observablehq-link"><a href="./update">5. Maand update</a></li>
+    <li class="observablehq-link"><a href="./assign_roles">6. Assign Roles</a></li>
+    <li class="observablehq-link"><a href="./job_setup">7. Job Setup</a></li>
+    <li class="observablehq-link"><a href="./job_control">8. Job Control</a></li>
+    <li class="observablehq-link"><a href="./add_health_check">9. Health Check</a></li>
+    <li class="observablehq-link"><a href="./setup_prometheus">10. Prometheus</a></li>
+    </ol>
+  </section>
+  <section>
+    <summary>Insides</summary>
+    <ol>
+    <li class="observablehq-link"><a href="./agent">Agent</a></li>
+    <li class="observablehq-link"><a href="./bucket">Bucket</a></li>
+    <li class="observablehq-link"><a href="./roles">Roles</a></li>
+    <li class="observablehq-link"><a href="./job">Job</a></li>
+    <li class="observablehq-link"><a href="./allocations">Allocations</a></li>
+    <li class="observablehq-link"><a href="./job_command">Job Command</a></li>
+    <li class="observablehq-link"><a href="./health_check">Health Check</a></li>
+    </ol>
+  </section>
+</nav>
+<script>{const e=document.querySelector("#observablehq-sidebar"),t=document.querySelector("#observablehq-sidebar-toggle"),r=sessionStorage.getItem("observablehq-sidebar");r?t.checked=r==="true":t.indeterminate=!0;for(const o of document.querySelectorAll("#observablehq-sidebar summary")){const s=o.parentElement;switch(sessionStorage.getItem(`observablehq-sidebar:${o.textContent}`)){case"true":s.open=!0;break;case"false":s.classList.contains("observablehq-section-active")||(s.open=!1);break}}addEventListener("beforeunload",()=>sessionStorage.setItem("observablehq-sidebar-scrolly",`${e.scrollTop}`));const a=sessionStorage.getItem("observablehq-sidebar-scrolly");a!=null&&(e.style.cssText="overflow: hidden;",e.scrollTop=+a,e.style.cssText="");}</script>
+<div id="observablehq-center">
+<aside id="observablehq-toc" data-selector="h1:not(:first-of-type)[id], h2:first-child[id], :not(h1) + h2[id]">
+<nav>
+<div>Contents</div>
+<ol>
+<li class="observablehq-secondary-link"><a href="#list-agents">List Agents</a></li>
+<li class="observablehq-secondary-link"><a href="#view-bucket-information">View Bucket Information</a></li>
+</ol>
+</nav>
+</aside>
+<main id="observablehq-main" class="observablehq">
+<h1 id="build" tabindex="-1"><a class="observablehq-header-anchor" href="#build">Build</a></h1>
+<p>The <code>maand build</code> command compile changes in the <code>workspace</code> folder and ready for execution.</p>
+<hr>
+<p>To compile changes, simply run:</p>
+<pre data-language="shell"><code class="language-shell"><span class="hljs-meta prompt_">$ </span><span class="language-bash">maand build</span>
+</code></pre>
+<p><strong>Note:</strong><br>
+The <code>maand build</code> command does not produce any output upon success. This is expected behavior.</p>
+<hr>
+<h2 id="list-agents" tabindex="-1"><a class="observablehq-header-anchor" href="#list-agents">List Agents</a></h2>
+<p>To view all agents, their roles, and status, use:</p>
+<pre data-language="shell"><code class="language-shell"><span class="hljs-meta prompt_">$ </span><span class="language-bash">maand <span class="hljs-built_in">cat</span> agents</span>
+</code></pre>
+<h4 id="example-output" tabindex="-1"><a class="observablehq-header-anchor" href="#example-output">Example Output:</a></h4>
+<pre data-language="plaintext"><code class="language-plaintext">agent_id                              agent_ip       detained  roles                                
+------------------------------------  -------------  --------  -------------------------------------
+1117262b-c412-4c28-8724-e22a3c194947  10.27.221.181  0         agent
+25d833a2-a7da-450f-81a6-11ecd1ef4632  10.27.221.144  0         agent           
+94dfe46b-2326-46d5-8956-971a774af8d2  10.27.221.170  0         agent   
+</code></pre>
+<hr>
+<h2 id="view-bucket-information" tabindex="-1"><a class="observablehq-header-anchor" href="#view-bucket-information">View Bucket Information</a></h2>
+<p>To check the details of your current bucket:</p>
+<pre data-language="bash"><code class="language-bash">$ maand info
+</code></pre>
+<h4 id="example-output-1" tabindex="-1"><a class="observablehq-header-anchor" href="#example-output-1">Example Output:</a></h4>
+<pre data-language="plaintext"><code class="language-plaintext">bucket                                update_seq
+------------------------------------  ----------
+db3c0da7-6709-4d8c-94a0-5f66b0e32249  0
+</code></pre>
+</main>
+<footer id="observablehq-footer">
+<nav><a rel="prev" href="./run_command"><span>3. Maand run_command</span></a><a rel="next" href="./update"><span>5. Maand update</span></a></nav>
+<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2024-11-28T23:59:30">Nov 28, 2024</a>.</div>
+</footer>
+</div>
+</body>
+</html>

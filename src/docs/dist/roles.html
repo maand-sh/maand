@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="generator" content="Observable Framework v1.13.0">
+<title>Roles | Maand</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" crossorigin>
+<link rel="preload" as="style" href="./_observablehq/theme-near-midnight.d49e655d.css">
+<link rel="stylesheet" type="text/css" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,200..900;1,8..60,200..900&amp;display=swap" crossorigin>
+<link rel="stylesheet" type="text/css" href="./_observablehq/theme-near-midnight.d49e655d.css">
+<link rel="modulepreload" href="./_observablehq/client.de0b474c.js">
+<link rel="modulepreload" href="./_observablehq/runtime.9393ab6d.js">
+<link rel="modulepreload" href="./_observablehq/stdlib.95bfbf7e.js">
+<link rel="icon" href="./_file/observable.1af93621.png" type="image/png" sizes="32x32">
+<script type="module">
+
+import "./_observablehq/client.de0b474c.js";
+
+</script>
+</head>
+<body>
+<input id="observablehq-sidebar-toggle" type="checkbox" title="Toggle sidebar">
+<label id="observablehq-sidebar-backdrop" for="observablehq-sidebar-toggle"></label>
+<nav id="observablehq-sidebar">
+  <ol>
+    <label id="observablehq-sidebar-close" for="observablehq-sidebar-toggle"></label>
+    <li class="observablehq-link"><a href="./">Maand</a></li>
+  </ol>
+  <section>
+    <summary>Guide</summary>
+    <ol>
+    <li class="observablehq-link"><a href="./maand_init">1. Maand init</a></li>
+    <li class="observablehq-link"><a href="./agent_setup">2. Agent Setup</a></li>
+    <li class="observablehq-link"><a href="./run_command">3. Maand run_command</a></li>
+    <li class="observablehq-link"><a href="./build">4. Maand build</a></li>
+    <li class="observablehq-link"><a href="./update">5. Maand update</a></li>
+    <li class="observablehq-link"><a href="./assign_roles">6. Assign Roles</a></li>
+    <li class="observablehq-link"><a href="./job_setup">7. Job Setup</a></li>
+    <li class="observablehq-link"><a href="./job_control">8. Job Control</a></li>
+    <li class="observablehq-link"><a href="./add_health_check">9. Health Check</a></li>
+    <li class="observablehq-link"><a href="./setup_prometheus">10. Prometheus</a></li>
+    </ol>
+  </section>
+  <section class="observablehq-section-active">
+    <summary>Insides</summary>
+    <ol>
+    <li class="observablehq-link"><a href="./agent">Agent</a></li>
+    <li class="observablehq-link"><a href="./bucket">Bucket</a></li>
+    <li class="observablehq-link observablehq-link-active"><a href="./roles">Roles</a></li>
+    <li class="observablehq-link"><a href="./job">Job</a></li>
+    <li class="observablehq-link"><a href="./allocations">Allocations</a></li>
+    <li class="observablehq-link"><a href="./job_command">Job Command</a></li>
+    <li class="observablehq-link"><a href="./health_check">Health Check</a></li>
+    </ol>
+  </section>
+</nav>
+<script>{const e=document.querySelector("#observablehq-sidebar"),t=document.querySelector("#observablehq-sidebar-toggle"),r=sessionStorage.getItem("observablehq-sidebar");r?t.checked=r==="true":t.indeterminate=!0;for(const o of document.querySelectorAll("#observablehq-sidebar summary")){const s=o.parentElement;switch(sessionStorage.getItem(`observablehq-sidebar:${o.textContent}`)){case"true":s.open=!0;break;case"false":s.classList.contains("observablehq-section-active")||(s.open=!1);break}}addEventListener("beforeunload",()=>sessionStorage.setItem("observablehq-sidebar-scrolly",`${e.scrollTop}`));const a=sessionStorage.getItem("observablehq-sidebar-scrolly");a!=null&&(e.style.cssText="overflow: hidden;",e.scrollTop=+a,e.style.cssText="");}</script>
+<div id="observablehq-center">
+<aside id="observablehq-toc" data-selector="h1:not(:first-of-type)[id], h2:first-child[id], :not(h1) + h2[id]">
+<nav>
+<div>Contents</div>
+<ol>
+<li class="observablehq-secondary-link"><a href="#variables">Variables</a></li>
+</ol>
+</nav>
+</aside>
+<main id="observablehq-main" class="observablehq">
+<h1 id="roles-and-variables" tabindex="-1"><a class="observablehq-header-anchor" href="#roles-and-variables">Roles and Variables</a></h1>
+<p>Maand smartly generates environment variables for each agent based on roles and attributes.</p>
+<hr>
+<p>These variables generated to simplify service discovery, role-based configuration, and agent-specific customizations.</p>
+<p>Example agents.json file</p>
+<pre data-language="json"><code class="language-json"><span class="hljs-punctuation">[</span>
+ <span class="hljs-punctuation">{</span>
+   <span class="hljs-attr">"host"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"10.27.221.181"</span><span class="hljs-punctuation">,</span>
+   <span class="hljs-attr">"roles"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"prometheus"</span><span class="hljs-punctuation">]</span>
+ <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-punctuation">{</span>
+   <span class="hljs-attr">"host"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"10.27.221.144"</span>
+ <span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+ <span class="hljs-punctuation">{</span>
+   <span class="hljs-attr">"host"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"10.27.221.170"</span>
+ <span class="hljs-punctuation">}</span>
+<span class="hljs-punctuation">]</span>
+</code></pre>
+<p>based on example agents.json file, following variables are generated</p>
+<h2 id="variables" tabindex="-1"><a class="observablehq-header-anchor" href="#variables">Variables</a></h2>
+<ul>
+<li><strong><code>AGENT_0</code>, <code>AGENT_1</code>, <code>AGENT_2</code></strong>: IP addresses of all agents in the agent role.</li>
+<li><strong><code>AGENT_ALLOCATION_INDEX</code></strong>: The index of the current agent in the <code>agent</code> role.</li>
+<li><strong><code>AGENT_IP</code></strong>: The IP address of the current agent.</li>
+<li><strong><code>AGENT_LENGTH</code></strong>: Total number of agents in the <code>agent</code> role.</li>
+<li><strong><code>AGENT_NODES</code></strong>: Comma-separated list of all agent IPs in the <code>agent</code> role.</li>
+<li><strong><code>AGENT_PEERS</code></strong>: Comma-separated list of all other <code>agent</code> IPs (excluding the current agent) in the <code>agent</code> role.</li>
+<li><strong><code>AGENT_ROLE_ID</code></strong>: Unique identifier for the <code>agent</code> role.</li>
+<li><strong><code>ROLES</code></strong>: Comma-separated list of roles assigned to the agent.</li>
+<li><strong><code>PROMETHEUS_0</code></strong>: IP address of the first agent with the <code>prometheus</code> role.</li>
+<li><strong><code>PROMETHEUS_ALLOCATION_INDEX</code></strong>: The index of the current agent in the <code>prometheus</code> role.</li>
+<li><strong><code>PROMETHEUS_LENGTH</code></strong>: Total number of agents with the <code>prometheus</code> role.</li>
+<li><strong><code>PROMETHEUS_NODES</code></strong>: Comma-separated list of all agent IPs in the <code>prometheus</code> role.</li>
+<li><strong><code>PROMETHEUS_ROLE_ID</code></strong>: Unique identifier for the <code>prometheus</code> role.</li>
+</ul>
+<hr>
+<h3 id="examples" tabindex="-1"><a class="observablehq-header-anchor" href="#examples"><strong>Examples</strong></a></h3>
+<h4 id="agent-10-27-221-181" tabindex="-1"><a class="observablehq-header-anchor" href="#agent-10-27-221-181">Agent <code>10.27.221.181</code>:</a></h4>
+<p>This agent has the roles <code>agent</code> and <code>prometheus</code>:</p>
+<pre data-language="plaintext"><code class="language-plaintext">AGENT_0=10.27.221.181
+AGENT_ALLOCATION_INDEX=0
+AGENT_IP=10.27.221.181
+AGENT_NODES=10.27.221.181,10.27.221.144,10.27.221.170
+PROMETHEUS_0=10.27.221.181
+PROMETHEUS_ALLOCATION_INDEX=0
+PROMETHEUS_NODES=10.27.221.181
+ROLES=agent,prometheus
+</code></pre>
+<h4 id="agent-10-27-221-144" tabindex="-1"><a class="observablehq-header-anchor" href="#agent-10-27-221-144">Agent <code>10.27.221.144</code>:</a></h4>
+<p>This agent has only the <code>agent</code> role:</p>
+<pre data-language="plaintext"><code class="language-plaintext">AGENT_1=10.27.221.144
+AGENT_ALLOCATION_INDEX=1
+AGENT_IP=10.27.221.144
+AGENT_NODES=10.27.221.181,10.27.221.144,10.27.221.170
+PROMETHEUS_NODES=10.27.221.181
+ROLES=agent
+</code></pre>
+<h4 id="agent-10-27-221-170" tabindex="-1"><a class="observablehq-header-anchor" href="#agent-10-27-221-170">Agent <code>10.27.221.170</code>:</a></h4>
+<p>This agent has only the <code>agent</code> role:</p>
+<pre data-language="plaintext"><code class="language-plaintext">AGENT_2=10.27.221.170
+AGENT_ALLOCATION_INDEX=2
+AGENT_IP=10.27.221.170
+AGENT_NODES=10.27.221.181,10.27.221.144,10.27.221.170
+PROMETHEUS_NODES=10.27.221.181
+ROLES=agent
+</code></pre>
+<hr>
+<h3 id="usage-in-jobs" tabindex="-1"><a class="observablehq-header-anchor" href="#usage-in-jobs"><strong>Usage in Jobs</strong></a></h3>
+<p>These variables allow dynamic behavior in jobs:</p>
+<ul>
+<li><strong>Static Discovery</strong>: Use <code>AGENT_NODES</code> or <code>AGENT_PEERS</code> for distributed applications.</li>
+<li><strong>Role-Specific Logic</strong>: Use <code>PROMETHEUS_NODES</code> for tasks targeting <code>prometheus</code> agents.</li>
+<li><strong>Agent Customization</strong>: Tailor configurations based on <code>AGENT_ALLOCATION_INDEX</code> or <code>AGENT_IP</code>.</li>
+</ul>
+<p>This approach ensures scalability and simplifies multi-agent orchestration!</p>
+</main>
+<footer id="observablehq-footer">
+<nav><a rel="prev" href="./bucket"><span>Bucket</span></a><a rel="next" href="./job"><span>Job</span></a></nav>
+<div>Built with <a href="https://observablehq.com/" target="_blank" rel="noopener noreferrer">Observable</a> on <a title="2024-11-28T23:59:30">Nov 28, 2024</a>.</div>
+</footer>
+</div>
+</body>
+</html>
