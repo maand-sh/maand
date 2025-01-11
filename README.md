@@ -2,7 +2,7 @@
 
 Maand is a lightweight, agentless framework designed for efficient task orchestration across multiple agents within a cluster. It automates job execution, coordinating tasks between agents.
 
-docs : https://kirubasankars.github.io/maand/
+docs : https://kirubasankars.github.io/maand_docs/latest
 
 ## License
 
