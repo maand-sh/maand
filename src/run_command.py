@@ -17,10 +17,13 @@ def get_args():
     parser.add_argument('--labels', default="")
     parser.add_argument('--cmd', default="")
     parser.add_argument('--concurrency', default="4", type=int)
-    parser.add_argument('--no-check', action='store_true')
+    parser.add_argument('--disable-cluster-check', action='store_true')
     parser.add_argument('--health_check', action='store_true')
-    parser.set_defaults(no_check=False)
+    parser.add_argument('--local', action='store_true')
+
+    parser.set_defaults(disable_cluster_check=False)
     parser.set_defaults(health_check=False)
+    parser.set_defaults(local=False)
     args = parser.parse_args()
 
     if args.agents:
@@ -40,7 +43,12 @@ def run_command(agent_ip):
 
         if args.health_check and not job_health_check.health_check(cursor, jobs, False, times=20, interval=5):
             utils.stop_the_world()
-        command_manager.capture_command_file_remote(f"{const.WORKSPACE_PATH}/command.sh", env, prefix=agent_ip)
+
+        if args.local:
+            command_manager.capture_command_local(f"sh {const.WORKSPACE_PATH}/command.sh", env=env, prefix=agent_ip)
+        else:
+            command_manager.capture_command_file_remote(f"{const.WORKSPACE_PATH}/command.sh", env, prefix=agent_ip)
+
         time.sleep(5)
         if args.health_check and not job_health_check.health_check(cursor, jobs, True, times=20, interval=5):
             utils.stop_the_world()
@@ -61,7 +69,7 @@ if __name__ == "__main__":
         context_manager.export_env_bucket_update_seq(cursor)
         system_manager.run(cursor, command_manager.scan_agent)
 
-        if not args.no_check:
+        if not args.disable_cluster_check:
             system_manager.run(cursor, context_manager.validate_cluster_update_seq)
 
         system_manager.run(

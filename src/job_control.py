@@ -66,10 +66,14 @@ def execute_default_action(job, allocations, target, alloc_health_check):
     bucket = os.getenv("BUCKET")
     for agent_ip in allocations:
         agent_env = context_manager.get_agent_minimal_env(agent_ip)
-        command_manager.capture_command_remote(
+        r = command_manager.capture_command_remote(
             f"python3 /opt/agent/{bucket}/bin/runner.py {bucket} {target} --jobs {job}",
             env=agent_env, prefix=agent_ip
         )
+
+        if r.returncode != 0:
+            raise Exception(r)
+
         if alloc_health_check:
             with maand_data.get_db() as db:
                 cursor = db.cursor()

@@ -9,7 +9,6 @@ if [ -z "${1+x}" ]; then
   echo "  deploy                        deploy jobs"
   echo "  uptime                        Check connectivity or uptime"
   echo "  run_command                   Run a command on the agents"
-  echo "  run_command_local             Run a command locally"
   echo "  job                           Run job control operations (start, stop and restart)"
   echo "  alloc_command                 Run job-related commands"
   echo "  cat                           Cat info from build action (agents, jobs, allocations, kv)"
@@ -67,9 +66,6 @@ case "$OPERATION" in
     ;;
   "run_command")
     run_python_script "run_command.py" "$@"
-    ;;
-  "run_command_local")
-    run_python_script "run_command_local.py" "$@"
     ;;
   "gc")
     run_python_script "gc.py"

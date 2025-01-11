@@ -17,7 +17,7 @@ def build_maand_conf():
     config = {
         "use_sudo": "1",
         "ssh_user": "agent",
-        "ssh_key": "agent.key",
+        "ssh_key": "secrets/agent.key",
         "certs_ttl": "60"
     }
 

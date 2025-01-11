@@ -37,6 +37,8 @@ def capture_command_local(cmd, env, prefix):
 
     process.wait()
 
+    return process
+
 
 def command_local(cmd, env=None, stdout=None, stderr=None):
     file_id = uuid.uuid4()
