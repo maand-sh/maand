@@ -7,7 +7,6 @@ if [ -z "${1+x}" ]; then
   echo "  init                          Initialize the bucket"
   echo "  build                         Build bucket"
   echo "  deploy                        deploy jobs"
-  echo "  uptime                        Check connectivity or uptime"
   echo "  run_command                   Run a command on the agents"
   echo "  job                           Run job control operations (start, stop and restart)"
   echo "  alloc_command                 Run job-related commands"
@@ -60,9 +59,6 @@ case "$OPERATION" in
     ;;
   "cat")
     run_python_script "cat.py" "$@"
-    ;;
-  "uptime")
-    run_python_script "uptime.py" "$@"
     ;;
   "run_command")
     run_python_script "run_command.py" "$@"
