@@ -46,6 +46,10 @@ def build_deployment_seq(cursor):
     cursor.execute(sql)
 
 
+def is_command_file_exists(job, command):
+    return os.path.isfile(f"/bucket/workspace/jobs/{job}/_modules/{command}.py")
+
+
 def get_job_cluster_level_value(job):
     jobs_conf_path = utils.get_maand_jobs_conf()
     path = f"/bucket/{jobs_conf_path}"
@@ -132,7 +136,8 @@ def build_jobs(cursor, job):
                                     "type": "string",
                                     "allOf": [
                                         {
-                                            "pattern": "^(direct|health_check|post_build|pre_deploy|post_deploy|job_control)$"}
+                                            "pattern": "^(direct|health_check|post_build|pre_deploy|post_deploy|job_control)$"
+                                        }
                                     ]
                                 }
                             },
@@ -210,12 +215,20 @@ def build_jobs(cursor, job):
                 logger.error(f"{depend_on_job} job not found: command: {command}, depend on job: {depend_on_job}")
             depend_on_command = depend_on.get("command")
             depend_on_config = json.dumps(depend_on.get("config", {}))
+
+            if depend_on_job:
+                if not is_command_file_exists(depend_on_job, depend_on_command):
+                    raise Exception(f"job {job}, alloc command not found depend_on job {job} alloc_command {command}")
+
             for on in executed_on:
                 cursor.execute(
                     "INSERT INTO job_db.job_commands (job_id, job_name, name, executed_on, depend_on_job, depend_on_command, depend_on_config) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (job_id, job, command, on, depend_on_job, depend_on_command, depend_on_config))
         else:
             logger.error(f"The commands must include an 'executed_on'. job: {job}, command: {command}")
+
+        if not is_command_file_exists(job, command):
+            raise Exception(f"alloc command not found job {job} alloc_command {command}")
 
     for file in files:
         isdir = os.path.isdir(f"{const.WORKSPACE_PATH}/jobs/{file}")

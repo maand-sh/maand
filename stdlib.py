@@ -1,15 +1,13 @@
-import sys
-
-sys.path.append("/maand")
-
 import json
 import os
-from core import command_manager, maand_data
-import kv_manager
+import sys
+sys.path.append("/maand")
+
+import kv_manager as internal_kv_manager
+from core import maand_data as __maand_data, command_manager as __command_manager
+from core import context_manager
 
 
-def get_db():
-    return maand_data.get_db()
 
 
 def get_demands():
@@ -18,9 +16,29 @@ def get_demands():
         return json.load(f)
 
 
-def get_kv_manager():
-    return kv_manager
+def get_db():
+    return __maand_data.get_db()
 
 
-def get_command_manager():
-    return command_manager
+def kv_get(cursor, namespace, key):
+    return internal_kv_manager.get(cursor, namespace, key)
+
+
+def kv_get_metadata(cursor, namespace, key):
+    return internal_kv_manager.get_metadata(cursor, namespace, key)
+
+
+def kv_put(cursor, namespace, key, value):
+    return internal_kv_manager.put(cursor, namespace, key, value)
+
+
+def kv_delete(cursor, namespace, key):
+    return internal_kv_manager.delete(cursor, namespace, key)
+
+
+def execute_shell_command(cursor, command, agent_ip=None):
+    host = agent_ip or os.environ.get("AGENT_IP")
+    agent_env = context_manager.get_agent_env(cursor, host)
+    return __command_manager.command_remote(command, env=agent_env)
+
+
