@@ -3,15 +3,10 @@ import base64
 import json
 from itertools import chain
 
-import command_manager
-import const
-import context_manager
-import job_control
-import job_data
+from core import command_manager, context_manager, const, job_data, maand_data, system_manager
+from deploy import update_job
 import kv_manager
-import maand_data
-import system_manager
-import update_job
+import job_control
 
 
 def get_args():

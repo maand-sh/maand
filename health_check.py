@@ -1,9 +1,7 @@
 import argparse
 import sys
 
-import context_manager
-import job_health_check
-import maand_data
+from core import context_manager, maand_data, job_health_check
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

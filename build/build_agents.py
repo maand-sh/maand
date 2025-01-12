@@ -3,10 +3,8 @@ import uuid
 import jsonschema
 from jsonschema import Draft202012Validator
 
+from core import maand_data, utils, workspace
 import kv_manager
-import maand_data
-import utils
-import workspace
 
 logger = utils.get_logger()
 

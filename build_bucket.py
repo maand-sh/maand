@@ -2,17 +2,10 @@ import re
 import sys
 from copy import deepcopy
 
+from build import build_jobs, build_agents, build_allocations, build_variables, build_certs
+from core import job_data, maand_data, utils, workspace
 import alloc_command_executor
-import build_agents
-import build_allocations
-import build_certs
-import build_jobs
-import build_variables
-import job_data
 import kv_manager
-import maand_data
-import utils
-import workspace
 
 logger = utils.get_logger()
 

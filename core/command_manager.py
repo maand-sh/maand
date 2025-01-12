@@ -1,8 +1,8 @@
 import subprocess
 import uuid
 
-import const
-import utils
+from core import const
+from core import utils
 
 
 def capture_command_local(cmd, env, prefix):

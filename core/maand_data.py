@@ -2,7 +2,7 @@ import os
 import sqlite3
 import uuid
 
-import const
+from core import const
 
 
 def get_db(fail_if_not_found=True):

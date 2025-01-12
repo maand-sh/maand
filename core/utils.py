@@ -3,8 +3,8 @@ import re
 import subprocess
 from functools import cache
 
-import const
-from log_manager import LoggerManager
+from core import const
+from core.log_manager import LoggerManager
 
 log_manager = LoggerManager()
 

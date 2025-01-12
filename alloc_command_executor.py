@@ -4,10 +4,8 @@ import shutil
 import subprocess
 import sys
 
-import context_manager
-import job_data
-import maand_data
-import utils
+from core import context_manager, job_data, maand_data
+from core import utils
 
 logger = utils.get_logger()
 

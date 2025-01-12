@@ -4,9 +4,8 @@ sys.path.append("/maand")
 
 import json
 import os
-import maand_data
+from core import command_manager, maand_data
 import kv_manager
-import command_manager
 
 
 def get_db():

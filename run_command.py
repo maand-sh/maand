@@ -2,13 +2,7 @@ import argparse
 import os
 import time
 
-import command_manager
-import const
-import context_manager
-import job_health_check
-import maand_data
-import system_manager
-import utils
+from core import command_manager, context_manager, const, maand_data, job_health_check, utils, system_manager
 
 
 def get_args():

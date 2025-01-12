@@ -1,9 +1,7 @@
 import multiprocessing
 import sys
 
-import command_manager
-import const
-import maand_data
+from core import command_manager, const, maand_data
 
 
 def split_list(input_list, chunk_size=3):

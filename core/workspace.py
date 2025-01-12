@@ -2,7 +2,7 @@ import glob
 import json
 import os
 
-import const
+from core import const
 
 
 def get_agents():

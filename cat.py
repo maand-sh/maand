@@ -1,8 +1,6 @@
 import sys
 
-import command_manager
-import const
-import maand_data
+from core import command_manager, const, maand_data
 
 
 def statement(sql, no_rows_found_msg, mode="column"):

@@ -1,5 +1,5 @@
+from core import maand_data
 import kv_manager
-import maand_data
 
 
 def clean_agents(cursor):

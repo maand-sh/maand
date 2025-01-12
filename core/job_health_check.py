@@ -1,9 +1,8 @@
 import time
 
+from core import job_data, maand_data
 import alloc_command_executor
-import job_data
-import maand_data
-import utils
+from core import utils
 
 
 def health_check(cursor, jobs_filter, wait, interval=5, times=10):

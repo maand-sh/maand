@@ -4,9 +4,8 @@ import uuid
 
 from dotenv import dotenv_values
 
-import const
+from core import const, maand_data
 import kv_manager
-import maand_data
 
 
 def build_env(cursor, path):
