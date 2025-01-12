@@ -58,7 +58,7 @@ def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs, update_jobs_jso
 
     bucket = agent_env.get("BUCKET", "")
     command_manager.command_remote(f"mkdir -p /opt/agent/{bucket}", env=agent_env)
-    r = command_manager.command_local(f"bash /maand/rsync_upload.sh {file_id}", env=agent_env)
+    r = command_manager.command_local(f"bash /maand/deploy/rsync_upload.sh {file_id}", env=agent_env)
     if r.returncode != 0:
         raise Exception(f"failed to upload files, agent_ip: {agent_ip}")
 

@@ -6,7 +6,7 @@ if [ -z "${1+x}" ]; then
   echo "Operations:"
   echo "  init                          Initialize the bucket"
   echo "  build                         Build bucket"
-  echo "  deploy                        deploy jobs"
+  echo "  deploy                        deploy bucket/jobs"
   echo "  run_command                   Run a command on the agents"
   echo "  job                           Run job control operations (start, stop and restart)"
   echo "  alloc_command                 Run job-related commands"
