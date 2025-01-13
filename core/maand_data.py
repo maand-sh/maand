@@ -13,19 +13,24 @@ def get_db(fail_if_not_found=True):
 
 def setup_maand_database(cursor):
     cursor.execute("CREATE TABLE IF NOT EXISTS bucket (bucket_id TEXT, update_seq INT, ca_md5_hash TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS agent (agent_id TEXT, agent_ip TEXT, agent_memory_mb TEXT, agent_cpu TEXT, detained INT, position INT)")
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS agent (agent_id TEXT, agent_ip TEXT, agent_memory_mb TEXT, agent_cpu TEXT, detained INT, position INT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS agent_labels (agent_id TEXT, label TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS agent_tags (agent_id TEXT, key TEXT, value TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS agent_jobs (agent_id TEXT, job TEXT, disabled INT, removed INT, current_md5_hash TEXT, previous_md5_hash TEXT)")
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS agent_jobs (agent_id TEXT, job TEXT, disabled INT, removed INT, current_md5_hash TEXT, previous_md5_hash TEXT)")
 
-    cursor.execute("CREATE TABLE IF NOT EXISTS job (job_id TEXT PRIMARY KEY, name TEXT, version TEXT, min_memory_mb TEXT, max_memory_mb TEXT, min_cpu TEXT, max_cpu TEXT, certs_md5_hash TEXT, deployment_seq INT)")
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS job (job_id TEXT PRIMARY KEY, name TEXT, version TEXT, min_memory_mb TEXT, max_memory_mb TEXT, min_cpu TEXT, max_cpu TEXT, certs_md5_hash TEXT, deployment_seq INT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS job_labels (job_id TEXT, label TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS job_ports (job_id TEXT, name TEXT, port INT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS job_certs (job_id TEXT, name TEXT, pkcs8 INT, subject TEXT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS job_files (job_id TEXT, path TEXT, content BLOB, isdir BOOL)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS job_commands (job_id TEXT, job_name TEXT, name TEXT, executed_on TEXT, depend_on_job TEXT, depend_on_command TEXT, depend_on_config TEXT)")
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS job_commands (job_id TEXT, job_name TEXT, name TEXT, executed_on TEXT, depend_on_job TEXT, depend_on_command TEXT, depend_on_config TEXT)")
 
-    cursor.execute("CREATE TABLE IF NOT EXISTS key_value (key TEXT, value TEXT, namespace TEXT, version INT, ttl TEXT, created_date TEXT, deleted INT)")
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS key_value (key TEXT, value TEXT, namespace TEXT, version INT, ttl TEXT, created_date TEXT, deleted INT)")
 
     cursor.execute("SELECT bucket_id FROM bucket")
     if cursor.fetchone() is None:

@@ -7,8 +7,8 @@ import uuid
 import jsonschema
 from jsonschema import Draft202012Validator
 
-from core import const, job_data, maand_data, utils, workspace
 import kv_manager
+from core import const, job_data, maand_data, utils, workspace
 
 logger = utils.get_logger()
 
@@ -313,6 +313,7 @@ def cleanup_polluted_memory_cpu_settings(job_variables, values):
 def build(cursor):
     jobs = workspace.get_jobs()
     for job in jobs:
+        assert job == job.lower()
         values = build_jobs(cursor, job) or {}
         job_variables = build_maand_jobs_conf(job) or {}
         build_deployment_seq(cursor)

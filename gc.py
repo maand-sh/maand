@@ -1,10 +1,10 @@
 import sys
 
-from core import maand_data, utils
 import kv_manager
-
+from core import maand_data, utils
 
 logger = utils.get_logger()
+
 
 def clean_agents(cursor):
     cursor.execute("DELETE FROM agent_labels WHERE agent_id IN (SELECT agent_id FROM agent WHERE detained = 1)")

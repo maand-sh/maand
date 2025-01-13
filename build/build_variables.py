@@ -1,11 +1,10 @@
 import copy
-import os.path
 import uuid
 
 from dotenv import dotenv_values
 
-from core import const, maand_data
 import kv_manager
+from core import const, maand_data
 
 
 def build_env(cursor, path):

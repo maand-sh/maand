@@ -1,8 +1,8 @@
 import jsonschema
 from jsonschema import Draft202012Validator
 
-from core import job_data, maand_data, utils, workspace
 import kv_manager
+from core import job_data, maand_data, utils, workspace
 
 logger = utils.get_logger()
 

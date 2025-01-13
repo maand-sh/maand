@@ -1,13 +1,12 @@
 import json
 import os
 import sys
+
 sys.path.append("/maand")
 
 import kv_manager as internal_kv_manager
 from core import maand_data as __maand_data, command_manager as __command_manager
 from core import context_manager
-
-
 
 
 def get_demands():
@@ -29,9 +28,9 @@ def kv_get_metadata(cursor, namespace, key):
 
 
 def kv_put(cursor, namespace, key, value):
-    key = key.lower()
-    namespace = namespace.lower()
     job = os.environ.get("JOB")
+    assert key.lower() == key
+    assert namespace.lower() == namespace
     assert namespace == f"job/{job}"
     return internal_kv_manager.put(cursor, namespace, key, value)
 
@@ -44,5 +43,3 @@ def execute_shell_command(command, agent_ip=None):
     host = agent_ip or os.environ.get("AGENT_IP")
     agent_env = context_manager.get_agent_minimal_env(host)
     return __command_manager.command_remote(command, env=agent_env)
-
-

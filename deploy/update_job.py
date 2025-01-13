@@ -1,13 +1,12 @@
 import base64
 import hashlib
 import os
-from copy import deepcopy
 from pathlib import Path
 
 import jinja2
 
-from core import command_manager, context_manager, const, job_data, maand_data, utils
 import kv_manager
+from core import command_manager, context_manager, const, job_data, maand_data, utils
 
 logger = utils.get_logger()
 

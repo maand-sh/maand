@@ -10,7 +10,11 @@ from core import utils
 logger = utils.get_logger()
 
 
-def execute_alloc_command(cursor, job, command, agent_ip, env):
+def execute_parallel_alloc_command(job, command, allocations, env):
+    pass
+
+
+def execute_alloc_command(job, command, agent_ip, env):
     allocation_env = context_manager.get_agent_minimal_env(agent_ip)
     allocation_env["JOB"] = job
     for k, v in env.items():
@@ -79,7 +83,7 @@ def main():
         result = True
         allocations = maand_data.get_allocations(cursor, job)
         for agent_ip in allocations:
-            result = result and execute_alloc_command(cursor, job, command, agent_ip, {})
+            result = result and execute_alloc_command(job, command, agent_ip, {})
 
         if not result:
             sys.exit(1)

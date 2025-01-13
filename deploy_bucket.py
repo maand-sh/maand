@@ -3,11 +3,10 @@ import base64
 import json
 from itertools import chain
 
+import job_control
+import kv_manager
 from core import command_manager, context_manager, job_data, maand_data, system_manager
 from deploy import update_job
-import kv_manager
-import job_control
-
 
 
 def get_args():

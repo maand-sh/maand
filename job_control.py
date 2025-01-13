@@ -2,8 +2,8 @@ import argparse
 import os
 from concurrent.futures import ThreadPoolExecutor, wait
 
-from core import command_manager, context_manager, job_data, maand_data, job_health_check
 import alloc_command_executor
+from core import command_manager, context_manager, job_data, maand_data, job_health_check
 
 
 def get_args():
@@ -53,7 +53,7 @@ def execute_commands(cursor, commands, job, allocations, target, alloc_health_ch
     for command in commands:
         alloc_command_executor.prepare_command(cursor, job, command)
         for agent_ip in allocations:
-            alloc_command_executor.execute_alloc_command(cursor, job, command, agent_ip, {"TARGET": target})
+            alloc_command_executor.execute_alloc_command(job, command, agent_ip, {"TARGET": target})
             if alloc_health_check:
                 job_health_check.health_check(cursor, [job], wait=True)
 
