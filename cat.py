@@ -5,8 +5,6 @@ from core import command_manager, const, maand_data
 
 def statement(sql, no_rows_found_msg, mode="column"):
     with open("/tmp/sql.txt", "w") as f:
-        f.write(f"ATTACH DATABASE '{const.JOBS_DB_PATH}' AS job_db;\n")
-        f.write(f"ATTACH DATABASE '{const.KV_DB_PATH}' AS kv_db;\n")
         f.write(".header on\n")
         f.write(f".mode {mode}\n")
         f.write(f"{sql}\n")
@@ -35,12 +33,12 @@ if __name__ == "__main__":
 
     elif name == "jobs":
         statement(
-            "SELECT DISTINCT job_id, name, version, (CASE WHEN (SELECT COUNT(1) FROM agent_jobs aj WHERE j.name = aj.job AND aj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled, deployment_seq, (SELECT GROUP_CONCAT(label) FROM job_db.job_labels jl WHERE jl.job_id = j.job_id) as labels FROM job_db.job j ORDER BY deployment_seq, name",
+            "SELECT DISTINCT job_id, name, version, (CASE WHEN (SELECT COUNT(1) FROM agent_jobs aj WHERE j.name = aj.job AND aj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled, deployment_seq, (SELECT GROUP_CONCAT(label) FROM job_labels jl WHERE jl.job_id = j.job_id) as labels FROM job j ORDER BY deployment_seq, name",
             "no jobs found")
 
     elif name == "allocations":
         statement(
-            "SELECT a.agent_ip, aj.job, aj.disabled, aj.removed FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id LEFT JOIN job_db.job j ON j.name = aj.job ORDER BY aj.job",
+            "SELECT a.agent_ip, aj.job, aj.disabled, aj.removed FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id LEFT JOIN job j ON j.name = aj.job ORDER BY aj.job",
             "no allocations found")
 
     elif name == "alloc_commands":
@@ -50,7 +48,7 @@ if __name__ == "__main__":
 
     elif name == "kv":
         statement(
-            "SELECT * FROM (SELECT key, CASE WHEN LENGTH(value) > 50 THEN substr(value, 1, 50) || '...' ELSE value END as value, namespace, max(version) as version, ttl, created_date, deleted FROM kv_db.key_value GROUP BY key, namespace) t ORDER BY namespace, key",
+            "SELECT * FROM (SELECT key, CASE WHEN LENGTH(value) > 50 THEN substr(value, 1, 50) || '...' ELSE value END as value, namespace, max(version) as version, ttl, created_date, deleted FROM key_value GROUP BY key, namespace) t ORDER BY namespace, key",
             "no key values found")
 
     elif name == "ports":
@@ -60,7 +58,7 @@ if __name__ == "__main__":
 
     elif name == "info":
         statement(
-            "SELECT bucket_id as bucket, update_seq, (SELECT (1) AS count FROM main.agent) AS 'number_of_agents', (SELECT (1) AS count FROM job_db.job) AS 'number_of_jobs' FROM bucket",
+            "SELECT bucket_id as bucket, update_seq, (SELECT (1) AS count FROM main.agent) AS 'number_of_agents', (SELECT (1) AS count FROM job) AS 'number_of_jobs' FROM bucket",
             "no info found")
 
     else:

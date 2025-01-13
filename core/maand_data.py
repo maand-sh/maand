@@ -6,24 +6,27 @@ from core import const
 
 
 def get_db(fail_if_not_found=True):
-    if fail_if_not_found and (
-            not os.path.exists(const.MAAND_DB_PATH) or not os.path.exists(const.JOBS_DB_PATH) or not os.path.exists(
-            const.KV_DB_PATH)):
+    if fail_if_not_found and not os.path.exists(const.MAAND_DB_PATH):
         raise Exception("maand is not initialized")
-    db = sqlite3.connect(const.MAAND_DB_PATH)
-    db.execute(f"ATTACH DATABASE '{const.JOBS_DB_PATH}' AS job_db;")
-    db.execute(f"ATTACH DATABASE '{const.KV_DB_PATH}' AS kv_db;")
-    return db
+    return sqlite3.connect(const.MAAND_DB_PATH)
 
 
 def setup_maand_database(cursor):
     cursor.execute("CREATE TABLE IF NOT EXISTS bucket (bucket_id TEXT, update_seq INT, ca_md5_hash TEXT)")
-    cursor.execute(
-        "CREATE TABLE IF NOT EXISTS agent (agent_id TEXT, agent_ip TEXT, agent_memory_mb TEXT, agent_cpu TEXT, detained INT, position INT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS agent (agent_id TEXT, agent_ip TEXT, agent_memory_mb TEXT, agent_cpu TEXT, detained INT, position INT)")
     cursor.execute("CREATE TABLE IF NOT EXISTS agent_labels (agent_id TEXT, label TEXT)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS agent_tags (agent_id TEXT, key TEXT, value INT)")
-    cursor.execute(
-        "CREATE TABLE IF NOT EXISTS agent_jobs (agent_id TEXT, job TEXT, disabled INT, removed INT, current_md5_hash TEXT, previous_md5_hash TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS agent_tags (agent_id TEXT, key TEXT, value TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS agent_jobs (agent_id TEXT, job TEXT, disabled INT, removed INT, current_md5_hash TEXT, previous_md5_hash TEXT)")
+
+    cursor.execute("CREATE TABLE IF NOT EXISTS job (job_id TEXT PRIMARY KEY, name TEXT, version TEXT, min_memory_mb TEXT, max_memory_mb TEXT, min_cpu TEXT, max_cpu TEXT, certs_md5_hash TEXT, deployment_seq INT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS job_labels (job_id TEXT, label TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS job_ports (job_id TEXT, name TEXT, port INT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS job_certs (job_id TEXT, name TEXT, pkcs8 INT, subject TEXT)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS job_files (job_id TEXT, path TEXT, content BLOB, isdir BOOL)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS job_commands (job_id TEXT, job_name TEXT, name TEXT, executed_on TEXT, depend_on_job TEXT, depend_on_command TEXT, depend_on_config TEXT)")
+
+    cursor.execute("CREATE TABLE IF NOT EXISTS key_value (key TEXT, value TEXT, namespace TEXT, version INT, ttl TEXT, created_date TEXT, deleted INT)")
+
     cursor.execute("SELECT bucket_id FROM bucket")
     if cursor.fetchone() is None:
         cursor.execute("INSERT INTO bucket (bucket_id, update_seq) VALUES (?, ?)", (str(uuid.uuid4()), 0))
@@ -55,7 +58,7 @@ def update_update_seq(cursor, seq):
 
 def get_agent_jobs(cursor, agent_ip):
     cursor.execute(
-        "SELECT aj.job, aj.disabled FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id JOIN job_db.job j ON j.name = aj.job AND aj.removed = 0 AND a.agent_ip = ?",
+        "SELECT aj.job, aj.disabled FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id JOIN job j ON j.name = aj.job AND aj.removed = 0 AND a.agent_ip = ?",
         (agent_ip,))
     rows = cursor.fetchall()
     return [row[0] for row in rows]
@@ -63,15 +66,7 @@ def get_agent_jobs(cursor, agent_ip):
 
 def get_agent_jobs_and_status(cursor, agent_ip):
     cursor.execute(
-        "SELECT aj.job, aj.disabled FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id JOIN job_db.job j ON j.name = aj.job AND aj.removed = 0 AND a.agent_ip = ?",
-        (agent_ip,))
-    rows = cursor.fetchall()
-    return {row[0]: {"disabled": row[1]} for row in rows}
-
-
-def get_agent_all_jobs(cursor, agent_ip):
-    cursor.execute(
-        "SELECT aj.job, aj.disabled FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id JOIN job_db.job j ON j.name = aj.job AND a.agent_ip = ?",
+        "SELECT aj.job, aj.disabled FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id JOIN job j ON j.name = aj.job AND aj.removed = 0 AND a.agent_ip = ?",
         (agent_ip,))
     rows = cursor.fetchall()
     return {row[0]: {"disabled": row[1]} for row in rows}
@@ -107,7 +102,7 @@ def get_agents(cursor, labels_filter):
 
 def get_allocations(cursor, job):
     cursor.execute(
-        "SELECT a.agent_ip FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id INNER JOIN job_db.job j ON j.name = aj.job WHERE aj.job = ? ORDER BY a.agent_ip",
+        "SELECT a.agent_ip FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id INNER JOIN job j ON j.name = aj.job WHERE aj.job = ? ORDER BY a.agent_ip",
         (job,))
     rows = cursor.fetchall()
     return [row[0] for row in rows]

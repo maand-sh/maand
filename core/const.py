@@ -3,7 +3,5 @@ CONF_PATH = "/bucket/maand.conf"
 WORKSPACE_PATH = "/bucket/workspace"
 SECRETS_PATH = "/bucket/secrets"
 LOGS_FOLDER = "/bucket/logs"
+
 MAAND_DB_PATH = "/bucket/data/maand.db"
-JOBS_DB_PATH = "/bucket/data/jobs.db"
-AGENTS_DB_PATH = "/bucket/data/agents.db"
-KV_DB_PATH = "/bucket/data/kv.db"

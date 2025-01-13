@@ -4,11 +4,6 @@ import sqlite3
 from datetime import datetime
 
 
-def setup_kv_database(cursor):
-    cursor.execute(
-        'CREATE TABLE IF NOT EXISTS kv_db.key_value (key, value, namespace, version, ttl, created_date, deleted)')
-
-
 def put(cursor, namespace, key, value, ttl=-1):
     if type(value) is not str:
         raise TypeError('value must be a string')
@@ -25,13 +20,13 @@ def put(cursor, namespace, key, value, ttl=-1):
         if deleted == 0 and current_value == value:
             return
     cursor.execute(
-        'INSERT INTO kv_db.key_value (key, value, namespace, version, ttl, created_date, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO key_value (key, value, namespace, version, ttl, created_date, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)',
         (key, value, namespace, version + 1, ttl, get_global_unix_epoch(), 0,))
 
 
 def get(cursor, namespace, key):
     cursor.execute(
-        'SELECT value FROM kv_db.key_value WHERE namespace = ? AND key = ? AND version = (SELECT max(version) FROM kv_db.key_value WHERE namespace = ? AND key = ?) AND deleted = 0',
+        'SELECT value FROM key_value WHERE namespace = ? AND key = ? AND version = (SELECT max(version) FROM key_value WHERE namespace = ? AND key = ?) AND deleted = 0',
         (namespace, key, namespace, key))
     row = cursor.fetchone()
     return row[0] if row else None
@@ -39,7 +34,7 @@ def get(cursor, namespace, key):
 
 def get_metadata(cursor, namespace, key):
     cursor.execute(
-        'SELECT value, version FROM kv_db.key_value WHERE namespace = ? AND key = ? AND version = (SELECT max(version) FROM kv_db.key_value WHERE namespace = ? AND key = ?) AND deleted = 0',
+        'SELECT value, version FROM key_value WHERE namespace = ? AND key = ? AND version = (SELECT max(version) FROM key_value WHERE namespace = ? AND key = ?) AND deleted = 0',
         (namespace, key, namespace, key))
     row = cursor.fetchone()
     return (row[0], row[1],) if row else None
@@ -47,13 +42,13 @@ def get_metadata(cursor, namespace, key):
 
 def delete(cursor, namespace, key):
     cursor.execute(
-        'INSERT INTO kv_db.key_value (key, value, namespace, version, ttl, created_date, deleted) SELECT key, value, namespace, max(version) + 1 as version, ttl, created_date, 1 FROM kv_db.key_value WHERE namespace = ? AND key = ? GROUP BY key, namespace',
+        'INSERT INTO key_value (key, value, namespace, version, ttl, created_date, deleted) SELECT key, value, namespace, max(version) + 1 as version, ttl, created_date, 1 FROM key_value WHERE namespace = ? AND key = ? GROUP BY key, namespace',
         (namespace, key,))
 
 
 def get_keys(cursor, namespace):
     cursor.execute(
-        'SELECT key FROM (SELECT namespace, key, max(version), deleted, created_date FROM kv_db.key_value group by key, namespace) t WHERE namespace = ? AND deleted = 0',
+        'SELECT key FROM (SELECT namespace, key, max(version), deleted, created_date FROM key_value group by key, namespace) t WHERE namespace = ? AND deleted = 0',
         (namespace,))
     rows = cursor.fetchall()
     return [row[0] for row in rows]
@@ -61,7 +56,7 @@ def get_keys(cursor, namespace):
 
 def gc(cursor, max_days):
     cursor.execute(
-        'SELECT namespace, key, max(version), deleted, created_date FROM kv_db.key_value group by key, namespace')
+        'SELECT namespace, key, max(CAST(version AS INT)) AS version, deleted, created_date FROM key_value group by key, namespace')
     rows = cursor.fetchall()
 
     current_datetime = datetime.now()
@@ -73,12 +68,12 @@ def gc(cursor, max_days):
         date_diff = current_datetime - created_datetime
 
         if deleted == 1 and date_diff.days >= max_days:  # delete all versions if latest version is deleted and older then 15 days
-            cursor.execute("DELETE FROM kv_db.key_value WHERE namespace = ? AND key = ?", (namespace, key,))
+            cursor.execute("DELETE FROM key_value WHERE namespace = ? AND key = ?", (namespace, key,))
 
         version = version - 7
         if version < 1:
             continue
-        cursor.execute("DELETE FROM kv_db.key_value WHERE namespace = ? AND key = ? AND version = ?",
+        cursor.execute("DELETE FROM key_value WHERE namespace = ? AND key = ? AND version = ?",
                        (namespace, key, version))
 
 

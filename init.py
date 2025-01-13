@@ -2,8 +2,7 @@ import configparser
 import os
 import sys
 
-from core import cert_provider, command_manager, const, job_data, maand_data, utils
-import kv_manager
+from core import cert_provider, command_manager, const, maand_data, utils
 
 logger = utils.get_logger()
 
@@ -37,8 +36,6 @@ def init():
         with maand_data.get_db(fail_if_not_found=False) as db:
             cursor = db.cursor()
             maand_data.setup_maand_database(cursor)
-            job_data.setup_job_database(cursor)
-            kv_manager.setup_kv_database(cursor)
 
             with open(f"{const.WORKSPACE_PATH}/agents.json", "r") as f:
                 data = f.read().strip()

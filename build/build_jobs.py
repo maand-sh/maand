@@ -14,28 +14,28 @@ logger = utils.get_logger()
 
 
 def delete_job(cursor, job):
-    cursor.execute("DELETE FROM job_db.job_ports WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)", (job,))
-    cursor.execute("DELETE FROM job_db.job_labels WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)",
+    cursor.execute("DELETE FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,))
+    cursor.execute("DELETE FROM job_labels WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
                    (job,))
-    cursor.execute("DELETE FROM job_db.job_certs WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)", (job,))
-    cursor.execute("DELETE FROM job_db.job_commands WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)",
+    cursor.execute("DELETE FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,))
+    cursor.execute("DELETE FROM job_commands WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
                    (job,))
-    cursor.execute("DELETE FROM job_db.job_files WHERE job_id = (SELECT job_id FROM job_db.job WHERE name = ?)", (job,))
-    cursor.execute("DELETE FROM job_db.job WHERE name = ?", (job,))
+    cursor.execute("DELETE FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,))
+    cursor.execute("DELETE FROM job WHERE name = ?", (job,))
 
 
 def build_deployment_seq(cursor):
     sql = '''
             WITH RECURSIVE job_command_seq AS (
-                SELECT jc.job_name, 0 AS level FROM job_db.job_commands jc WHERE jc.depend_on_job IS NULL
+                SELECT jc.job_name, 0 AS level FROM job_commands jc WHERE jc.depend_on_job IS NULL
 
                 UNION ALL
 
                 SELECT jc.job_name, jcs.level + 1 AS level
                 FROM
-                    job_db.job_commands jc INNER JOIN job_command_seq jcs ON jc.depend_on_job = jcs.job_name
+                    job_commands jc INNER JOIN job_command_seq jcs ON jc.depend_on_job = jcs.job_name
             )
-            UPDATE job_db.job SET deployment_seq = t.deployment_seq FROM (
+            UPDATE job SET deployment_seq = t.deployment_seq FROM (
             SELECT
                 DISTINCT job_name, deployment_seq
             FROM
@@ -186,7 +186,7 @@ def build_jobs(cursor, job):
     certs_hash = hashlib.md5(json.dumps(certs).encode()).hexdigest()
 
     cursor.execute(
-        "INSERT INTO job_db.job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash, deployment_seq) "
+        "INSERT INTO job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash, deployment_seq) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
         (job_id, job, version, min_memory_limit, max_memory_limit, min_cpu_limit, max_cpu_limit, certs_hash))
 
@@ -196,13 +196,13 @@ def build_jobs(cursor, job):
     values["MAX_CPU_LIMIT"] = max_cpu_limit
 
     for label in labels:
-        cursor.execute("INSERT INTO job_db.job_labels (job_id, label) VALUES (?, ?)", (job_id, label,))
+        cursor.execute("INSERT INTO job_labels (job_id, label) VALUES (?, ?)", (job_id, label,))
 
     for cert in certs:
         for name, config in cert.items():
             pkcs8 = config.get("pkcs8", 0)
             subject = config.get("subject", "")
-            cursor.execute("INSERT INTO job_db.job_certs (job_id, name, pkcs8, subject) VALUES (?, ?, ?, ?)",
+            cursor.execute("INSERT INTO job_certs (job_id, name, pkcs8, subject) VALUES (?, ?, ?, ?)",
                            (job_id, name, pkcs8, subject,))
 
     for command, command_obj in commands.items():
@@ -222,7 +222,7 @@ def build_jobs(cursor, job):
 
             for on in executed_on:
                 cursor.execute(
-                    "INSERT INTO job_db.job_commands (job_id, job_name, name, executed_on, depend_on_job, depend_on_command, depend_on_config) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO job_commands (job_id, job_name, name, executed_on, depend_on_job, depend_on_command, depend_on_config) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (job_id, job, command, on, depend_on_job, depend_on_command, depend_on_config))
         else:
             logger.error(f"The commands must include an 'executed_on'. job: {job}, command: {command}")
@@ -236,12 +236,12 @@ def build_jobs(cursor, job):
         if not isdir:
             with open(f"{const.WORKSPACE_PATH}/jobs/{file}", 'rb') as f:
                 content = f.read()
-        cursor.execute("INSERT INTO job_db.job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)",
+        cursor.execute("INSERT INTO job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)",
                        (job_id, file, content, isdir))
 
     for name, port in ports.items():
         name = name.upper()
-        cursor.execute("INSERT INTO job_db.job_ports (job_id, name, port) VALUES (?, ?, ?)", (job_id, name, port,))
+        cursor.execute("INSERT INTO job_ports (job_id, name, port) VALUES (?, ?, ?)", (job_id, name, port,))
         values[name] = port
 
     return values
@@ -311,8 +311,6 @@ def cleanup_polluted_memory_cpu_settings(job_variables, values):
 
 
 def build(cursor):
-    job_data.setup_job_database(cursor)
-
     jobs = workspace.get_jobs()
     for job in jobs:
         values = build_jobs(cursor, job) or {}
@@ -324,7 +322,7 @@ def build(cursor):
         manage_kv(cursor, f"vars/job/{job}", values)
         manage_kv(cursor, f"{job}.variables", job_variables)
 
-    cursor.execute("SELECT name FROM job_db.job")
+    cursor.execute("SELECT name FROM job")
     all_jobs = [row[0] for row in cursor.fetchall()]
     missing_jobs = list(set(jobs) ^ set(all_jobs))
     for job in missing_jobs:

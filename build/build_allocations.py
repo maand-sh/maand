@@ -50,12 +50,12 @@ def build_allocated_jobs(cursor):
     for agent_id, agent_ip in agents:
         cursor.execute("""
             SELECT DISTINCT j.name
-            FROM job_db.job j
-            JOIN job_db.job_labels jl ON jl.job_id = j.job_id
+            FROM job j
+            JOIN job_labels jl ON jl.job_id = j.job_id
             JOIN agent_labels al ON al.label = jl.label
             WHERE (
                 SELECT COUNT(DISTINCT jl_sub.label)
-                FROM job_db.job_labels jl_sub
+                FROM job_labels jl_sub
                 WHERE jl_sub.job_id = j.job_id
             ) = (
                 SELECT COUNT(DISTINCT al_sub.label)
@@ -63,7 +63,7 @@ def build_allocated_jobs(cursor):
                 JOIN agent a ON al_sub.agent_id = a.agent_id
                 WHERE al_sub.label IN (
                     SELECT jl_sub.label
-                    FROM job_db.job_labels jl_sub
+                    FROM job_labels jl_sub
                     WHERE jl_sub.job_id = j.job_id
                 ) AND a.agent_ip = ?
             );""", (agent_ip,))

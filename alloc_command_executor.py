@@ -56,7 +56,7 @@ def prepare_command(cursor, job, command):
 
     shutil.copy("/maand/stdlib.py", f"/modules/{job}/_modules/stdlib.py")
     cursor.execute(
-        "SELECT job_name, name, depend_on_config FROM job_db.job_commands WHERE depend_on_job = ? AND depend_on_command = ?",
+        "SELECT job_name, name, depend_on_config FROM job_commands WHERE depend_on_job = ? AND depend_on_command = ?",
         (job, command))
     rows = cursor.fetchall()
     demands = []
