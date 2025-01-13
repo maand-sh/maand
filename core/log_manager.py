@@ -30,8 +30,10 @@ class LoggerManager:
         file_handler = logging.FileHandler(f"{self._log_dir}/{ns}.log")
         maand_handler = logging.FileHandler(f"{self._log_dir}/maand.log")
 
-        console_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        file_formatter = logging.Formatter('%(message)s')
+        console_formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        file_formatter = logging.Formatter("%(message)s")
 
         console_handler.setFormatter(console_formatter)
         file_handler.setFormatter(file_formatter)

@@ -12,16 +12,16 @@ def build_maand_conf():
         "use_sudo": "1",
         "ssh_user": "agent",
         "ssh_key": "secrets/agent.key",
-        "certs_ttl": "60"
+        "certs_ttl": "60",
     }
 
     config_parser = configparser.ConfigParser()
     config_parser.add_section("default")
     for key, value in config.items():
-        config_parser.set('default', key, value)
+        config_parser.set("default", key, value)
 
     if not os.path.isfile(const.CONF_PATH):
-        with open(const.CONF_PATH, 'w') as f:
+        with open(const.CONF_PATH, "w") as f:
             config_parser.write(f)
 
 
@@ -30,8 +30,11 @@ def init():
         if os.path.isfile(const.MAAND_DB_PATH):
             raise Exception("bucket is already initialized")
 
-        command_manager.command_local(f"mkdir -p {const.BUCKET_PATH}/{{workspace,secrets,logs,data}}")
+        command_manager.command_local(
+            f"mkdir -p {const.BUCKET_PATH}/{{workspace,secrets,logs,data}}"
+        )
         command_manager.command_local(f"touch {const.WORKSPACE_PATH}/agents.json")
+        command_manager.command_local(f"touch {const.WORKSPACE_PATH}/bucket.conf")
 
         with maand_data.get_db(fail_if_not_found=False) as db:
             cursor = db.cursor()
@@ -40,11 +43,13 @@ def init():
             with open(f"{const.WORKSPACE_PATH}/agents.json", "r") as f:
                 data = f.read().strip()
                 if len(data) == 0:
-                    command_manager.command_local(f"echo '[]' > {const.WORKSPACE_PATH}/agents.json")
+                    command_manager.command_local(
+                        f"echo '[]' > {const.WORKSPACE_PATH}/agents.json"
+                    )
 
             build_maand_conf()
 
-            if not os.path.isfile(f'{const.BUCKET_PATH}/secrets/ca.key'):
+            if not os.path.isfile(f"{const.BUCKET_PATH}/secrets/ca.key"):
                 cert_provider.generate_ca_private()
                 bucket_id = maand_data.get_bucket_id(cursor)
                 cert_provider.generate_ca_public(bucket_id, 3650)
@@ -59,5 +64,5 @@ def init():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     init()

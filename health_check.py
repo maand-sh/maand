@@ -3,15 +3,15 @@ import sys
 
 from core import context_manager, maand_data, job_health_check
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--jobs', default="", required=False)
-    parser.add_argument('--wait', action='store_true')
+    parser.add_argument("--jobs", default="", required=False)
+    parser.add_argument("--wait", action="store_true")
     parser.set_defaults(no_wait=True)
     args = parser.parse_args()
 
     if args.jobs:
-        args.jobs = args.jobs.split(',')
+        args.jobs = args.jobs.split(",")
 
     with maand_data.get_db() as db:
         cursor = db.cursor()

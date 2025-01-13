@@ -21,26 +21,21 @@ def build_allocated_jobs(cursor):
                         "properties": {
                             "agents": {
                                 "type": "array",
-                                "items": {
-                                    "type": "string",
-                                    "format": "ipv4"
-                                }
+                                "items": {"type": "string", "format": "ipv4"},
                             }
-                        }
+                        },
                     }
-                }
+                },
             },
-            "agents": {
-                "type": "array",
-                "items": {
-                    "type": "string",
-                    "format": "ipv4"
-                }
-            }
-        }
+            "agents": {"type": "array", "items": {"type": "string", "format": "ipv4"}},
+        },
     }
 
-    jsonschema.validate(instance=disabled, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER, )
+    jsonschema.validate(
+        instance=disabled,
+        schema=schema,
+        format_checker=Draft202012Validator.FORMAT_CHECKER,
+    )
 
     disabled_jobs = disabled.get("jobs", {})
     disabled_agents = disabled.get("agents", [])
@@ -48,7 +43,8 @@ def build_allocated_jobs(cursor):
     agents = cursor.fetchall()
 
     for agent_id, agent_ip in agents:
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT j.name
             FROM job j
             JOIN job_labels jl ON jl.job_id = j.job_id
@@ -66,7 +62,9 @@ def build_allocated_jobs(cursor):
                     FROM job_labels jl_sub
                     WHERE jl_sub.job_id = j.job_id
                 ) AND a.agent_ip = ?
-            );""", (agent_ip,))
+            );""",
+            (agent_ip,),
+        )
 
         assigned_jobs = [row[0] for row in cursor.fetchall()]
 
@@ -78,29 +76,51 @@ def build_allocated_jobs(cursor):
                 if len(job_disabled_agents) == 0:
                     disabled = job in disabled_jobs
 
-            cursor.execute("SELECT * FROM agent_jobs WHERE job = ? AND agent_id = ?", (job, agent_id,))
+            cursor.execute(
+                "SELECT * FROM agent_jobs WHERE job = ? AND agent_id = ?",
+                (
+                    job,
+                    agent_id,
+                ),
+            )
             row = cursor.fetchone()
             if row:
-                cursor.execute("UPDATE agent_jobs SET disabled = ?, removed = 0 WHERE job = ? AND agent_id = ?",
-                               (disabled, job, agent_id,))
+                cursor.execute(
+                    "UPDATE agent_jobs SET disabled = ?, removed = 0 WHERE job = ? AND agent_id = ?",
+                    (
+                        disabled,
+                        job,
+                        agent_id,
+                    ),
+                )
             else:
-                cursor.execute("INSERT INTO agent_jobs (job, agent_id, disabled, removed) VALUES (?, ?, ?, 0)",
-                               (job, agent_id, disabled))
+                cursor.execute(
+                    "INSERT INTO agent_jobs (job, agent_id, disabled, removed) VALUES (?, ?, ?, 0)",
+                    (job, agent_id, disabled),
+                )
 
         cursor.execute("SELECT job FROM agent_jobs WHERE agent_id = ?", (agent_id,))
         all_assigned_jobs = [row[0] for row in cursor.fetchall()]
         removed_jobs = list(set(all_assigned_jobs) ^ set(assigned_jobs))
         for job in removed_jobs:
-            cursor.execute(f"UPDATE agent_jobs SET removed = 1 WHERE job = ? AND agent_id = ?", (job, agent_id,))
+            cursor.execute(
+                "UPDATE agent_jobs SET removed = 1 WHERE job = ? AND agent_id = ?",
+                (
+                    job,
+                    agent_id,
+                ),
+            )
 
         cursor.execute(
             "UPDATE agent_jobs SET disabled = 1 WHERE agent_id IN (SELECT agent_id FROM agent WHERE agent_ip = ? AND detained = 1)",
-            (agent_ip,))
+            (agent_ip,),
+        )
 
 
 def validate_resource_limit(cursor):
     cursor.execute(
-        "SELECT agent_ip, CAST(agent_memory_mb AS FLOAT) AS agent_memory_mb, CAST(agent_cpu AS FLOAT) AS agent_cpu FROM agent")
+        "SELECT agent_ip, CAST(agent_memory_mb AS FLOAT) AS agent_memory_mb, CAST(agent_cpu AS FLOAT) AS agent_cpu FROM agent"
+    )
     agents = cursor.fetchall()
 
     for agent_ip, agent_memory_mb, agent_cpu in agents:
@@ -109,7 +129,9 @@ def validate_resource_limit(cursor):
         total_allocated_memory = 0
         total_allocated_cpu = 0
         for job in jobs:
-            min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = job_data.get_job_resource_limits(cursor, job)
+            min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = (
+                job_data.get_job_resource_limits(cursor, job)
+            )
 
             namespace = f"vars/job/{job}"
             job_cpu = float(kv_manager.get(cursor, namespace, "cpu") or "0")
@@ -166,10 +188,14 @@ def validate_resource_limit(cursor):
                 )
 
         cursor.execute(
-            "SELECT GROUP_CONCAT(job) AS jobs, port FROM (SELECT (SELECT name AS job FROM job WHERE job_id = jp.job_id) AS job, name, port FROM job_ports jp WHERE port IN (SELECT port FROM job_ports GROUP BY port HAVING COUNT(port) > 1)) GROUP BY port;")
+            "SELECT GROUP_CONCAT(job) AS jobs, port FROM (SELECT (SELECT name AS job FROM job WHERE job_id = jp.job_id) AS job, name, port FROM job_ports jp WHERE port IN (SELECT port FROM job_ports GROUP BY port HAVING COUNT(port) > 1)) GROUP BY port;"
+        )
         rows = cursor.fetchall()
         msg = []
-        for (jobs, port,) in rows:
+        for (
+            jobs,
+            port,
+        ) in rows:
             msg.append(f"jobs: {jobs}, on port: {port}")
         if msg:
             msg = ",".join(msg)

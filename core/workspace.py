@@ -26,7 +26,9 @@ def get_jobs():
 
 
 def get_job_manifest(job_name):
-    manifest_path = os.path.join(f"{const.WORKSPACE_PATH}/jobs", job_name, "manifest.json")
+    manifest_path = os.path.join(
+        f"{const.WORKSPACE_PATH}/jobs", job_name, "manifest.json"
+    )
     with open(manifest_path, "r") as f:
         manifest = json.loads(f.read())
         if "labels" not in manifest:
@@ -41,7 +43,11 @@ def get_job_manifest(job_name):
 
 
 def get_job_files(job_name):
-    return glob.glob("{}/**".format(job_name), recursive=True, root_dir=f"{const.WORKSPACE_PATH}/jobs")
+    return glob.glob(
+        "{}/**".format(job_name),
+        recursive=True,
+        root_dir=f"{const.WORKSPACE_PATH}/jobs",
+    )
 
 
 def get_disabled_jobs():

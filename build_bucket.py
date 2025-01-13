@@ -1,7 +1,13 @@
 import sys
 
 import alloc_command_executor
-from build import build_jobs, build_agents, build_allocations, build_variables, build_certs
+from build import (
+    build_jobs,
+    build_agents,
+    build_allocations,
+    build_variables,
+    build_certs,
+)
 from core import job_data, maand_data, utils
 
 logger = utils.get_logger()
@@ -17,10 +23,13 @@ def post_build_hook(cursor):
         for command in job_commands:
             alloc_command_executor.prepare_command(cursor, job, command)
             for agent_ip in allocations:
-                r = alloc_command_executor.execute_alloc_command(job, command, agent_ip, {"TARGET": target})
+                r = alloc_command_executor.execute_alloc_command(
+                    job, command, agent_ip, {"TARGET": target}
+                )
                 if not r:
                     raise Exception(
-                        f"error job: {job}, allocation: {agent_ip}, command: {command}, error: failed with error code")
+                        f"error job: {job}, allocation: {agent_ip}, command: {command}, error: failed with error code"
+                    )
 
 
 def build():

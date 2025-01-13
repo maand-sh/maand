@@ -19,11 +19,13 @@ def get_agent_minimal_env(agent_ip):
         "SSH_USER": config.get("default", "ssh_user"),
         "SSH_KEY": config.get("default", "ssh_key"),
         "USE_SUDO": config.get("default", "use_sudo"),
-        "BUCKET": os.environ.get("BUCKET")
+        "BUCKET": os.environ.get("BUCKET"),
     }
 
 
-def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs, update_jobs_json=False):
+def rsync_upload_agent_files(
+    agent_ip, jobs, agent_removed_jobs, update_jobs_json=False
+):
     agent_env = get_agent_minimal_env(agent_ip)
 
     lines = []
@@ -39,7 +41,9 @@ def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs, update_jobs_jso
 
     bucket = agent_env.get("BUCKET", "")
     command_manager.command_remote(f"mkdir -p /opt/agent/{bucket}", env=agent_env)
-    r = command_manager.command_local(f"bash /maand/deploy/rsync_upload.sh {file_id}", env=agent_env)
+    r = command_manager.command_local(
+        f"bash /maand/deploy/rsync_upload.sh {file_id}", env=agent_env
+    )
     if r.returncode != 0:
         raise Exception(f"failed to upload files, agent_ip: {agent_ip}")
 
@@ -49,8 +53,12 @@ def validate_agent_bucket(agent_ip, fail_if_no_bucket_id=True):
     try:
         agent_env = get_agent_minimal_env(agent_ip)
         bucket = os.environ.get("BUCKET")
-        res = command_manager.command_remote(f"ls /opt/agent/{bucket}", agent_env, stdout=subprocess.PIPE,
-                                             stderr=subprocess.PIPE)
+        res = command_manager.command_remote(
+            f"ls /opt/agent/{bucket}",
+            agent_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
         if fail_if_no_bucket_id and res.returncode != 0:
             raise Exception(f"agent {agent_ip} : bucket not found.")
     except Exception as e:
@@ -64,13 +72,19 @@ def validate_update_seq(agent_ip):
         agent_env = get_agent_minimal_env(agent_ip)
         update_seq = os.environ.get("UPDATE_SEQ")
         bucket_id = os.environ.get("BUCKET")
-        res = command_manager.command_remote(f"cat /opt/agent/{bucket_id}/update_seq.txt", agent_env,
-                                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        res = command_manager.command_remote(
+            f"cat /opt/agent/{bucket_id}/update_seq.txt",
+            agent_env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
         if res.returncode == 1:
             raise Exception(f"{agent_ip} : {res.stderr}")
         agent_update_seq = res.stdout.decode("utf-8")
         if res.returncode == 0 and agent_update_seq != update_seq:
-            raise AssertionError(f"Failed on update_seq validation: mismatch, agent {agent_ip}.")
+            raise AssertionError(
+                f"Failed on update_seq validation: mismatch, agent {agent_ip}."
+            )
     except Exception as e:
         logger.error(e)
         utils.stop_the_world()

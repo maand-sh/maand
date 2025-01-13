@@ -7,8 +7,12 @@ logger = utils.get_logger()
 
 
 def clean_agents(cursor):
-    cursor.execute("DELETE FROM agent_labels WHERE agent_id IN (SELECT agent_id FROM agent WHERE detained = 1)")
-    cursor.execute("DELETE FROM agent_tags WHERE agent_id IN (SELECT agent_id FROM agent WHERE detained = 1)")
+    cursor.execute(
+        "DELETE FROM agent_labels WHERE agent_id IN (SELECT agent_id FROM agent WHERE detained = 1)"
+    )
+    cursor.execute(
+        "DELETE FROM agent_tags WHERE agent_id IN (SELECT agent_id FROM agent WHERE detained = 1)"
+    )
     cursor.execute("DELETE FROM agent_jobs WHERE removed = 1")
     cursor.execute("DELETE FROM agent WHERE detained = 1")
 
@@ -26,5 +30,5 @@ def clean():
             sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     clean()

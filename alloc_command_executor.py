@@ -33,7 +33,7 @@ def execute_alloc_command(job, command, agent_ip, env):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             env=allocation_env,
-            text=True
+            text=True,
         )
 
         for line in process.stdout:
@@ -47,7 +47,9 @@ def execute_alloc_command(job, command, agent_ip, env):
         process.wait()
         return process.returncode == 0
     except Exception as e:
-        raise Exception(f"error job: {job}, allocation: {agent_ip}, command: {command}, error: {e}")
+        raise Exception(
+            f"error job: {job}, allocation: {agent_ip}, command: {command}, error: {e}"
+        )
 
 
 def prepare_command(cursor, job, command):
@@ -57,11 +59,18 @@ def prepare_command(cursor, job, command):
     shutil.copy("/maand/stdlib.py", f"/modules/{job}/_modules/stdlib.py")
     cursor.execute(
         "SELECT job_name, name, depend_on_config FROM job_commands WHERE depend_on_job = ? AND depend_on_command = ?",
-        (job, command))
+        (job, command),
+    )
     rows = cursor.fetchall()
     demands = []
     for depend_on_job, depend_on_command, depend_on_config in rows:
-        demands.append({"job": depend_on_job, "command": depend_on_command, "config": json.loads(depend_on_config)})
+        demands.append(
+            {
+                "job": depend_on_job,
+                "command": depend_on_command,
+                "config": json.loads(depend_on_config),
+            }
+        )
     with open(f"/modules/{job}/_modules/demands.json", "w") as f:
         f.write(json.dumps(demands))
 
@@ -89,5 +98,5 @@ def main():
             sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

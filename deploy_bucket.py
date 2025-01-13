@@ -11,9 +11,11 @@ from deploy import update_job
 
 def get_args():
     parser = argparse.ArgumentParser(description="Deploy and manage jobs.")
-    parser.add_argument('--jobs', default="", help="Comma-separated list of jobs to process.")
+    parser.add_argument(
+        "--jobs", default="", help="Comma-separated list of jobs to process."
+    )
     args = parser.parse_args()
-    args.jobs = args.jobs.split(',') if args.jobs else []
+    args.jobs = args.jobs.split(",") if args.jobs else []
     return args
 
 
@@ -33,13 +35,25 @@ def handle_disabled_stopped_allocations(cursor, job):
     allocations.extend(removed_allocations)
     allocations.extend(disabled_allocations)
 
-    if counts['removed'] == counts['total']:  # job removed
-        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=False,
-                               job_health_check_flag=False)
+    if counts["removed"] == counts["total"]:  # job removed
+        job_control.run_target(
+            "stop",
+            "deploy",
+            job,
+            allocations,
+            alloc_health_check_flag=False,
+            job_health_check_flag=False,
+        )
         update_allocation_hash(cursor, job, allocations)
-    elif counts['removed'] > 0:  # few allocations removed
-        job_control.run_target("stop", "deploy", job, allocations, alloc_health_check_flag=True,
-                               job_health_check_flag=False)
+    elif counts["removed"] > 0:  # few allocations removed
+        job_control.run_target(
+            "stop",
+            "deploy",
+            job,
+            allocations,
+            alloc_health_check_flag=True,
+            job_health_check_flag=False,
+        )
         update_allocation_hash(cursor, job, allocations)
 
 
@@ -49,7 +63,13 @@ def update_allocation_hash(cursor, job, allocations):
         md5_hash = update_job.calculate_dir_md5(f"{agent_dir}/jobs/{job}")
         cursor.execute(
             "UPDATE agent_jobs SET current_md5_hash = ?, previous_md5_hash = current_md5_hash "
-            "WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)", (md5_hash, job, agent_ip,))
+            "WHERE job = ? AND agent_id = (SELECT agent_id FROM agent WHERE agent_ip = ?)",
+            (
+                md5_hash,
+                job,
+                agent_ip,
+            ),
+        )
 
 
 def handle_new_updated_allocations(job):
@@ -62,15 +82,33 @@ def handle_new_updated_allocations(job):
         changed_allocations = maand_data.get_changed_allocations(cursor, job)
         db.rollback()
 
-    if counts['new'] > 0:  # allocations added
-        job_control.run_target("start", "deploy", job, new_allocations,
-                               alloc_health_check_flag=False, job_health_check_flag=True)
-    elif counts['changed'] < counts["total"]:  # few allocations modified
-        job_control.run_target("restart", "deploy", job, changed_allocations,
-                               alloc_health_check_flag=True, job_health_check_flag=False)
+    if counts["new"] > 0:  # allocations added
+        job_control.run_target(
+            "start",
+            "deploy",
+            job,
+            new_allocations,
+            alloc_health_check_flag=False,
+            job_health_check_flag=True,
+        )
+    elif counts["changed"] < counts["total"]:  # few allocations modified
+        job_control.run_target(
+            "restart",
+            "deploy",
+            job,
+            changed_allocations,
+            alloc_health_check_flag=True,
+            job_health_check_flag=False,
+        )
     else:
-        job_control.run_target("restart", "deploy", job, allocations,
-                               alloc_health_check_flag=True, job_health_check_flag=False)
+        job_control.run_target(
+            "restart",
+            "deploy",
+            job,
+            allocations,
+            alloc_health_check_flag=True,
+            job_health_check_flag=False,
+        )
 
     with maand_data.get_db() as db:
         cursor = db.cursor()
@@ -118,7 +156,9 @@ def update(jobs):
 
             agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
             agent_disabled_jobs = maand_data.get_agent_disabled_jobs(cursor, agent_ip)
-            stopped_jobs = set(jobs) & set(chain(agent_removed_jobs, agent_disabled_jobs))
+            stopped_jobs = set(jobs) & set(
+                chain(agent_removed_jobs, agent_disabled_jobs)
+            )
 
             for job in stopped_jobs:
                 handle_disabled_stopped_allocations(cursor, job)
@@ -126,9 +166,13 @@ def update(jobs):
             db.commit()
 
             for job in jobs:
-                update_job.prepare_allocation(cursor, job, agent_ip)  # copy files to agent dir
+                update_job.prepare_allocation(
+                    cursor, job, agent_ip
+                )  # copy files to agent dir
 
-            context_manager.rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs)  # update changes
+            context_manager.rsync_upload_agent_files(
+                agent_ip, jobs, agent_removed_jobs
+            )  # update changes
 
 
 def main():

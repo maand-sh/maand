@@ -29,9 +29,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('bucket', default="")
-    parser.add_argument('cmd', default="")
-    parser.add_argument('--jobs', default=None, required=False)
+    parser.add_argument("bucket", default="")
+    parser.add_argument("cmd", default="")
+    parser.add_argument("--jobs", default=None, required=False)
     args = parser.parse_args()
     if args.jobs:
         args.jobs = args.jobs.split(",")

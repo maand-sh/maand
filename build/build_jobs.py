@@ -1,4 +1,3 @@
-import configparser
 import hashlib
 import json
 import os
@@ -14,18 +13,31 @@ logger = utils.get_logger()
 
 
 def delete_job(cursor, job):
-    cursor.execute("DELETE FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,))
-    cursor.execute("DELETE FROM job_labels WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
-                   (job,))
-    cursor.execute("DELETE FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,))
-    cursor.execute("DELETE FROM job_commands WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
-                   (job,))
-    cursor.execute("DELETE FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,))
+    cursor.execute(
+        "DELETE FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
+        (job,),
+    )
+    cursor.execute(
+        "DELETE FROM job_labels WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
+        (job,),
+    )
+    cursor.execute(
+        "DELETE FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
+        (job,),
+    )
+    cursor.execute(
+        "DELETE FROM job_commands WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
+        (job,),
+    )
+    cursor.execute(
+        "DELETE FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
+        (job,),
+    )
     cursor.execute("DELETE FROM job WHERE name = ?", (job,))
 
 
 def build_deployment_seq(cursor):
-    sql = '''
+    sql = """
             WITH RECURSIVE job_command_seq AS (
                 SELECT jc.job_name, 0 AS level FROM job_commands jc WHERE jc.depend_on_job IS NULL
 
@@ -41,7 +53,7 @@ def build_deployment_seq(cursor):
             FROM
                 (SELECT job_name, (SELECT MAX(level) FROM job_command_seq jcs WHERE jcs.job_name = t.job_name) as deployment_seq FROM job_command_seq t) t1
             ORDER BY deployment_seq) t WHERE job.name = t.job_name;
-        '''
+        """
 
     cursor.execute(sql)
 
@@ -51,11 +63,7 @@ def is_command_file_exists(job, command):
 
 
 def get_job_cluster_level_value(job):
-    jobs_conf_path = utils.get_maand_jobs_conf()
-    path = f"/bucket/{jobs_conf_path}"
-
-    config_parser = configparser.ConfigParser()
-    config_parser.read(path)
+    config_parser = utils.get_maand_jobs_conf()
 
     name = f"{job}.variables"
     job_kv = {}
@@ -82,10 +90,7 @@ def build_jobs(cursor, job):
         "type": "object",
         "properties": {
             "version": {"type": "string"},
-            "labels": {
-                "type": "array",
-                "items": {"type": "string"}
-            },
+            "labels": {"type": "array", "items": {"type": "string"}},
             "resources": {
                 "type": "object",
                 "properties": {
@@ -93,36 +98,32 @@ def build_jobs(cursor, job):
                         "type": "object",
                         "properties": {
                             "min": {"type": "string"},
-                            "max": {"type": "string"}
+                            "max": {"type": "string"},
                         },
-                        "additionalProperties": False
+                        "additionalProperties": False,
                     },
                     "cpu": {
                         "type": "object",
                         "properties": {
                             "min": {"type": "string"},
-                            "max": {"type": "string"}
+                            "max": {"type": "string"},
                         },
-                        "additionalProperties": False
+                        "additionalProperties": False,
                     },
                     "ports": {
                         "type": "object",
-                        "patternProperties": {
-                            "^port_": {"type": ["string", "object"]}
-                        },
-                        "additionalProperties": False
-                    }
+                        "patternProperties": {"^port_": {"type": ["string", "object"]}},
+                        "additionalProperties": False,
+                    },
                 },
-                "additionalProperties": False
+                "additionalProperties": False,
             },
             "certs": {
                 "type": "array",
                 "items": {
                     "type": "object",
-                    "patternProperties": {
-                        ".*": {"type": ["string", "object"]}
-                    }
-                }
+                    "patternProperties": {".*": {"type": ["string", "object"]}},
+                },
             },
             "commands": {
                 "type": "object",
@@ -138,31 +139,35 @@ def build_jobs(cursor, job):
                                         {
                                             "pattern": "^(direct|health_check|post_build|pre_deploy|post_deploy|job_control)$"
                                         }
-                                    ]
-                                }
+                                    ],
+                                },
                             },
                             "depend_on": {
                                 "type": "object",
                                 "properties": {
                                     "job": {"type": "string"},
                                     "command": {"type": "string"},
-                                    "config": {"type": "object"}
+                                    "config": {"type": "object"},
                                 },
-                                "additionalProperties": False
-                            }
+                                "additionalProperties": False,
+                            },
                         },
-                        "additionalProperties": False
+                        "additionalProperties": False,
                     }
                 },
-                "additionalProperties": False
-            }
+                "additionalProperties": False,
+            },
         },
-        "additionalProperties": False
+        "additionalProperties": False,
     }
 
     manifest = workspace.get_job_manifest(job)
 
-    jsonschema.validate(instance=manifest, schema=schema, format_checker=Draft202012Validator.FORMAT_CHECKER, )
+    jsonschema.validate(
+        instance=manifest,
+        schema=schema,
+        format_checker=Draft202012Validator.FORMAT_CHECKER,
+    )
 
     files = workspace.get_job_files(job)
 
@@ -175,20 +180,42 @@ def build_jobs(cursor, job):
 
     job_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(job)))
     min_memory_limit = float(
-        utils.extract_size_in_mb(manifest.get("resources", {}).get("memory", {}).get("min", "0 MB")))
+        utils.extract_size_in_mb(
+            manifest.get("resources", {}).get("memory", {}).get("min", "0 MB")
+        )
+    )
     max_memory_limit = float(
-        utils.extract_size_in_mb(manifest.get("resources", {}).get("memory", {}).get("max", "0 MB")))
+        utils.extract_size_in_mb(
+            manifest.get("resources", {}).get("memory", {}).get("max", "0 MB")
+        )
+    )
     min_cpu_limit = float(
-        utils.extract_cpu_frequency_in_mhz(manifest.get("resources", {}).get("cpu", {}).get("min", "0 MHZ")))
+        utils.extract_cpu_frequency_in_mhz(
+            manifest.get("resources", {}).get("cpu", {}).get("min", "0 MHZ")
+        )
+    )
     max_cpu_limit = float(
-        utils.extract_cpu_frequency_in_mhz(manifest.get("resources", {}).get("cpu", {}).get("max", "0 MHZ")))
+        utils.extract_cpu_frequency_in_mhz(
+            manifest.get("resources", {}).get("cpu", {}).get("max", "0 MHZ")
+        )
+    )
     ports = manifest.get("resources", {}).get("ports", {})
     certs_hash = hashlib.md5(json.dumps(certs).encode()).hexdigest()
 
     cursor.execute(
         "INSERT INTO job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash, deployment_seq) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
-        (job_id, job, version, min_memory_limit, max_memory_limit, min_cpu_limit, max_cpu_limit, certs_hash))
+        (
+            job_id,
+            job,
+            version,
+            min_memory_limit,
+            max_memory_limit,
+            min_cpu_limit,
+            max_cpu_limit,
+            certs_hash,
+        ),
+    )
 
     values["min_memory_limit"] = min_memory_limit
     values["max_memory_limit"] = max_memory_limit
@@ -196,14 +223,27 @@ def build_jobs(cursor, job):
     values["max_cpu_limit"] = max_cpu_limit
 
     for label in labels:
-        cursor.execute("INSERT INTO job_labels (job_id, label) VALUES (?, ?)", (job_id, label,))
+        cursor.execute(
+            "INSERT INTO job_labels (job_id, label) VALUES (?, ?)",
+            (
+                job_id,
+                label,
+            ),
+        )
 
     for cert in certs:
         for name, config in cert.items():
             pkcs8 = config.get("pkcs8", 0)
             subject = config.get("subject", "")
-            cursor.execute("INSERT INTO job_certs (job_id, name, pkcs8, subject) VALUES (?, ?, ?, ?)",
-                           (job_id, name, pkcs8, subject,))
+            cursor.execute(
+                "INSERT INTO job_certs (job_id, name, pkcs8, subject) VALUES (?, ?, ?, ?)",
+                (
+                    job_id,
+                    name,
+                    pkcs8,
+                    subject,
+                ),
+            )
 
     for command, command_obj in commands.items():
         executed_on = command_obj.get("executed_on", ["direct"])
@@ -212,36 +252,62 @@ def build_jobs(cursor, job):
             depend_on_job = depend_on.get("job")
             jobs = job_data.get_jobs(cursor)
             if depend_on_job and depend_on_job not in jobs:
-                logger.error(f"{depend_on_job} job not found: command: {command}, depend on job: {depend_on_job}")
+                logger.error(
+                    f"{depend_on_job} job not found: command: {command}, depend on job: {depend_on_job}"
+                )
             depend_on_command = depend_on.get("command")
             depend_on_config = json.dumps(depend_on.get("config", {}))
 
             if depend_on_job:
                 if not is_command_file_exists(depend_on_job, depend_on_command):
-                    raise Exception(f"job {job}, alloc command not found depend_on job {job} alloc_command {command}")
+                    raise Exception(
+                        f"job {job}, alloc command not found depend_on job {job} alloc_command {command}"
+                    )
 
             for on in executed_on:
                 cursor.execute(
                     "INSERT INTO job_commands (job_id, job_name, name, executed_on, depend_on_job, depend_on_command, depend_on_config) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (job_id, job, command, on, depend_on_job, depend_on_command, depend_on_config))
+                    (
+                        job_id,
+                        job,
+                        command,
+                        on,
+                        depend_on_job,
+                        depend_on_command,
+                        depend_on_config,
+                    ),
+                )
         else:
-            logger.error(f"The commands must include an 'executed_on'. job: {job}, command: {command}")
+            logger.error(
+                f"The commands must include an 'executed_on'. job: {job}, command: {command}"
+            )
 
         if not is_command_file_exists(job, command):
-            raise Exception(f"alloc command not found job {job} alloc_command {command}")
+            raise Exception(
+                f"alloc command not found job {job} alloc_command {command}"
+            )
 
     for file in files:
         isdir = os.path.isdir(f"{const.WORKSPACE_PATH}/jobs/{file}")
         content = ""
         if not isdir:
-            with open(f"{const.WORKSPACE_PATH}/jobs/{file}", 'rb') as f:
+            with open(f"{const.WORKSPACE_PATH}/jobs/{file}", "rb") as f:
                 content = f.read()
-        cursor.execute("INSERT INTO job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)",
-                       (job_id, file, content, isdir))
+        cursor.execute(
+            "INSERT INTO job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)",
+            (job_id, file, content, isdir),
+        )
 
     for name, port in ports.items():
         name = name.lower()
-        cursor.execute("INSERT INTO job_ports (job_id, name, port) VALUES (?, ?, ?)", (job_id, name, port,))
+        cursor.execute(
+            "INSERT INTO job_ports (job_id, name, port) VALUES (?, ?, ?)",
+            (
+                job_id,
+                name,
+                port,
+            ),
+        )
         values[name] = port
 
     return values
@@ -249,14 +315,6 @@ def build_jobs(cursor, job):
 
 def build_maand_jobs_conf(job):
     values = {}
-    jobs_conf_path = utils.get_maand_jobs_conf()
-    path = f"/bucket/{jobs_conf_path}"
-    if not os.path.exists(path):
-        return
-
-    config_parser = configparser.ConfigParser()
-    config_parser.read(path)
-
     kv = get_job_cluster_level_value(job)
     for key, value in kv.items():
         values[key] = value

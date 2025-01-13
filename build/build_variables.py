@@ -1,15 +1,23 @@
 import copy
 import uuid
 
-from dotenv import dotenv_values
+from core import utils
 
 import kv_manager
-from core import const, maand_data
+from core import maand_data
 
 
-def build_env(cursor, path):
+def build_env(cursor):
     namespace = "maand"
-    key_values = dotenv_values(path)
+
+    config_parser = utils.get_bucket_conf()
+    key_values = {}
+    if config_parser.has_section(namespace):
+        keys = config_parser.options(namespace)
+        for key in keys:
+            key = key.lower()
+            value = config_parser.get(namespace, key)
+            key_values[key] = value
 
     for key, value in key_values.items():
         key = key.lower()
@@ -68,7 +76,9 @@ def build_agent_variables(cursor):
         for key, value in agent_tags.items():
             values[key] = value
 
-        agent_memory, agent_cpu = maand_data.get_agent_available_resources(cursor, agent_ip)
+        agent_memory, agent_cpu = maand_data.get_agent_available_resources(
+            cursor, agent_ip
+        )
         if agent_memory != "0.0":
             values["agent_memory"] = agent_memory
         if agent_cpu != "0.0":
@@ -85,5 +95,5 @@ def build_agent_variables(cursor):
 
 
 def build(cursor):
-    build_env(cursor, f"{const.WORKSPACE_PATH}/maand.vars")
+    build_env(cursor)
     build_agent_variables(cursor)

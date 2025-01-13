@@ -20,7 +20,7 @@ def capture_command_local(cmd, env, prefix):
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
     )
 
     for line in process.stdout:
@@ -59,7 +59,9 @@ def capture_command_remote(cmd, env, prefix):
     sh = "sh" if not use_sudo else "sudo sh"
     return capture_command_local(
         f"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
-        env=env, prefix=prefix, )
+        env=env,
+        prefix=prefix,
+    )
 
 
 def command_remote(cmd, env=None, stdout=None, stderr=None):
@@ -72,7 +74,10 @@ def command_remote(cmd, env=None, stdout=None, stderr=None):
     sh = "sh" if not use_sudo else "sudo sh"
     return command_local(
         f"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
-        env=env, stdout=stdout, stderr=stderr)
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+    )
 
 
 def command_file_remote(file_path, env=None, stdout=None, stderr=None):
@@ -80,7 +85,10 @@ def command_file_remote(file_path, env=None, stdout=None, stderr=None):
     sh = "sh" if not use_sudo else "sudo sh"
     return command_local(
         f"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
-        env=env, stdout=stdout, stderr=stderr)
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+    )
 
 
 def capture_command_file_remote(file_path, env, prefix):
@@ -88,10 +96,14 @@ def capture_command_file_remote(file_path, env, prefix):
     sh = "sh" if not use_sudo else "sudo sh"
     return capture_command_local(
         f"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i {const.BUCKET_PATH}/$SSH_KEY $SSH_USER@$AGENT_IP 'timeout 300 {sh}' < {file_path}",
-        env, prefix)
+        env,
+        prefix,
+    )
 
 
 def scan_agent(agent_ip):
     agent_file = agent_ip.replace(".", "_")
-    command_local(f"ssh-keyscan -H {agent_ip} > /tmp/{agent_file}.agent; cat /tmp/*.agent > ~/.ssh/known_hosts",
-                  stderr=subprocess.DEVNULL)
+    command_local(
+        f"ssh-keyscan -H {agent_ip} > /tmp/{agent_file}.agent; cat /tmp/*.agent > ~/.ssh/known_hosts",
+        stderr=subprocess.DEVNULL,
+    )

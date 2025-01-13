@@ -21,7 +21,6 @@ def statement(sql, no_rows_found_msg, mode="column"):
 
 
 if __name__ == "__main__":
-
     name = ""
     if len(sys.argv) > 1:
         name = sys.argv[1]
@@ -29,37 +28,44 @@ if __name__ == "__main__":
     if name == "agents":
         statement(
             "SELECT agent_id, agent_ip, detained, (SELECT GROUP_CONCAT(label) FROM agent_labels al WHERE al.agent_id = a.agent_id ORDER BY label) as labels FROM agent a ORDER BY position",
-            "no agents found")
+            "no agents found",
+        )
 
     elif name == "jobs":
         statement(
             "SELECT DISTINCT job_id, name, version, (CASE WHEN (SELECT COUNT(1) FROM agent_jobs aj WHERE j.name = aj.job AND aj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled, deployment_seq, (SELECT GROUP_CONCAT(label) FROM job_labels jl WHERE jl.job_id = j.job_id) as labels FROM job j ORDER BY deployment_seq, name",
-            "no jobs found")
+            "no jobs found",
+        )
 
     elif name == "allocations":
         statement(
             "SELECT a.agent_ip, aj.job, aj.disabled, aj.removed FROM agent a JOIN agent_jobs aj ON a.agent_id = aj.agent_id LEFT JOIN job j ON j.name = aj.job ORDER BY aj.job",
-            "no allocations found")
+            "no allocations found",
+        )
 
     elif name == "alloc_commands":
         statement(
             "SELECT job_name, name as command_name, executed_on, depend_on_job, depend_on_command, depend_on_config  FROM job_commands ORDER BY job_name, name",
-            "no commands found")
+            "no commands found",
+        )
 
     elif name == "kv":
         statement(
             "SELECT * FROM (SELECT namespace, key, CASE WHEN LENGTH(value) > 50 THEN substr(value, 1, 50) || '...' ELSE value END as value, max(version) as version, ttl, created_date, deleted FROM key_value GROUP BY key, namespace) t ORDER BY namespace, key",
-            "no key values found")
+            "no key values found",
+        )
 
     elif name == "ports":
         statement(
             "SELECT * FROM (SELECT (SELECT name FROM job WHERE job_id = jp.job_id) AS job , name, port FROM job_ports jp) t ORDER BY job, name",
-            "no ports found")
+            "no ports found",
+        )
 
     elif name == "info":
         statement(
             "SELECT bucket_id as bucket, update_seq, (SELECT (1) AS count FROM main.agent) AS 'number_of_agents', (SELECT (1) AS count FROM job) AS 'number_of_jobs' FROM bucket",
-            "no info found")
+            "no info found",
+        )
 
     else:
         print("Usage: maand cat <operation>")

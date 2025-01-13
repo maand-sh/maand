@@ -21,16 +21,24 @@ def get_maand_conf():
 
 
 def get_maand_jobs_conf():
-    jobs_conf_path = "workspace/maand.jobs.conf"
+    jobs_conf_path = "/bucket/workspace/bucket.jobs.conf"
     maand_conf = get_maand_conf()
     if maand_conf.has_option("default", "jobs_conf_path"):
         jobs_conf_path = maand_conf.get("default", "jobs_conf_path")
-    return jobs_conf_path
+    config_parser = configparser.ConfigParser()
+    config_parser.read(jobs_conf_path)
+    return config_parser
+
+
+def get_bucket_conf():
+    config_parser = configparser.ConfigParser()
+    config_parser.read("/bucket/workspace/bucket.conf")
+    return config_parser
 
 
 def split_list(input_list, chunk_size=3):
     return [
-        input_list[i: i + chunk_size] for i in range(0, len(input_list), chunk_size)
+        input_list[i : i + chunk_size] for i in range(0, len(input_list), chunk_size)
     ]
 
 
@@ -38,7 +46,7 @@ def extract_size_in_mb(size_string):
     unit_to_mb = {
         "MB": 1,
         "GB": 1024,
-        "TB": 1024 ** 2,
+        "TB": 1024**2,
     }
 
     if isinstance(size_string, (int, float)):
@@ -51,7 +59,9 @@ def extract_size_in_mb(size_string):
         raise ValueError(f"Invalid size input: {size_string}")
 
     size = float(match.group(1))
-    unit = match.group(2).upper() if match.group(2) else "MB"  # Default to MB if no unit is provided
+    unit = (
+        match.group(2).upper() if match.group(2) else "MB"
+    )  # Default to MB if no unit is provided
 
     if unit not in unit_to_mb:
         raise ValueError(f"Unit smaller than MB or invalid: {unit}")
@@ -63,8 +73,8 @@ def extract_size_in_mb(size_string):
 def extract_cpu_frequency_in_mhz(freq_string):
     unit_to_mhz = {
         "MHZ": 1,  # Megahertz
-        "GHZ": 10 ** 3,  # Gigahertz to MHz
-        "THZ": 10 ** 6,  # Terahertz to MHz
+        "GHZ": 10**3,  # Gigahertz to MHz
+        "THZ": 10**6,  # Terahertz to MHz
     }
 
     if isinstance(freq_string, (int, float)):
@@ -80,7 +90,9 @@ def extract_cpu_frequency_in_mhz(freq_string):
     unit = match.group(2).upper()
 
     if unit not in unit_to_mhz:
-        raise ValueError(f"Unsupported or invalid unit: '{unit}' (unit must be MHz or larger)")
+        raise ValueError(
+            f"Unsupported or invalid unit: '{unit}' (unit must be MHz or larger)"
+        )
 
     frequency_in_mhz = frequency * unit_to_mhz[unit]
     return frequency_in_mhz
