@@ -40,9 +40,9 @@ def kv_delete(cursor, namespace, key):
     return internal_kv_manager.delete(cursor, namespace, key)
 
 
-def execute_shell_command(cursor, command, agent_ip=None):
+def execute_shell_command(command, agent_ip=None):
     host = agent_ip or os.environ.get("AGENT_IP")
-    agent_env = context_manager.get_agent_env(cursor, host)
+    agent_env = context_manager.get_agent_minimal_env(host)
     return __command_manager.command_remote(command, env=agent_env)
 
 

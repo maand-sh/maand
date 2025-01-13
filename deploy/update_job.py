@@ -46,12 +46,11 @@ def update_certificates(cursor, job, agent_ip):
             write_cert(cursor, f"{job_cert_path}.pem", namespace, f"{job_cert_kv_path}.pem")
 
 
-def process_templates(cursor, values, job):
-    agent_ip = values["AGENT_IP"]
+def process_templates(cursor, agent_ip, job):
     agent_dir = context_manager.get_agent_dir(agent_ip)
 
-    values = deepcopy(values)
-    for job_namespace in [f"vars/job/{job}", f"job/{job}"]:
+    values = {}
+    for job_namespace in ["maand", f"vars/job/{job}", f"job/{job}", f"maand/job/{job}", f"maand/agent/{agent_ip}"]:
         job_keys = kv_manager.get_keys(cursor, job_namespace)
         for key in job_keys:
             values[key] = kv_manager.get(cursor, job_namespace, key)
@@ -74,8 +73,7 @@ def process_templates(cursor, values, job):
 
 def transpile(cursor, agent_ip, job):
     logger.debug("Transpiling templates...")
-    values = context_manager.get_agent_env(cursor, agent_ip)
-    process_templates(cursor, values, job)
+    process_templates(cursor, agent_ip, job)
 
 
 def calculate_file_md5(file_path):

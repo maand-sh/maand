@@ -24,24 +24,6 @@ def get_agent_minimal_env(agent_ip):
     }
 
 
-def get_agent_env(cursor, agent_ip):
-    env = get_agent_minimal_env(agent_ip)
-    for ns in ["variables.env", f"vars/agent/{agent_ip}"]:
-        keys = kv_manager.get_keys(cursor, ns)
-        for key in keys:
-            env[key] = kv_manager.get(cursor, ns, key)
-    return env
-
-
-def get_job_env(cursor, job):
-    values = {}
-    for job_namespace in [f"job/{job}", f"vars/job/{job}", f"{job}.variables"]:
-        job_keys = kv_manager.get_keys(cursor, job_namespace)
-        for key in job_keys:
-            values[key] = kv_manager.get(cursor, job_namespace, key)
-    return values
-
-
 def rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs, update_jobs_json=False):
     agent_env = get_agent_minimal_env(agent_ip)
 
