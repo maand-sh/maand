@@ -3,6 +3,7 @@ import os
 import time
 
 from core import command_manager, context_manager, const, maand_data, job_health_check, utils, system_manager
+from tests.scripts.utils import command
 
 
 def get_args():
@@ -39,9 +40,9 @@ def run_command(agent_ip):
             utils.stop_the_world()
 
         if args.local:
-            command_manager.capture_command_local(f"sh {const.WORKSPACE_PATH}/command.sh", env=env, prefix=agent_ip)
+            command_manager.capture_command_local("sh /tmp/command.sh", env=env, prefix=agent_ip)
         else:
-            command_manager.capture_command_file_remote(f"{const.WORKSPACE_PATH}/command.sh", env, prefix=agent_ip)
+            command_manager.capture_command_file_remote("/tmp/command.sh", env, prefix=agent_ip)
 
         time.sleep(5)
         if args.health_check and not job_health_check.health_check(cursor, jobs, True, times=20, interval=5):
@@ -51,11 +52,12 @@ def run_command(agent_ip):
 if __name__ == "__main__":
     args = get_args()
     if args.cmd:
-        with open(f"{const.WORKSPACE_PATH}/command.sh", "w") as f:
+        with open(f"/tmp/command.sh", "w") as f:
             f.write(args.cmd)
-
-    if not os.path.exists(f"{const.WORKSPACE_PATH}/command.sh"):
-        raise Exception("No command file found")
+    else:
+        if not os.path.exists(f"{const.WORKSPACE_PATH}/command.sh"):
+            raise Exception("No command file found")
+        command(f"cp {const.WORKSPACE_PATH}/command.sh /tmp/command.sh")
 
     with maand_data.get_db() as db:
         cursor = db.cursor()
