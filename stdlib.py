@@ -29,6 +29,10 @@ def kv_get_metadata(cursor, namespace, key):
 
 
 def kv_put(cursor, namespace, key, value):
+    key = key.lower()
+    namespace = namespace.lower()
+    job = os.environ.get("JOB")
+    assert namespace == f"job/{job}"
     return internal_kv_manager.put(cursor, namespace, key, value)
 
 

@@ -11,13 +11,9 @@ logger = utils.get_logger()
 
 
 def execute_alloc_command(cursor, job, command, agent_ip, env):
-    allocation_env = context_manager.get_agent_env(cursor, agent_ip)
+    allocation_env = context_manager.get_agent_minimal_env(agent_ip)
     allocation_env["JOB"] = job
     for k, v in env.items():
-        allocation_env[k] = v
-
-    values = context_manager.get_job_env(cursor, job)
-    for k, v in values.items():
         allocation_env[k] = v
 
     for key, value in os.environ.items():

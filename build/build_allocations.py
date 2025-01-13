@@ -111,9 +111,9 @@ def validate_resource_limit(cursor):
         for job in jobs:
             min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz = job_data.get_job_resource_limits(cursor, job)
 
-            namespace = f"{job}.variables"
-            job_cpu = float(kv_manager.get(cursor, namespace, "CPU") or "0")
-            job_memory = float(kv_manager.get(cursor, namespace, "MEMORY") or "0")
+            namespace = f"vars/job/{job}"
+            job_cpu = float(kv_manager.get(cursor, namespace, "cpu") or "0")
+            job_memory = float(kv_manager.get(cursor, namespace, "memory") or "0")
 
             if min_memory_mb > max_memory_mb:
                 raise Exception(

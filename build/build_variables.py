@@ -9,14 +9,14 @@ import kv_manager
 
 
 def build_env(cursor, path):
-    namespace = os.path.basename(path)
+    namespace = "maand"
     key_values = dotenv_values(path)
 
     for key, value in key_values.items():
-        key = key.upper()
+        key = key.lower()
         kv_manager.put(cursor, namespace, key, value)
 
-    available_keys = [k.upper() for k in key_values.keys()]
+    available_keys = [k.lower() for k in key_values.keys()]
     all_keys = kv_manager.get_keys(cursor, namespace)
     missing_keys = list(set(all_keys) ^ set(available_keys))
     for key in missing_keys:
@@ -32,16 +32,16 @@ def build_agent_variables(cursor):
 
         values = {}
         for label in labels:
-            key_nodes = f"{label}_nodes".upper()
+            key_nodes = f"{label}_nodes".lower()
 
             agents = maand_data.get_agents(cursor, [label])
             values[key_nodes] = ",".join(agents)
 
-            key = f"{label}_length".upper()
+            key = f"{label}_length".lower()
             values[key] = str(len(agents))
 
             for idx, host in enumerate(agents):
-                key = f"{label}_{idx}".upper()
+                key = f"{label}_{idx}".lower()
                 values[key] = host
 
             if label not in agent_labels:
@@ -51,19 +51,19 @@ def build_agent_variables(cursor):
             if agent_ip in other_agents:
                 other_agents.remove(agent_ip)
 
-            key_peers = f"{label}_peers".upper()
+            key_peers = f"{label}_peers".lower()
             if other_agents:
                 values[key_peers] = ",".join(other_agents)
 
             for idx, host in enumerate(agents):
                 if host == agent_ip:
-                    key = f"{label}_allocation_index".upper()
+                    key = f"{label}_allocation_index".lower()
                     values[key] = str(idx)
 
-            key = f"{label}_label_id".upper()
+            key = f"{label}_label_id".lower()
             values[key] = str(uuid.uuid5(uuid.NAMESPACE_DNS, str(label)))
 
-        values["LABELS"] = ",".join(sorted(agent_labels))
+        values["labels"] = ",".join(sorted(agent_labels))
 
         agent_tags = maand_data.get_agent_tags(cursor, agent_ip)
         for key, value in agent_tags.items():
@@ -71,11 +71,11 @@ def build_agent_variables(cursor):
 
         agent_memory, agent_cpu = maand_data.get_agent_available_resources(cursor, agent_ip)
         if agent_memory != "0.0":
-            values["AGENT_MEMORY"] = agent_memory
+            values["agent_memory"] = agent_memory
         if agent_cpu != "0.0":
-            values["AGENT_CPU"] = agent_cpu
+            values["agent_cpu"] = agent_cpu
 
-        namespace = f"vars/agent/{agent_ip}"
+        namespace = f"maand/agent/{agent_ip}"
         for key, value in values.items():
             kv_manager.put(cursor, namespace, key, str(value))
 
@@ -86,5 +86,5 @@ def build_agent_variables(cursor):
 
 
 def build(cursor):
-    build_env(cursor, f"{const.WORKSPACE_PATH}/variables.env")
+    build_env(cursor, f"{const.WORKSPACE_PATH}/maand.vars")
     build_agent_variables(cursor)

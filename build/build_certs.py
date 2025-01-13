@@ -49,13 +49,13 @@ def build_agent_certs(cursor):
         agent_cert_location = f"{agent_dir}/certs"
         command_manager.command_local(f"mkdir -p {agent_cert_location}")
 
-        namespace = f"certs/agent/{agent_ip}"
+        namespace = f"maand/certs/agent/{agent_ip}"
         agent_cert_path = f"{agent_cert_location}/agent"
 
         if not update_certs:
-            get_cert_if_available(cursor, f"{agent_cert_path}.key", namespace, "certs/agent.key")
-            get_cert_if_available(cursor, f"{agent_cert_path}.crt", namespace, "certs/agent.crt")
-            get_cert_if_available(cursor, f"{agent_cert_path}.pem", namespace, "certs/agent.pem")
+            get_cert_if_available(cursor, f"{agent_cert_path}.key", namespace, "agent.key")
+            get_cert_if_available(cursor, f"{agent_cert_path}.crt", namespace, "agent.crt")
+            get_cert_if_available(cursor, f"{agent_cert_path}.pem", namespace, "agent.pem")
 
         found = (os.path.isfile(f"{agent_cert_path}.key") and os.path.isfile(f"{agent_cert_path}.crt")
                  and os.path.isfile(f"{agent_cert_path}.pem"))
@@ -67,9 +67,9 @@ def build_agent_certs(cursor):
             subject_alt_name = f"DNS.1:localhost,IP.1:127.0.0.1,IP.2:{agent_ip}"
             cert_provider.generate_site_public("agent", subject_alt_name, 60, agent_cert_location)
 
-            put_cert(cursor, f"{agent_cert_path}.key", namespace, "certs/agent.key")
-            put_cert(cursor, f"{agent_cert_path}.crt", namespace, "certs/agent.crt")
-            put_cert(cursor, f"{agent_cert_path}.pem", namespace, "certs/agent.pem")
+            put_cert(cursor, f"{agent_cert_path}.key", namespace, "agent.key")
+            put_cert(cursor, f"{agent_cert_path}.crt", namespace, "agent.crt")
+            put_cert(cursor, f"{agent_cert_path}.pem", namespace, "agent.pem")
 
 
 def build_job_certs(cursor):
@@ -87,7 +87,7 @@ def build_job_certs(cursor):
             agent_dir = context_manager.get_agent_dir(agent_ip)
             job_cert_location = f"{agent_dir}/jobs/{job}/certs"
             job_cert_kv_location = f"{job}/certs"
-            namespace = f"certs/job/{agent_ip}"
+            namespace = f"maand/certs/job/{agent_ip}"
 
             job_certs = job_data.get_job_certs_config(cursor, job)
 

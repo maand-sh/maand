@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     elif name == "kv":
         statement(
-            "SELECT * FROM (SELECT key, CASE WHEN LENGTH(value) > 50 THEN substr(value, 1, 50) || '...' ELSE value END as value, namespace, max(version) as version, ttl, created_date, deleted FROM key_value GROUP BY key, namespace) t ORDER BY namespace, key",
+            "SELECT * FROM (SELECT namespace, key, CASE WHEN LENGTH(value) > 50 THEN substr(value, 1, 50) || '...' ELSE value END as value, max(version) as version, ttl, created_date, deleted FROM key_value GROUP BY key, namespace) t ORDER BY namespace, key",
             "no key values found")
 
     elif name == "ports":

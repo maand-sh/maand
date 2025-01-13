@@ -3,10 +3,11 @@ import base64
 import json
 from itertools import chain
 
-from core import command_manager, context_manager, const, job_data, maand_data, system_manager
+from core import command_manager, context_manager, job_data, maand_data, system_manager
 from deploy import update_job
 import kv_manager
 import job_control
+
 
 
 def get_args():
@@ -83,25 +84,7 @@ def handle_agent_files(cursor, agent_ip):
     agent_dir = context_manager.get_agent_dir(agent_ip)
     bucket_id = maand_data.get_bucket_id(cursor)
 
-    command_manager.command_local(f"""
-        mkdir -p {agent_dir}/certs
-        rsync {const.SECRETS_PATH}/ca.crt {agent_dir}/certs/
-    """)
-
-    name = "agent"
-    agent_cert_location = f"{agent_dir}/certs"
-    agent_cert_path = f"{agent_cert_location}/{name}"
-    agent_cert_kv_path = f"certs/{name}"
-    agent_kv_namespace = f"certs/agent/{agent_ip}"
-    write_cert(
-        cursor, f"{agent_cert_path}.key", agent_kv_namespace, f"{agent_cert_kv_path}.key"
-    )
-    write_cert(
-        cursor, f"{agent_cert_path}.crt", agent_kv_namespace, f"{agent_cert_kv_path}.crt"
-    )
-    write_cert(
-        cursor, f"{agent_cert_path}.pem", agent_kv_namespace, f"{agent_cert_kv_path}.pem"
-    )
+    command_manager.command_local(f"mkdir -p {agent_dir}")
 
     agent_id = maand_data.get_agent_id(cursor, agent_ip)
     with open(f"{agent_dir}/agent.txt", "w") as f:

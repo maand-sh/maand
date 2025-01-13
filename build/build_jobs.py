@@ -62,14 +62,14 @@ def get_job_cluster_level_value(job):
     if config_parser.has_section(name):
         keys = config_parser.options(name)
         for key in keys:
-            key = key.upper()
+            key = key.lower()
             value = config_parser.get(name, key)
             job_kv[key] = value
 
-    if "MEMORY" in job_kv:
-        job_kv["MEMORY"] = float(utils.extract_size_in_mb(job_kv.get("MEMORY")))
-    if "CPU" in job_kv:
-        job_kv["CPU"] = float(utils.extract_cpu_frequency_in_mhz(job_kv.get("CPU")))
+    if "memory" in job_kv:
+        job_kv["memory"] = float(utils.extract_size_in_mb(job_kv.get("memory")))
+    if "cpu" in job_kv:
+        job_kv["cpu"] = float(utils.extract_cpu_frequency_in_mhz(job_kv.get("cpu")))
 
     return job_kv
 
@@ -190,10 +190,10 @@ def build_jobs(cursor, job):
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
         (job_id, job, version, min_memory_limit, max_memory_limit, min_cpu_limit, max_cpu_limit, certs_hash))
 
-    values["MIN_MEMORY_LIMIT"] = min_memory_limit
-    values["MAX_MEMORY_LIMIT"] = max_memory_limit
-    values["MIN_CPU_LIMIT"] = min_cpu_limit
-    values["MAX_CPU_LIMIT"] = max_cpu_limit
+    values["min_memory_limit"] = min_memory_limit
+    values["max_memory_limit"] = max_memory_limit
+    values["min_cpu_limit"] = min_cpu_limit
+    values["max_cpu_limit"] = max_cpu_limit
 
     for label in labels:
         cursor.execute("INSERT INTO job_labels (job_id, label) VALUES (?, ?)", (job_id, label,))
@@ -240,7 +240,7 @@ def build_jobs(cursor, job):
                        (job_id, file, content, isdir))
 
     for name, port in ports.items():
-        name = name.upper()
+        name = name.lower()
         cursor.execute("INSERT INTO job_ports (job_id, name, port) VALUES (?, ?, ?)", (job_id, name, port,))
         values[name] = port
 
@@ -268,7 +268,7 @@ def manage_kv(cursor, namespace, values):
         kv_manager.put(cursor, namespace, key, str(value))
 
     keys = values.keys()
-    keys = [key.upper() for key in keys]
+    keys = [key.lower() for key in keys]
     all_keys = kv_manager.get_keys(cursor, namespace)
     missing_keys = list(set(all_keys) ^ set(keys))
     for key in missing_keys:
@@ -276,34 +276,34 @@ def manage_kv(cursor, namespace, values):
 
 
 def cleanup_polluted_memory_cpu_settings(job_variables, values):
-    if not job_variables.get("MEMORY"):
-        job_variables["MEMORY"] = values.get("MAX_MEMORY_LIMIT")
-    if not job_variables.get("CPU"):
-        job_variables["CPU"] = values.get("MAX_CPU_LIMIT")
+    if not job_variables.get("memory"):
+        job_variables["memory"] = values.get("max_memory_limit")
+    if not job_variables.get("cpu"):
+        job_variables["cpu"] = values.get("max_cpu_limit")
 
     found_memory_settings = False
-    for k in ["MIN_MEMORY_LIMIT", "MAX_MEMORY_LIMIT", "MEMORY"]:
+    for k in ["min_memory_limit", "max_memory_limit", "memory"]:
         if k in values and values[k] != 0.0:
             found_memory_settings = True
         if k in job_variables and job_variables[k] != 0.0:
             found_memory_settings = True
 
     found_cpu_settings = False
-    for k in ["MIN_CPU_LIMIT", "MAX_CPU_LIMIT", "CPU"]:
+    for k in ["min_cpu_limit", "max_cpu_limit", "cpu"]:
         if k in values and values[k] != 0.0:
             found_cpu_settings = True
         if k in job_variables and job_variables[k] != 0.0:
             found_cpu_settings = True
 
     if not found_memory_settings:
-        for k in ["MIN_MEMORY_LIMIT", "MAX_MEMORY_LIMIT", "MEMORY"]:
+        for k in ["min_memory_limit", "max_memory_limit", "memory"]:
             if k in values:
                 del values[k]
             if k in job_variables:
                 del job_variables[k]
 
     if not found_cpu_settings:
-        for k in ["MIN_CPU_LIMIT", "MAX_CPU_LIMIT", "CPU"]:
+        for k in ["min_cpu_limit", "max_cpu_limit", "cpu"]:
             if k in values:
                 del values[k]
             if k in job_variables:
@@ -319,8 +319,8 @@ def build(cursor):
 
         cleanup_polluted_memory_cpu_settings(job_variables, values)
 
-        manage_kv(cursor, f"vars/job/{job}", values)
-        manage_kv(cursor, f"{job}.variables", job_variables)
+        manage_kv(cursor, f"maand/job/{job}", values)
+        manage_kv(cursor, f"vars/job/{job}", job_variables)
 
     cursor.execute("SELECT name FROM job")
     all_jobs = [row[0] for row in cursor.fetchall()]
@@ -332,7 +332,7 @@ def build(cursor):
     for agent_ip in agents:
         agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
         for job in agent_removed_jobs:
-            for namespace in [f"job/{job}", f"vars/job/{job}", f"{job}.variables"]:
+            for namespace in [f"maand/job/{job}", f"vars/job/{job}", f"job/{job}"]:
                 deleted_keys = kv_manager.get_keys(cursor, namespace)
                 for key in deleted_keys:
                     kv_manager.delete(cursor, namespace, key)
