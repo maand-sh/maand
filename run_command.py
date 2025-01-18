@@ -46,7 +46,7 @@ def run_command(agent_ip):
         jobs = maand_data.get_agent_jobs(cursor, agent_ip)
 
         if args.health_check and not job_health_check.health_check(
-            cursor, jobs, False, times=20, interval=5
+                cursor, jobs, False, times=20, interval=5
         ):
             utils.stop_the_world()
 
@@ -64,7 +64,7 @@ def run_command(agent_ip):
 
         time.sleep(5)
         if args.health_check and not job_health_check.health_check(
-            cursor, jobs, True, times=20, interval=5
+                cursor, jobs, True, times=20, interval=5
         ):
             utils.stop_the_world()
 

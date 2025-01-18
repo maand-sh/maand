@@ -77,21 +77,24 @@ def process_templates(cursor, agent_ip, job):
             values[key] = kv_manager.get(cursor, job_namespace, key)
 
     logger.debug("Processing templates...")
-    for ext in ["*.json", "*.service", "*.conf", "*.yml", "*.yaml", "*.env", "*.txt"]:
-        for f in Path(f"{agent_dir}/jobs/{job}").rglob(ext):
-            try:
-                with open(f, "r") as file:
-                    data = file.read()
-                content = jinja2.Template(
-                    data, undefined=jinja2.StrictUndefined
-                ).render(values)
-                if content != data:
-                    with open(f, "w") as file:
-                        file.write(content)
-                logger.debug(f"Processed template: {f}")
-            except Exception as e:
-                logger.error(f"Error processing file {f}: {e}")
-                raise e
+
+    for f in Path(f"{agent_dir}/jobs/{job}").rglob("*.tpl"):
+        try:
+            with open(f, "r") as file:
+                data = file.read()
+            os.unlink(f)
+            content = jinja2.Template(
+                data, undefined=jinja2.StrictUndefined
+            ).render(values)
+
+            if content != data:
+                new_file_name = os.path.splitext(f)[0]
+                with open(new_file_name, "w") as file:
+                    file.write(content)
+            logger.debug(f"Processed template: {f}")
+        except Exception as e:
+            logger.error(f"Error processing file {f}: {e}")
+            raise e
 
 
 def transpile(cursor, agent_ip, job):
