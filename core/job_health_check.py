@@ -22,10 +22,10 @@ def health_check(cursor, jobs_filter, wait, interval=5, times=10):
                 for agent_ip in allocations:
                     if job not in maand_data.get_agent_removed_jobs(cursor, agent_ip):
                         result = (
-                            result
-                            and alloc_command_executor.execute_alloc_command(
-                                job, command, agent_ip, {}
-                            )
+                                result
+                                and alloc_command_executor.execute_alloc_command(
+                            job, command, agent_ip, {}
+                        )
                         )
             return result
         except Exception as e:
