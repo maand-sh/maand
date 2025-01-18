@@ -1,21 +1,21 @@
 import time
 
 import alloc_command_executor
-from core import job_data, maand_data
+from core import maand_data
 from core import utils
 
 
 def health_check(cursor, jobs_filter, wait, interval=5, times=10):
     logger = utils.get_logger()
 
-    jobs = job_data.get_jobs(cursor)
+    jobs = maand_data.get_jobs(cursor)
     if jobs_filter:
         jobs = set(jobs_filter) & set(jobs)
 
     def execute_health_check(job):
         result = True
         try:
-            job_commands = job_data.get_job_commands(cursor, job, "health_check")
+            job_commands = maand_data.get_job_commands(cursor, job, "health_check")
             for command in job_commands:
                 alloc_command_executor.prepare_command(cursor, job, command)
                 allocations = maand_data.get_allocations(cursor, job)
@@ -38,7 +38,7 @@ def health_check(cursor, jobs_filter, wait, interval=5, times=10):
         # Perform health checks with retries
         for job in jobs:
             for attempt in range(times):
-                job_commands = job_data.get_job_commands(cursor, job, "health_check")
+                job_commands = maand_data.get_job_commands(cursor, job, "health_check")
                 if len(job_commands) == 0:
                     logger.info(f"Health check unknown: {job}")
                     break
@@ -57,7 +57,7 @@ def health_check(cursor, jobs_filter, wait, interval=5, times=10):
     else:
         # Perform health checks without retries
         for job in jobs:
-            job_commands = job_data.get_job_commands(cursor, job, "health_check")
+            job_commands = maand_data.get_job_commands(cursor, job, "health_check")
             if len(job_commands) == 0:
                 logger.info(f"Health check unknown: {job}")
                 continue

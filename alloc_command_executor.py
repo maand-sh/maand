@@ -4,7 +4,7 @@ import shutil
 import subprocess
 import sys
 
-from core import context_manager, job_data, maand_data
+from core import context_manager, maand_data
 from core import utils
 
 logger = utils.get_logger()
@@ -54,7 +54,7 @@ def execute_alloc_command(job, command, agent_ip, env):
 
 def prepare_command(cursor, job, command):
     context_manager.export_env_bucket_update_seq(cursor)
-    job_data.copy_job_modules(cursor, job)
+    maand_data.setup_job_modules(cursor, job)
 
     shutil.copy("/maand/stdlib.py", f"/modules/{job}/_modules/stdlib.py")
     cursor.execute(
@@ -83,7 +83,7 @@ def main():
     with maand_data.get_db() as db:
         cursor = db.cursor()
 
-        commands = job_data.get_job_commands(cursor, job, event)
+        commands = maand_data.get_job_commands(cursor, job, event)
         if command not in commands:
             raise Exception(f"job: {job}, command: {command}, event {event} not found")
 

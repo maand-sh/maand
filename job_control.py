@@ -6,7 +6,6 @@ import alloc_command_executor
 from core import (
     command_manager,
     context_manager,
-    job_data,
     maand_data,
     job_health_check,
 )
@@ -43,11 +42,11 @@ def run_target(
 
         available_allocations = maand_data.get_allocations(cursor, job)
         # Run pre-target commands
-        pre_commands = job_data.get_job_commands(cursor, job, f"pre_{action}")
+        pre_commands = maand_data.get_job_commands(cursor, job, f"pre_{action}")
         execute_commands(cursor, pre_commands, job, available_allocations, target)
 
         # Run main job control or default action
-        job_control_commands = job_data.get_job_commands(cursor, job, "job_control")
+        job_control_commands = maand_data.get_job_commands(cursor, job, "job_control")
         if job_control_commands:
             execute_commands(
                 cursor,
@@ -65,7 +64,7 @@ def run_target(
             job_health_check.health_check(cursor, [job], wait=True)
 
         # Run post-target commands
-        post_commands = job_data.get_job_commands(cursor, job, f"post_{action}")
+        post_commands = maand_data.get_job_commands(cursor, job, f"post_{action}")
         execute_commands(cursor, post_commands, job, available_allocations, target)
 
 
@@ -108,10 +107,10 @@ def main():
         cursor = db.cursor()
 
         context_manager.export_env_bucket_update_seq(cursor)
-        max_deployment_seq = job_data.get_max_deployment_seq(cursor)
+        max_deployment_seq = maand_data.get_max_deployment_seq(cursor)
 
         for seq in range(0, max_deployment_seq + 1):
-            jobs = job_data.get_jobs(cursor, deployment_seq=seq)
+            jobs = maand_data.get_jobs(cursor, deployment_seq=seq)
             if args.jobs:
                 jobs = list(set(jobs) & set(args.jobs))
 
