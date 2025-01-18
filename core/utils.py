@@ -38,7 +38,7 @@ def get_bucket_conf():
 
 def split_list(input_list, chunk_size=3):
     return [
-        input_list[i : i + chunk_size] for i in range(0, len(input_list), chunk_size)
+        input_list[i: i + chunk_size] for i in range(0, len(input_list), chunk_size)
     ]
 
 
@@ -46,7 +46,7 @@ def extract_size_in_mb(size_string):
     unit_to_mb = {
         "MB": 1,
         "GB": 1024,
-        "TB": 1024**2,
+        "TB": 1024 ** 2,
     }
 
     if isinstance(size_string, (int, float)):
@@ -73,8 +73,8 @@ def extract_size_in_mb(size_string):
 def extract_cpu_frequency_in_mhz(freq_string):
     unit_to_mhz = {
         "MHZ": 1,  # Megahertz
-        "GHZ": 10**3,  # Gigahertz to MHz
-        "THZ": 10**6,  # Terahertz to MHz
+        "GHZ": 10 ** 3,  # Gigahertz to MHz
+        "THZ": 10 ** 6,  # Terahertz to MHz
     }
 
     if isinstance(freq_string, (int, float)):

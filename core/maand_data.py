@@ -335,4 +335,3 @@ def setup_job_modules(cursor, job):
             continue
         with open(f"/modules/{path}", "wb") as f:
             f.write(content)
-

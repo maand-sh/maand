@@ -30,12 +30,12 @@ def get_args():
 
 
 def run_target(
-    target,
-    action,
-    job,
-    allocations,
-    alloc_health_check_flag=False,
-    job_health_check_flag=False,
+        target,
+        action,
+        job,
+        allocations,
+        alloc_health_check_flag=False,
+        job_health_check_flag=False,
 ):
     with maand_data.get_db() as db:
         cursor = db.cursor()
@@ -69,7 +69,7 @@ def run_target(
 
 
 def execute_commands(
-    cursor, commands, job, allocations, target, alloc_health_check=False
+        cursor, commands, job, allocations, target, alloc_health_check=False
 ):
     for command in commands:
         alloc_command_executor.prepare_command(cursor, job, command)
@@ -125,10 +125,10 @@ def main():
                         agent_ip
                         for agent_ip in allocations
                         if job in maand_data.get_agent_jobs(cursor, agent_ip)
-                        and maand_data.get_agent_jobs_and_status(cursor, agent_ip)[
-                            job
-                        ].get("disabled")
-                        == 0
+                           and maand_data.get_agent_jobs_and_status(cursor, agent_ip)[
+                               job
+                           ].get("disabled")
+                           == 0
                     ]
 
                 if allocations:

@@ -24,7 +24,7 @@ def get_agent_minimal_env(agent_ip):
 
 
 def rsync_upload_agent_files(
-    agent_ip, jobs, agent_removed_jobs, update_jobs_json=False
+        agent_ip, jobs, agent_removed_jobs, update_jobs_json=False
 ):
     agent_env = get_agent_minimal_env(agent_ip)
 
