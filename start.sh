@@ -39,10 +39,10 @@ case "$OPERATION" in
     run_python_script "cat.py" info
     ;;
   "build")
-    run_python_script "build_bucket.py"
+    run_python_script "build.py"
     ;;
   "deploy")
-    run_python_script "deploy_bucket.py" "$@"
+    run_python_script "deploy.py" "$@"
     ;;
   "job")
     run_python_script "job_control.py" "$@"

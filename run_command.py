@@ -12,6 +12,8 @@ from core import (
     system_manager,
 )
 
+logger = utils.get_logger()
+
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -49,13 +51,16 @@ def run_command(agent_ip):
             utils.stop_the_world()
 
         if args.local:
-            command_manager.capture_command_local(
+            r = command_manager.capture_command_local(
                 "sh /tmp/command.sh", env=env, prefix=agent_ip
             )
         else:
-            command_manager.capture_command_file_remote(
+            r = command_manager.capture_command_file_remote(
                 "/tmp/command.sh", env, prefix=agent_ip
             )
+
+        if r.returncode != 0:
+            logger.info(f"Command failed for agent {agent_ip}")
 
         time.sleep(5)
         if args.health_check and not job_health_check.health_check(
@@ -64,7 +69,7 @@ def run_command(agent_ip):
             utils.stop_the_world()
 
 
-if __name__ == "__main__":
+def main():
     args = get_args()
     if args.cmd:
         with open("/tmp/command.sh", "w") as f:
@@ -92,3 +97,7 @@ if __name__ == "__main__":
             labels_filter=args.labels,
             agents_filter=args.agents,
         )
+
+
+if __name__ == "__main__":
+    main()
