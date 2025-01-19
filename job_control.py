@@ -73,12 +73,15 @@ def execute_commands(
 ):
     for command in commands:
         alloc_command_executor.prepare_command(cursor, job, command)
-        for agent_ip in allocations:
-            alloc_command_executor.execute_alloc_command(
-                job, command, agent_ip, {"TARGET": target}
-            )
-            if alloc_health_check:
-                job_health_check.health_check(cursor, [job], wait=True)
+        if command.startswith("command_parallel_"):
+            alloc_command_executor.execute_parallel_alloc_command(job, command, allocations, target)
+        else:
+            for agent_ip in allocations:
+                alloc_command_executor.execute_alloc_command(
+                    job, command, agent_ip, {"TARGET": target}
+                )
+                if alloc_health_check:
+                    job_health_check.health_check(cursor, [job], wait=True)
 
 
 def execute_default_action(job, allocations, target, alloc_health_check):

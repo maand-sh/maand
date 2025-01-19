@@ -33,6 +33,9 @@ def init():
         command_manager.command_local(
             f"mkdir -p {const.BUCKET_PATH}/{{workspace,secrets,logs,data}}"
         )
+        command_manager.command_local(
+            f"mkdir -p {const.BUCKET_PATH}/workspace/jobs"
+        )
         command_manager.command_local(f"touch {const.WORKSPACE_PATH}/agents.json")
         command_manager.command_local(f"touch {const.WORKSPACE_PATH}/bucket.conf")
 

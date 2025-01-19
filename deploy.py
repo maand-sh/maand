@@ -133,8 +133,8 @@ def prepare_allocation(cursor, job, allocation_ip):
     agent_dir = context_manager.get_agent_dir(allocation_ip)
     agent_jobs = maand_data.get_agent_jobs(cursor, allocation_ip)
     if job in agent_jobs:
-        command_manager.command_local(f"mkdir -p {agent_dir}/jobs/")
-        maand_data.copy_job_files(cursor, job, agent_dir)
+        command_manager.command_local(f"mkdir -p {agent_dir}/jobs")
+        maand_data.copy_job_files(cursor, job, allocation_ip, agent_dir)
 
     transpile(cursor, allocation_ip, job)
     update_certificates(cursor, job, allocation_ip)
