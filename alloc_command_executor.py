@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, wait
 
 from core import context_manager, maand_data
 from core import utils
@@ -11,7 +12,23 @@ logger = utils.get_logger()
 
 
 def execute_parallel_alloc_command(job, command, allocations, env):
-    pass
+    failed = False
+    with ThreadPoolExecutor(max_workers=len(allocations)) as executor:
+        futures = {
+            executor.submit(execute_alloc_command, job, command, agent_ip, env): agent_ip for agent_ip in allocations
+        }
+
+        wait(futures)
+
+        for future in futures:
+            try:
+                if not future.result(): # Block until the thread completes
+                    failed = True
+            except Exception as e:
+                failed = True
+                print(f"Task generated an exception: {e}")
+    if failed:
+        sys.exit(1)
 
 
 def execute_alloc_command(job, command, agent_ip, env):

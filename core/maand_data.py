@@ -2,6 +2,7 @@ import os
 import sqlite3
 import uuid
 
+import kv_manager
 from core import const
 
 
@@ -305,7 +306,7 @@ def get_job_resource_limits(cursor, job):
     )
 
 
-def copy_job_files(cursor, name, agent_dir):
+def copy_job_files(cursor, name, allocation_ip, agent_dir):
     cursor.execute(
         "SELECT path, content, isdir FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?) AND path NOT LIKE ? ORDER BY isdir DESC",
         (name, f"{name}/_modules%"),
@@ -318,6 +319,16 @@ def copy_job_files(cursor, name, agent_dir):
             continue
         with open(f"{agent_dir}/jobs/{path}", "wb") as f:
             f.write(content)
+
+    namespace = f"maand/agent/{allocation_ip}/job/{name}"
+    certs = kv_manager.get_keys(cursor, namespace)
+    if certs:
+        os.makedirs(f"{agent_dir}/jobs/{name}/certs", exist_ok=True)
+    for cert in certs:
+        with open(f"{agent_dir}/jobs/{name}/{cert}", "wb") as f:
+            content = kv_manager.get(cursor, namespace, cert)
+            f.write(str.encode(content))
+
 
 
 def setup_job_modules(cursor, job):
