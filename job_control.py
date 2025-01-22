@@ -29,14 +29,7 @@ def get_args():
     return args
 
 
-def run_target(
-        target,
-        action,
-        job,
-        allocations,
-        alloc_health_check_flag=False,
-        job_health_check_flag=False,
-):
+def run_target(target, action, job, allocations, alloc_health_check_flag=False, job_health_check_flag=False):
     with maand_data.get_db() as db:
         cursor = db.cursor()
 
@@ -48,14 +41,7 @@ def run_target(
         # Run main job control or default action
         job_control_commands = maand_data.get_job_commands(cursor, job, "job_control")
         if job_control_commands:
-            execute_commands(
-                cursor,
-                job_control_commands,
-                job,
-                allocations,
-                target,
-                alloc_health_check_flag,
-            )
+            execute_commands(cursor, job_control_commands, job, allocations, target, alloc_health_check_flag)
         else:
             execute_default_action(job, allocations, target, alloc_health_check_flag)
 
@@ -68,9 +54,7 @@ def run_target(
         execute_commands(cursor, post_commands, job, available_allocations, target)
 
 
-def execute_commands(
-        cursor, commands, job, allocations, target, alloc_health_check=False
-):
+def execute_commands(cursor, commands, job, allocations, target, alloc_health_check=False):
     for command in commands:
         alloc_command_executor.prepare_command(cursor, job, command)
         if command.startswith("command_parallel_"):
