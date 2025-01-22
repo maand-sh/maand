@@ -185,16 +185,11 @@ def build_job_deployment_seq(cursor):
     cursor.execute(sql)
 
 
-def is_command_file_exists(job, command):
-    return os.path.isfile(f"/bucket/workspace/jobs/{job}/_modules/{command}.py")
-
-
 def get_job_variables(job):
-    version = workspace.get_job_manifest(job).get("version", "unknown")
     config_parser = utils.get_maand_jobs_conf()
 
     name = f"{job}.variables"
-    job_kv = {"version": version}
+    job_kv = {}
     if config_parser.has_section(name):
         keys = config_parser.options(name)
         for key in keys:
@@ -210,7 +205,7 @@ def get_job_variables(job):
     return job_kv
 
 
-def build_bucket_jobs_conf(job):
+def get_bucket_jobs_conf(job):
     values = {}
     kv = get_job_variables(job)
     for key, value in kv.items():
@@ -218,7 +213,7 @@ def build_bucket_jobs_conf(job):
     return values
 
 
-def delete_job(cursor, job):
+def delete_job_from_db(cursor, job):
     cursor.execute(
         "DELETE FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
         (job,),
@@ -243,8 +238,7 @@ def delete_job(cursor, job):
 
 
 def build_job(cursor, job):
-    values = {}
-    delete_job(cursor, job)
+    delete_job_from_db(cursor, job)
 
     schema = {
         "type": "object",
@@ -379,11 +373,6 @@ def build_job(cursor, job):
         ),
     )
 
-    values["min_memory_limit"] = min_memory_limit
-    values["max_memory_limit"] = max_memory_limit
-    values["min_cpu_limit"] = min_cpu_limit
-    values["max_cpu_limit"] = max_cpu_limit
-
     for label in labels:
         cursor.execute(
             "INSERT INTO job_labels (job_id, label) VALUES (?, ?)",
@@ -410,15 +399,16 @@ def build_job(cursor, job):
     for command, command_obj in commands.items():
         executed_on = command_obj.get("executed_on", ["direct"])
         depend_on = command_obj.get("depend_on", {})
+
         if executed_on:
             depend_on_job = depend_on.get("job")
             depend_on_command = depend_on.get("command")
             depend_on_config = json.dumps(depend_on.get("config", {}))
 
             if depend_on_job:
-                if not is_command_file_exists(depend_on_job, depend_on_command):
+                if not os.path.isfile(f"/bucket/workspace/jobs/{depend_on_job}/_modules/{depend_on_command}.py"):
                     raise Exception(
-                        f"job {job}, alloc command not found depend_on job {job} alloc_command {command}"
+                        f"job {job}, alloc command not found depend_on job {depend_on_job} alloc_command {depend_on_command}"
                     )
 
             for on in executed_on:
@@ -439,7 +429,7 @@ def build_job(cursor, job):
                 f"The commands must include an 'executed_on'. job: {job}, command: {command}"
             )
 
-        if not is_command_file_exists(job, command):
+        if not os.path.isfile(f"/bucket/workspace/jobs/{job}/_modules/{command}.py"):
             raise Exception(
                 f"alloc command not found job {job} alloc_command {command}"
             )
@@ -465,9 +455,42 @@ def build_job(cursor, job):
                 port,
             ),
         )
-        values[name] = port
 
-    return values
+
+def build_job_variables(cursor):
+    jobs = workspace.get_jobs()
+    for job in jobs:
+        cursor.execute("SELECT min_memory_mb, max_memory_mb, min_cpu, max_cpu FROM job WHERE name = ?", (job,))
+        row = cursor.fetchone()
+        values = {
+            "min_memory_limit": row[0],
+            "max_memory_limit": row[1],
+            "min_cpu_limit": row[2],
+            "max_cpu_limit": row[3]
+        }
+
+        cursor.execute("SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,))
+        rows = cursor.fetchall()
+        for (name, port,) in rows:
+            values[name] = port
+
+        job_variables = get_bucket_jobs_conf(job) or {}
+        remove_unused_resource_variables(job_variables, values)
+
+        version = workspace.get_job_manifest(job).get("version", "unknown")
+        values["version"] = version
+
+        manage_job_variables(cursor, f"maand/job/{job}", values)
+        manage_job_variables(cursor, f"vars/job/{job}", job_variables)
+
+    agents = maand_data.get_agents(cursor, labels_filter=None)
+    for agent_ip in agents:
+        agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
+        for job in agent_removed_jobs:
+            for namespace in [f"maand/agent/{agent_ip}/job/{job}"]:
+                deleted_keys = kv_manager.get_keys(cursor, namespace)
+                for key in deleted_keys:
+                    kv_manager.delete(cursor, namespace, key)
 
 
 def manage_job_variables(cursor, namespace, values):
@@ -482,7 +505,7 @@ def manage_job_variables(cursor, namespace, values):
         kv_manager.delete(cursor, namespace, key)
 
 
-def remove_unused_resource_settings(job_variables, values):
+def remove_unused_resource_variables(job_variables, values):
     if not job_variables.get("memory"):
         job_variables["memory"] = values.get("max_memory_limit")
     if not job_variables.get("cpu"):
@@ -521,32 +544,17 @@ def build_jobs(cursor):
     jobs = workspace.get_jobs()
     for job in jobs:
         assert job == job.lower()
-        values = build_job(cursor, job) or {}
-        job_variables = build_bucket_jobs_conf(job) or {}
+        build_job(cursor, job)
         build_job_deployment_seq(cursor)
-
-        remove_unused_resource_settings(job_variables, values)
-
-        manage_job_variables(cursor, f"maand/job/{job}", values)
-        manage_job_variables(cursor, f"vars/job/{job}", job_variables)
 
     cursor.execute("SELECT name FROM job")
     all_jobs = [row[0] for row in cursor.fetchall()]
     missing_jobs = list(set(jobs) ^ set(all_jobs))
     for job in missing_jobs:
-        delete_job(cursor, job)
-
-    agents = maand_data.get_agents(cursor, labels_filter=None)
-    for agent_ip in agents:
-        agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
-        for job in agent_removed_jobs:
-            for namespace in [f"maand/job/{job}", f"vars/job/{job}", f"job/{job}"]:
-                deleted_keys = kv_manager.get_keys(cursor, namespace)
-                for key in deleted_keys:
-                    kv_manager.delete(cursor, namespace, key)
+        delete_job_from_db(cursor, job)
 
 
-def validate_resource_limit(cursor):
+def validate(cursor):
     cursor.execute(
         "SELECT agent_ip, CAST(agent_memory_mb AS FLOAT) AS agent_memory_mb, CAST(agent_cpu AS FLOAT) AS agent_cpu FROM agent"
     )
@@ -725,8 +733,8 @@ def build_allocations(cursor):
 
         cursor.execute("SELECT job FROM agent_jobs WHERE agent_id = ?", (agent_id,))
         all_assigned_jobs = [row[0] for row in cursor.fetchall()]
-        removed_jobs = list(set(all_assigned_jobs) ^ set(assigned_jobs))
-        for job in removed_jobs:
+        missing_jobs = list(set(all_assigned_jobs) ^ set(assigned_jobs))
+        for job in missing_jobs:
             cursor.execute(
                 "UPDATE agent_jobs SET removed = 1 WHERE job = ? AND agent_id = ?",
                 (
@@ -740,10 +748,8 @@ def build_allocations(cursor):
             (agent_ip,),
         )
 
-    validate_resource_limit(cursor)
 
-
-def build_bucket_conf(cursor):
+def build_bucket_variables(cursor):
     namespace = "maand"
 
     config_parser = utils.get_bucket_conf()
@@ -831,8 +837,9 @@ def build_agent_variables(cursor):
 
 
 def build_variables(cursor):
-    build_bucket_conf(cursor)
+    build_bucket_variables(cursor)
     build_agent_variables(cursor)
+    build_job_variables(cursor)
 
 
 def get_cert_if_available(cursor, file_path, namespace, key):
@@ -855,7 +862,7 @@ def get_ca_file_hash():
         return hashlib.md5(data.encode("utf-8")).hexdigest()
 
 
-def build_ca_hash(cursor):
+def update_ca_hash(cursor):
     current_md5_hash = maand_data.get_ca_md5_hash(cursor)
     new_md5_hash = get_ca_file_hash()
     if current_md5_hash != new_md5_hash:
@@ -971,7 +978,7 @@ def build_job_certs(cursor):
 
 def build_certs(cursor):
     build_job_certs(cursor)
-    build_ca_hash(cursor)
+    update_ca_hash(cursor)
     command_manager.command_local(f"rm -f {const.SECRETS_PATH}/ca.srl")
 
 
@@ -1003,6 +1010,7 @@ def build():
             build_allocations(cursor)
             build_variables(cursor)
             build_certs(cursor)
+            validate(cursor)
             db.commit()
             post_build_hook(cursor)
         except Exception as e:
