@@ -30,7 +30,7 @@ def setup_maand_database(cursor):
     )
 
     cursor.execute(
-        "CREATE TABLE IF NOT EXISTS job (job_id TEXT PRIMARY KEY, name TEXT, version TEXT, min_memory_mb TEXT, max_memory_mb TEXT, min_cpu TEXT, max_cpu TEXT, certs_md5_hash TEXT, deployment_seq INT)"
+        "CREATE TABLE IF NOT EXISTS job (job_id TEXT PRIMARY KEY, name TEXT, version TEXT, min_memory_mb FLOAT, max_memory_mb FLOAT, min_cpu FLOAT, max_cpu FLOAT, certs_md5_hash TEXT, deployment_seq INT)"
     )
     cursor.execute("CREATE TABLE IF NOT EXISTS job_labels (job_id TEXT, label TEXT)")
     cursor.execute(
