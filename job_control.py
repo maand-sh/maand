@@ -97,7 +97,7 @@ def main():
         max_deployment_seq = maand_data.get_max_deployment_seq(cursor)
 
         for seq in range(0, max_deployment_seq + 1):
-            jobs = maand_data.get_jobs(cursor, deployment_seq=seq)
+            jobs = maand_data.get_allocations_jobs(cursor, deployment_seq=seq)
             if args.jobs:
                 jobs = list(set(jobs) & set(args.jobs))
 
