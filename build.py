@@ -144,26 +144,12 @@ def build_agents(cursor):
         for agent_ip in missing_agents:
             cursor.execute("UPDATE agent SET detained = 1 WHERE agent_ip = ?", (agent_ip,))
 
-        cursor.execute("SELECT agent_ip FROM agent WHERE detained = 1")
-        rows = cursor.fetchall()
-        detained_agents = {row[0] for row in rows}
-
-        for agent_ip in detained_agents:
-            for namespace in [
-                f"maand/certs/agent/{agent_ip}",
-                f"maand/agent/{agent_ip}",
-                f"vars/agent/{agent_ip}",
-            ]:
-                keys = kv_manager.get_keys(cursor, namespace)
-                for key in keys:
-                    kv_manager.delete(cursor, namespace, key)
-
     except Exception as e:
         logger.error(f"Error building agents: {e}")
         raise
 
 
-def build_job_deployment_seq(cursor):
+def build_job_deployment_sequence(cursor):
     sql = """
             WITH RECURSIVE job_command_seq AS (
                 SELECT jc.job_name, 0 AS level FROM job_commands jc WHERE jc.depend_on_job IS NULL
@@ -174,12 +160,12 @@ def build_job_deployment_seq(cursor):
                 FROM
                     job_commands jc INNER JOIN job_command_seq jcs ON jc.depend_on_job = jcs.job_name
             )
-            UPDATE job SET deployment_seq = t.deployment_seq FROM (
+            UPDATE agent_jobs SET deployment_seq = t.deployment_seq FROM (
             SELECT
                 DISTINCT job_name, deployment_seq
             FROM
                 (SELECT job_name, (SELECT MAX(level) FROM job_command_seq jcs WHERE jcs.job_name = t.job_name) as deployment_seq FROM job_command_seq t) t1
-            ORDER BY deployment_seq) t WHERE job.name = t.job_name;
+            ORDER BY deployment_seq) t WHERE agent_jobs.job = t.job_name;
         """
 
     cursor.execute(sql)
@@ -214,27 +200,12 @@ def get_bucket_jobs_conf(job):
 
 
 def delete_job_from_db(cursor, job):
-    cursor.execute(
-        "DELETE FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
-        (job,),
-    )
-    cursor.execute(
-        "DELETE FROM job_labels WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
-        (job,),
-    )
-    cursor.execute(
-        "DELETE FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
-        (job,),
-    )
-    cursor.execute(
-        "DELETE FROM job_commands WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
-        (job,),
-    )
-    cursor.execute(
-        "DELETE FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?)",
-        (job,),
-    )
-    cursor.execute("DELETE FROM job WHERE name = ?", (job,))
+    cursor.execute("DELETE FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,),)
+    cursor.execute("DELETE FROM job_labels WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,),)
+    cursor.execute("DELETE FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,),)
+    cursor.execute("DELETE FROM job_commands WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,),)
+    cursor.execute("DELETE FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", (job,),)
+    cursor.execute("DELETE FROM job WHERE name = ?", (job,), )
 
 
 def build_job(cursor, job):
@@ -359,8 +330,8 @@ def build_job(cursor, job):
     certs_hash = hashlib.md5(json.dumps(certs).encode()).hexdigest()
 
     cursor.execute(
-        "INSERT INTO job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash, deployment_seq) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        "INSERT INTO job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu, max_cpu, certs_md5_hash) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             job_id,
             job,
@@ -545,7 +516,6 @@ def build_jobs(cursor):
     for job in jobs:
         assert job == job.lower()
         build_job(cursor, job)
-        build_job_deployment_seq(cursor)
 
     cursor.execute("SELECT name FROM job")
     all_jobs = [row[0] for row in cursor.fetchall()]
@@ -727,7 +697,7 @@ def build_allocations(cursor):
                 )
             else:
                 cursor.execute(
-                    "INSERT INTO agent_jobs (job, agent_id, disabled, removed) VALUES (?, ?, ?, 0)",
+                    "INSERT INTO agent_jobs (job, agent_id, disabled, removed, deployment_seq) VALUES (?, ?, ?, 0, 0)",
                     (job, agent_id, disabled),
                 )
 
@@ -1008,6 +978,7 @@ def build():
             build_agents(cursor)
             build_jobs(cursor)
             build_allocations(cursor)
+            build_job_deployment_sequence(cursor)
             build_variables(cursor)
             build_certs(cursor)
             validate(cursor)

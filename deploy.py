@@ -149,6 +149,7 @@ def handle_disabled_stopped_allocations(cursor, job):
     allocations.extend(disabled_allocations)
 
     if counts["removed"] == counts["total"]:  # job removed
+        logger.info(f"job {job} removed")
         job_control.run_target(
             "stop",
             "deploy",
@@ -159,6 +160,7 @@ def handle_disabled_stopped_allocations(cursor, job):
         )
         update_allocation_hash(cursor, job, allocations)
     elif counts["removed"] > 0:  # few allocations removed
+        logger.info(f"job {job}, few allocations removed {counts['removed']}")
         job_control.run_target(
             "stop",
             "deploy",
@@ -196,6 +198,7 @@ def handle_new_updated_allocations(job):
         db.rollback()
 
     if counts["new"] > 0:  # allocations added
+        logger.info(f"job {job}, new allocations: {counts['new']}")
         job_control.run_target(
             "start",
             "deploy",
@@ -205,6 +208,7 @@ def handle_new_updated_allocations(job):
             job_health_check_flag=True,
         )
     elif counts["changed"] < counts["total"]:  # few allocations modified
+        logger.info(f"job {job}, few allocations modified: {counts['new']}")
         job_control.run_target(
             "restart",
             "deploy",
@@ -214,6 +218,7 @@ def handle_new_updated_allocations(job):
             job_health_check_flag=False,
         )
     else:
+        logger.info(f"job {job}, restart allocations: {len(allocations)}")
         job_control.run_target(
             "restart",
             "deploy",
@@ -275,28 +280,24 @@ def main():
 
         db.commit()
 
-        stopped_jobs = []
-        agents = maand_data.get_agents(cursor, labels_filter=None)
-        for agent_ip in agents:
-            agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
-            agent_disabled_jobs = maand_data.get_agent_disabled_jobs(cursor, agent_ip)
-            agent_stopped_jobs = list(set(chain(agent_removed_jobs, agent_disabled_jobs)))
-            stopped_jobs.extend(agent_stopped_jobs)
-
-        if args.jobs:
-            stopped_jobs = list(set(stopped_jobs) & set(args.jobs))
-
-        stopped_jobs = list(set(stopped_jobs))
-        for job in stopped_jobs:
-            handle_disabled_stopped_allocations(cursor, job)
-
-        db.commit()
-
         max_deployment_seq = maand_data.get_max_deployment_seq(cursor)
         for seq in range(max_deployment_seq + 1):
-            jobs = maand_data.get_jobs(cursor, deployment_seq=seq)
+            jobs = maand_data.get_allocations_jobs(cursor, deployment_seq=seq)
             if args.jobs:
                 jobs = list(set(jobs) & set(args.jobs))
+
+            stopped_jobs = []
+            agents = maand_data.get_agents(cursor, labels_filter=None)
+            for agent_ip in agents:
+                agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
+                agent_disabled_jobs = maand_data.get_agent_disabled_jobs(cursor, agent_ip)
+                agent_stopped_jobs = list(set(chain(agent_removed_jobs, agent_disabled_jobs)))
+                stopped_jobs.extend(agent_stopped_jobs)
+            db.commit()
+
+            stopped_jobs = list(set(stopped_jobs) & set(jobs))
+            for job in stopped_jobs:
+                handle_disabled_stopped_allocations(cursor, job)
 
             agents = maand_data.get_agents(cursor, labels_filter=None)
             for agent_ip in agents:
@@ -306,6 +307,7 @@ def main():
                     prepare_allocation(cursor, job, agent_ip)  # copy files to agent dir
 
                 agent_removed_jobs = maand_data.get_agent_removed_jobs(cursor, agent_ip)
+                agent_removed_jobs = list(set(jobs) & set(agent_removed_jobs))
                 context_manager.rsync_upload_agent_files(agent_ip, jobs, agent_removed_jobs)  # update changes
 
             for job in jobs:

@@ -33,7 +33,7 @@ if __name__ == "__main__":
 
     elif name == "jobs":
         statement(
-            "SELECT DISTINCT job_id, name, version, (CASE WHEN (SELECT COUNT(1) FROM agent_jobs aj WHERE j.name = aj.job AND aj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled, deployment_seq, (SELECT GROUP_CONCAT(label) FROM job_labels jl WHERE jl.job_id = j.job_id) as labels FROM job j ORDER BY deployment_seq, name",
+            "SELECT DISTINCT job_id, name, version, (CASE WHEN (SELECT COUNT(1) FROM agent_jobs aj WHERE j.name = aj.job AND aj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled, (SELECT DISTINCT deployment_seq FROM agent_jobs aj WHERE aj.job = j.name) AS deployment_seq, (SELECT GROUP_CONCAT(label) FROM job_labels jl WHERE jl.job_id = j.job_id) as labels FROM job j ORDER BY deployment_seq, name",
             "no jobs found",
         )
 
