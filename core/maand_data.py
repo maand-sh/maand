@@ -156,32 +156,19 @@ def get_agent_available_resources(cursor, agent_ip):
 
 
 def get_allocation_counts(cursor, job):
-    cursor.execute(
-        """
-        SELECT
-            (SELECT COUNT(*) FROM agent_jobs aj WHERE aj.previous_md5_hash IS NULL AND aj.removed <> 1 AND aj.job = ?) AS new_allocations_count,
-            (SELECT COUNT(*) FROM agent_jobs aj WHERE aj.previous_md5_hash = aj.current_md5_hash AND aj.job = ?) AS unchanged_allocations_count,
-            (SELECT COUNT(*) FROM agent_jobs aj WHERE aj.previous_md5_hash IS NOT NULL AND aj.previous_md5_hash != aj.current_md5_hash AND aj.job = ?) AS changed_allocations_count,
-            (SELECT COUNT(*) FROM agent_jobs aj WHERE aj.removed = 1 AND aj.job = ?) AS removed_allocations_count,
-            (SELECT COUNT(*) FROM agent_jobs aj WHERE aj.job = ?) AS total_allocations_count
-    """,
-        (job, job, job, job, job),
-    )
-    new_count, unchanged_count, changed_count, removed_count, total_count = (
-        cursor.fetchone()
-    )
-    counts = {}
-    counts["new"] = new_count
-    counts["unchanged"] = unchanged_count
-    counts["changed"] = changed_count
-    counts["removed"] = removed_count
-    counts["total"] = total_count
+    new_count = len(get_new_allocations(cursor, job))
+    unchanged_count = len(get_unchanged_allocations(cursor, job))
+    changed_count = len(get_changed_allocations(cursor, job))
+    removed_count = len(get_removed_allocations(cursor, job))
+    disabled_count =  len(get_disabled_allocations(cursor, job))
+    total_count = len(get_allocations(cursor, job))
+    counts = {"new": new_count, "unchanged": unchanged_count, "changed": changed_count, "removed": removed_count, "disabled": disabled_count, "total": total_count}
     return counts
 
 
 def get_new_allocations(cursor, job):
     cursor.execute(
-        "SELECT a.agent_ip FROM agent_jobs aj JOIN agent a ON a.agent_id = aj.agent_id WHERE aj.previous_md5_hash IS NULL AND aj.job = ?",
+        "SELECT a.agent_ip FROM agent_jobs aj JOIN agent a ON a.agent_id = aj.agent_id WHERE aj.previous_md5_hash IS NULL AND aj.current_md5_hash IS NULL AND aj.removed = 0 AND aj.disabled = 0 AND aj.job = ?",
         (job,),
     )
     rows = cursor.fetchall()
@@ -190,7 +177,16 @@ def get_new_allocations(cursor, job):
 
 def get_changed_allocations(cursor, job):
     cursor.execute(
-        "SELECT a.agent_ip FROM agent_jobs aj JOIN agent a ON a.agent_id = aj.agent_id WHERE aj.previous_md5_hash IS NOT NULL AND aj.previous_md5_hash != aj.current_md5_hash AND aj.job = ?",
+        "SELECT a.agent_ip FROM agent_jobs aj JOIN agent a ON a.agent_id = aj.agent_id WHERE aj.previous_md5_hash IS NOT NULL AND aj.previous_md5_hash != aj.current_md5_hash AND aj.removed = 0 AND aj.disabled = 0 AND aj.job = ?",
+        (job,),
+    )
+    rows = cursor.fetchall()
+    return [row[0] for row in rows]
+
+
+def get_unchanged_allocations(cursor, job):
+    cursor.execute(
+        "SELECT a.agent_ip FROM agent_jobs aj JOIN agent a ON a.agent_id = aj.agent_id WHERE aj.current_md5_hash IS NOT NULL AND aj.previous_md5_hash = aj.current_md5_hash AND aj.removed = 0 AND aj.disabled = 0 AND aj.job = ?",
         (job,),
     )
     rows = cursor.fetchall()
@@ -287,8 +283,8 @@ def get_job_resource_limits(cursor, job):
 
 def copy_job_files(cursor, name, allocation_ip, agent_dir):
     cursor.execute(
-        "SELECT path, content, isdir FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?) AND path NOT LIKE ? ORDER BY isdir DESC",
-        (name, f"{name}/_modules%"),
+        "SELECT path, content, isdir FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?) ORDER BY isdir DESC",
+        (name,),
     )
     rows = cursor.fetchall()
 

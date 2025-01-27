@@ -29,14 +29,9 @@ def get_args():
     return args
 
 
-def run_target(target, action, job, allocations, alloc_health_check_flag=False, job_health_check_flag=False):
+def run_target(target, job, allocations, alloc_health_check_flag=False, job_health_check_flag=False):
     with maand_data.get_db() as db:
         cursor = db.cursor()
-
-        available_allocations = maand_data.get_allocations(cursor, job)
-        # Run pre-target commands
-        pre_commands = maand_data.get_job_commands(cursor, job, f"pre_{action}")
-        execute_commands(cursor, pre_commands, job, available_allocations, target)
 
         # Run main job control or default action
         job_control_commands = maand_data.get_job_commands(cursor, job, "job_control")
@@ -49,16 +44,14 @@ def run_target(target, action, job, allocations, alloc_health_check_flag=False, 
         if job_health_check_flag:
             job_health_check.health_check(cursor, [job], wait=True)
 
-        # Run post-target commands
-        post_commands = maand_data.get_job_commands(cursor, job, f"post_{action}")
-        execute_commands(cursor, post_commands, job, available_allocations, target)
-
 
 def execute_commands(cursor, commands, job, allocations, target, alloc_health_check=False):
     for command in commands:
         alloc_command_executor.prepare_command(cursor, job, command)
         if command.startswith("command_parallel_"):
-            alloc_command_executor.execute_parallel_alloc_command(job, command, allocations, target)
+            alloc_command_executor.execute_parallel_alloc_command(
+                job, command, allocations, {"TARGET": target}
+            )
         else:
             for agent_ip in allocations:
                 alloc_command_executor.execute_alloc_command(
@@ -126,7 +119,6 @@ def main():
                 futures = [
                     executor.submit(
                         run_target,
-                        target,
                         target,
                         job,
                         allocations,

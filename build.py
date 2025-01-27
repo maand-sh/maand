@@ -168,6 +168,7 @@ def build_job_deployment_sequence(cursor):
             ORDER BY deployment_seq) t WHERE agent_jobs.job = t.job_name;
         """
 
+    # TODO: timeout
     cursor.execute(sql)
 
 
@@ -680,20 +681,18 @@ def build_allocations(cursor):
 
             cursor.execute(
                 "SELECT * FROM agent_jobs WHERE job = ? AND agent_id = ?",
-                (
-                    job,
-                    agent_id,
-                ),
+                (job, agent_id,),
             )
             row = cursor.fetchone()
             if row:
+                if not disabled:
+                    cursor.execute(
+                        "UPDATE agent_jobs SET current_md5_hash = NULL,previous_md5_hash = NULL WHERE disabled = 1 AND job = ? AND agent_id = ?",
+                        (job, agent_id,),
+                    )
                 cursor.execute(
                     "UPDATE agent_jobs SET disabled = ?, removed = 0 WHERE job = ? AND agent_id = ?",
-                    (
-                        disabled,
-                        job,
-                        agent_id,
-                    ),
+                    (disabled, job, agent_id,),
                 )
             else:
                 cursor.execute(
@@ -714,7 +713,7 @@ def build_allocations(cursor):
             )
 
         cursor.execute(
-            "UPDATE agent_jobs SET disabled = 1 WHERE agent_id IN (SELECT agent_id FROM agent WHERE agent_ip = ? AND detained = 1)",
+            "UPDATE agent_jobs SET removed = 1 WHERE agent_id IN (SELECT agent_id FROM agent WHERE agent_ip = ? AND detained = 1)",
             (agent_ip,),
         )
 
@@ -804,6 +803,14 @@ def build_agent_variables(cursor):
         missing_keys = list(set(all_keys) ^ set(values.keys()))
         for key in missing_keys:
             kv_manager.delete(cursor, namespace, key)
+
+        cursor.execute("SELECT agent_ip FROM agent WHERE detained = 1")
+        removed_agents = [row[0] for row in cursor.fetchall()]
+        for agent_ip in removed_agents:
+            namespace = f"maand/agent/{agent_ip}"
+            all_keys = kv_manager.get_keys(cursor, namespace)
+            for key in all_keys:
+                kv_manager.delete(cursor, namespace, key)
 
 
 def build_variables(cursor):
