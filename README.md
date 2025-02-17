@@ -1,7 +1,7 @@
-### Maand: A Agentless Job Orchestration Framework
+# Maand
 
-Maand is a lightweight, agentless framework designed for any kind of workload orchestration within a
-cluster. It automates job execution, coordinating tasks between agents.
+Maand is a workload orchestrator and provisioner that operates without agents, with all states stored in a file. 
+It is designed to handle a wide variety of workloads within a cluster, automating the execution and management of jobs.
 
 docs : https://maand.sh/latest
 
