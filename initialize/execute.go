@@ -7,7 +7,6 @@ import (
 	"crypto/x509/pkix"
 	_ "embed"
 	"encoding/pem"
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"maand/bucket"
@@ -22,33 +21,64 @@ import (
 //go:embed Dockerfile
 var dockerFile []byte
 
-func Execute() {
+var BucketAlreadyInitializedErr = fmt.Errorf("maand is already initialized in this directory")
+
+func Execute() error {
 	var dbFile = path.Join(bucket.Location, "data/maand.db")
 	if f, err := os.Stat(dbFile); f != nil || os.IsExist(err) {
-		utils.Check(errors.New("maand is already initialized"))
+		return BucketAlreadyInitializedErr
 	}
 
-	err := utils.ExecuteCommand([]string{fmt.Sprintf("mkdir -p %s/{data,workspace,logs,secrets}", bucket.Location), fmt.Sprintf("mkdir -p %s/jobs", bucket.WorkspaceLocation)})
-	utils.Check(err)
+	err := os.MkdirAll(path.Join(bucket.Location, "data"), os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("unable to create data directory: %w", err)
+	}
+
+	err = os.MkdirAll(path.Join(bucket.Location, "workspace", "jobs"), os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("unable to create workspace jobs directory: %w", err)
+	}
+
+	err = os.MkdirAll(path.Join(bucket.Location, "logs"), os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("unable to create logs directory: %w", err)
+	}
+
+	err = os.MkdirAll(path.Join(bucket.Location, "secrets"), os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("unable to create secrets directory: %w", err)
+	}
 
 	db, err := data.GetDatabase(false)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	tx, err := db.Begin()
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	err = data.SetupMaand(tx)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	bucketId := uuid.NewString()
-
 	_, err = tx.Exec("INSERT INTO bucket (bucket_id, update_seq) VALUES (?, ?)", bucketId, 0)
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 
 	workersJson := path.Join(bucket.WorkspaceLocation, "workers.json")
 	if _, err := os.Stat(workersJson); os.IsNotExist(err) {
 		err = os.WriteFile(workersJson, []byte("[]"), os.ModePerm)
-		utils.Check(err)
+		if err != nil {
+			return fmt.Errorf("unable to create workers.json, %w", err)
+		}
 	}
 
 	conf := utils.MaandConf{
@@ -57,12 +87,18 @@ func Execute() {
 		SSHKeyFile: "worker.key",
 		CertsTTL:   60,
 	}
-	utils.WriteMaandConf(&conf)
+
+	err = utils.WriteMaandConf(&conf)
+	if err != nil {
+		return fmt.Errorf("unable to write maand.conf, %w", err)
+	}
 
 	bucketConf := path.Join(bucket.WorkspaceLocation, "bucket.conf")
 	if _, err := os.Stat(bucketConf); os.IsNotExist(err) {
 		err = os.WriteFile(bucketConf, []byte(""), os.ModePerm)
-		utils.Check(err)
+		if err != nil {
+			return fmt.Errorf("unable to create bucket.conf, %w", err)
+		}
 	}
 
 	caCrtFile := path.Join(bucket.SecretLocation, "ca.crt")
@@ -70,28 +106,46 @@ func Execute() {
 	_, caCrtErr := os.Stat(caCrtFile)
 	_, caKeyErr := os.Stat(caKeyFile)
 	if os.IsNotExist(caCrtErr) && os.IsNotExist(caKeyErr) {
-		generateCA(bucket.SecretLocation, pkix.Name{CommonName: bucketId}, 10*365)
+		err = generateCA(bucket.SecretLocation, pkix.Name{CommonName: bucketId}, 10*365)
+		if err != nil {
+			return err
+		}
 	}
 
 	dockerFilePath := path.Join(bucket.Location, "Dockerfile")
 	if _, err := os.Stat(dockerFilePath); os.IsNotExist(err) {
-		_ = os.WriteFile(dockerFilePath, dockerFile, os.ModePerm)
+		err = os.WriteFile(dockerFilePath, dockerFile, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("unable to create docker file, %w", err)
+		}
 	}
 
 	requirementFilePath := path.Join(bucket.Location, "requirements.txt")
 	if _, err := os.Stat(requirementFilePath); os.IsNotExist(err) {
-		_ = os.WriteFile(requirementFilePath, []byte(""), os.ModePerm)
+		err = os.WriteFile(requirementFilePath, []byte(""), os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("unable to create requirements.txt, %w", err)
+		}
 	}
 
 	err = tx.Commit()
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 
-	_ = utils.ExecuteCommand([]string{"sync"})
+	err = data.UpdateJournalModeDefault(db)
+	if err != nil {
+		return err
+	}
+
+	return utils.ExecuteCommand([]string{"sync"})
 }
 
-func generateCA(path string, subject pkix.Name, ttlDays int) {
+func generateCA(path string, subject pkix.Name, ttlDays int) error {
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	now := time.Now()
 	template := x509.Certificate{
@@ -105,24 +159,42 @@ func generateCA(path string, subject pkix.Name, ttlDays int) {
 	}
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	// Save CA certificate
 	certFile, err := os.Create(fmt.Sprintf("%s/ca.crt", path))
-	utils.Check(err)
-	defer certFile.Close()
+	if err != nil {
+		return fmt.Errorf("unable to create ca.crt, %w", err)
+	}
+	defer func() {
+		_ = certFile.Close()
+	}()
 
 	err = pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	// Save CA private key
 	keyFile, err := os.Create(fmt.Sprintf("%s/ca.key", path))
-	utils.Check(err)
-	defer keyFile.Close()
+	if err != nil {
+		return fmt.Errorf("unable to create ca.key, %w", err)
+	}
+	defer func() {
+		_ = keyFile.Close()
+	}()
 
 	err = pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

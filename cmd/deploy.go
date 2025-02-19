@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"maand/build"
 	"maand/deploy"
@@ -19,9 +20,16 @@ var deployCmd = &cobra.Command{
 		}
 		buildFlag, _ := flags.GetBool("build")
 		if buildFlag {
-			build.Execute()
+			err := build.Execute()
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
-		deploy.Execute(jobsFilter)
+
+		err := deploy.Execute(jobsFilter)
+		if err != nil {
+			fmt.Println(err)
+		}
 	},
 }
 

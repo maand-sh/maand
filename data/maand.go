@@ -6,7 +6,6 @@ import (
 	"fmt"
 	_ "github.com/mattn/go-sqlite3"
 	"maand/bucket"
-	"maand/utils"
 	"os"
 	"path"
 )
@@ -18,12 +17,17 @@ func GetDatabase(failIfNotFound bool) (*sql.DB, error) {
 			return nil, errors.New("maand is not initialized in this dictionary")
 		}
 	}
+
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_busy_timeout=5000&_locking_mode=NORMAL&_txlock=deferred", DbFile))
 	if err != nil {
-		return nil, err
+		return nil, NewDatabaseError(err)
 	}
-	_, err = db.Exec("PRAGMA journal_mode = WAL;")
-	utils.Check(err)
+
+	err = UpdateJournalModeWAL(db)
+	if err != nil {
+		return nil, NewDatabaseError(err)
+	}
+
 	return db, nil
 }
 
@@ -35,7 +39,7 @@ func SetupMaand(tx *sql.Tx) error {
 		"CREATE TABLE IF NOT EXISTS worker_tags (worker_id TEXT, key TEXT, value TEXT)",
 		"CREATE TABLE IF NOT EXISTS allocations (alloc_id TEXT, worker_ip TEXT, job TEXT, disabled INT, removed INT, deployment_seq INT, PRIMARY KEY(worker_ip, job))",
 
-		"CREATE TABLE IF NOT EXISTS job (job_id TEXT, name TEXT, version TEXT, min_memory_mb TEXT, max_memory_mb TEXT, min_cpu_mhz TEXT, max_cpu_mhz TEXT, update_parallel_count int, PRIMARY KEY(name))",
+		"CREATE TABLE IF NOT EXISTS job (job_id TEXT, name TEXT, version TEXT, min_memory_mb TEXT, max_memory_mb TEXT, min_cpu_mhz TEXT, max_cpu_mhz TEXT, update_parallel_count INT, PRIMARY KEY(name))",
 		"CREATE TABLE IF NOT EXISTS job_selectors (job_id TEXT, selector TEXT)",
 		"CREATE TABLE IF NOT EXISTS job_ports (job_id TEXT, name TEXT, port INT)",
 		"CREATE TABLE IF NOT EXISTS job_certs (job_id TEXT, name TEXT, pkcs8 INT, subject TEXT)",
@@ -69,35 +73,60 @@ func SetupMaand(tx *sql.Tx) error {
 
 	for _, query := range tables {
 		if _, err := tx.Exec(query); err != nil {
-			return err
+			return NewDatabaseError(err)
 		}
 	}
 
 	return nil
 }
 
-func GetBucketID(tx *sql.Tx) string {
+func GetBucketID(tx *sql.Tx) (string, error) {
 	var bucketID string
 	err := tx.QueryRow("SELECT bucket_id FROM bucket LIMIT 1").Scan(&bucketID)
-	utils.Check(err)
-	return bucketID
+	if err != nil {
+		return "", NewDatabaseError(err)
+	}
+	return bucketID, nil
 }
 
-func GetUpdateSeq(tx *sql.Tx) int {
+func GetUpdateSeq(tx *sql.Tx) (int, error) {
 	var updateSeq int
 	err := tx.QueryRow("SELECT update_seq FROM bucket").Scan(&updateSeq)
-	utils.Check(err)
-	return updateSeq
+	if err != nil {
+		return -1, NewDatabaseError(err)
+	}
+	return updateSeq, nil
 }
 
-func UpdateSeq(tx *sql.Tx, updateSeq int) {
+func UpdateSeq(tx *sql.Tx, updateSeq int) error {
 	_, err := tx.Exec("UPDATE bucket SET update_seq = ?", updateSeq)
-	utils.Check(err)
+	if err != nil {
+		return NewDatabaseError(err)
+	}
+	return nil
 }
 
-func GetMaxDeploymentSeq(tx *sql.Tx) int {
+func GetMaxDeploymentSeq(tx *sql.Tx) (int, error) {
 	var updateSeq int
 	err := tx.QueryRow("SELECT ifnull(max(deployment_seq), 0) AS max_deployment_seq FROM allocations").Scan(&updateSeq)
-	utils.Check(err)
-	return updateSeq
+	if err != nil {
+		return -1, NewDatabaseError(err)
+	}
+	return updateSeq, nil
+}
+
+func UpdateJournalModeDefault(db *sql.DB) error {
+	_, err := db.Exec("PRAGMA journal_mode = DELETE;")
+	if err != nil {
+		return NewDatabaseError(err)
+	}
+	return nil
+}
+
+func UpdateJournalModeWAL(db *sql.DB) error {
+	_, err := db.Exec("PRAGMA journal_mode = WAL;")
+	if err != nil {
+		return NewDatabaseError(err)
+	}
+	return nil
 }

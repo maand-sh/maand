@@ -1,0 +1,16 @@
+package health_check
+
+import "fmt"
+
+type HealthCheckError struct {
+	Job string
+	Err error
+}
+
+func (e *HealthCheckError) Error() string {
+	return fmt.Sprintf("health check failed: %v", e.Err)
+}
+
+func (e *HealthCheckError) Unwrap() error {
+	return e.Err
+}

@@ -2,10 +2,9 @@ package build
 
 import (
 	"database/sql"
-	"maand/utils"
 )
 
-func DeploymentSequence(tx *sql.Tx) {
+func DeploymentSequence(tx *sql.Tx) error {
 	query := `
 		 WITH RECURSIVE job_command_seq AS (
 			SELECT jc.job, 0 AS level FROM job_commands jc WHERE jc.depend_on_job = ''
@@ -23,5 +22,5 @@ func DeploymentSequence(tx *sql.Tx) {
 		ORDER BY deployment_seq) t WHERE allocations.job = t.job;
 	`
 	_, err := tx.Exec(query)
-	utils.Check(err)
+	return err
 }

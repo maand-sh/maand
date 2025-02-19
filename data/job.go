@@ -2,7 +2,6 @@ package data
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"maand/utils"
 	"os"
@@ -22,121 +21,161 @@ func GetJobs(tx *sql.Tx) []string {
 	return jobs
 }
 
-func GetJobMemoryLimits(tx *sql.Tx, job string) (string, string) {
+func GetJobMemoryLimits(tx *sql.Tx, job string) (string, string, error) {
 	var minMemory, maxMemory string
 	row := tx.QueryRow("SELECT min_memory_mb, max_memory_mb FROM job WHERE name = ?", job)
 	err := row.Scan(&minMemory, &maxMemory)
-	utils.Check(err)
-	return minMemory, maxMemory
+	if err != nil {
+		return "", "", NewDatabaseError(err)
+	}
+	return minMemory, maxMemory, nil
 }
 
-func GetJobCPULimits(tx *sql.Tx, job string) (string, string) {
+func GetJobCPULimits(tx *sql.Tx, job string) (string, string, error) {
 	var minCPU, maxCPU string
 	row := tx.QueryRow("SELECT min_cpu_mhz, max_cpu_mhz FROM job WHERE name = ?", job)
 	err := row.Scan(&minCPU, &maxCPU)
-	utils.Check(err)
-	return minCPU, maxCPU
+	if err != nil {
+		return "", "", NewDatabaseError(err)
+	}
+	return minCPU, maxCPU, nil
 }
 
-func GetJobVersion(tx *sql.Tx, job string) string {
+func GetJobVersion(tx *sql.Tx, job string) (string, error) {
 	var version string
 	row := tx.QueryRow("SELECT version FROM job WHERE name = ?", job)
 	err := row.Scan(&version)
-	utils.Check(err)
-	return version
+	if err != nil {
+		return "", NewDatabaseError(err)
+	}
+	return version, nil
 }
 
-func GetJobSelectors(tx *sql.Tx, job string) []string {
+func GetJobSelectors(tx *sql.Tx, job string) ([]string, error) {
 	rows, err := tx.Query("SELECT selector FROM job_selectors WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
-	utils.Check(err)
+	if err != nil {
+		return nil, NewDatabaseError(err)
+	}
+
 	selectors := make([]string, 0)
 	for rows.Next() {
 		var selector string
 		err := rows.Scan(&selector)
-		utils.Check(err)
+		if err != nil {
+			return nil, NewDatabaseError(err)
+		}
+
 		selectors = append(selectors, selector)
 	}
-	return selectors
+	return selectors, nil
 }
 
-func CopyJobFiles(tx *sql.Tx, job string, outputPath string) {
-	// TODO: ignore modules
+func CopyJobFiles(tx *sql.Tx, job string, outputPath string) error {
 	rows, err := tx.Query("SELECT path, content, isdir FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?) ORDER BY isdir DESC", job)
-	utils.Check(err)
+	if err != nil {
+		return NewDatabaseError(err)
+	}
 
 	for rows.Next() {
 		var filePath string
 		var content string
 		var isDir bool
 		err := rows.Scan(&filePath, &content, &isDir)
-		utils.Check(err)
+		if err != nil {
+			return NewDatabaseError(err)
+		}
 
 		if isDir {
 			err = os.MkdirAll(path.Join(outputPath, filePath), os.ModePerm)
-			utils.Check(err)
+			if err != nil {
+				return NewDatabaseError(err)
+			}
 			continue
 		}
-
 		err = os.WriteFile(path.Join(outputPath, filePath), []byte(content), os.ModePerm)
-		utils.Check(err)
+		if err != nil {
+			return NewDatabaseError(err)
+		}
 	}
+
+	return nil
 }
 
-func GetAllocationID(tx *sql.Tx, workerIP, job string) string {
+func GetAllocationID(tx *sql.Tx, workerIP, job string) (string, error) {
 	var allocID string
 	row := tx.QueryRow("SELECT alloc_id FROM allocations WHERE job = ? AND worker_ip = ?", job, workerIP)
 	err := row.Scan(&allocID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ""
+	if err != nil {
+		return "", NewDatabaseError(err)
 	}
-	return allocID
+	return allocID, nil
 }
 
-func GetNewAllocations(tx *sql.Tx, job string) []string {
+func GetNewAllocations(tx *sql.Tx, job string) ([]string, error) {
 	rows, err := tx.Query("SELECT a.worker_ip FROM hash h JOIN allocations a ON h.namespace = ? AND h.key = a.alloc_id AND h.previous_hash is NULL WHERE a.job = ? AND a.removed = 0 AND a.disabled = 0", fmt.Sprintf("%s_allocation", job), job)
-	utils.Check(err)
+	if err != nil {
+		return nil, NewDatabaseError(err)
+	}
+
 	allocations := make([]string, 0)
 	for rows.Next() {
 		var allocID string
 		err := rows.Scan(&allocID)
-		utils.Check(err)
+		if err != nil {
+			return nil, NewDatabaseError(err)
+		}
+
 		allocations = append(allocations, allocID)
 	}
-	return allocations
+	return allocations, nil
 }
 
-func GetUpdatedAllocations(tx *sql.Tx, job string) []string {
+func GetUpdatedAllocations(tx *sql.Tx, job string) ([]string, error) {
 	rows, err := tx.Query("SELECT a.worker_ip FROM hash h JOIN allocations a ON h.namespace = ? AND h.key = a.alloc_id AND h.previous_hash IS NOT NULL AND h.previous_hash != h.current_hash WHERE a.job = ? AND a.removed = 0", fmt.Sprintf("%s_allocation", job), job)
-	utils.Check(err)
+	if err != nil {
+		return nil, NewDatabaseError(err)
+	}
+
 	allocations := make([]string, 0)
 	for rows.Next() {
 		var allocID string
 		err := rows.Scan(&allocID)
-		utils.Check(err)
+		if err != nil {
+			return nil, NewDatabaseError(err)
+		}
+
 		allocations = append(allocations, allocID)
 	}
-	return allocations
+	return allocations, nil
 }
 
-func GetJobCommands(tx *sql.Tx, job, event string) []string {
+func GetJobCommands(tx *sql.Tx, job, event string) ([]string, error) {
 	rows, err := tx.Query("SELECT DISTINCT name as command_name FROM job_commands WHERE job = ? AND executed_on = ?", job, event)
-	utils.Check(err)
+	if err != nil {
+		return nil, NewDatabaseError(err)
+	}
+
 	commands := make([]string, 0)
 	for rows.Next() {
 		var command string
 		err := rows.Scan(&command)
-		utils.Check(err)
+		if err != nil {
+			return nil, NewDatabaseError(err)
+		}
+
 		commands = append(commands, command)
 	}
-	return commands
+	return commands, nil
 }
 
-func GetUpdateParallelCount(tx *sql.Tx, job string) int {
+func GetUpdateParallelCount(tx *sql.Tx, job string) (int, error) {
 	var updateParallelCount int
 	row := tx.QueryRow("SELECT update_parallel_count FROM job WHERE name = ?", job)
 	err := row.Scan(&updateParallelCount)
-	utils.Check(err)
-	return updateParallelCount
+	if err != nil {
+		return 0, NewDatabaseError(err)
+	}
+	return updateParallelCount, nil
 }
 
 func GetJobsByDeploymentSeq(tx *sql.Tx, deploymentSeq int) []string {

@@ -15,14 +15,18 @@ import (
 
 func Execute(workerComma, labelComma string, concurrency int, shCommand string, disableCheck bool, healthcheck bool) error {
 	db, err := data.GetDatabase(true)
-	utils.Check(err)
-
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 	defer func() {
 		_ = db.Close()
 	}()
 
 	tx, err := db.Begin()
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+
 	defer func() {
 		_ = tx.Rollback()
 	}()
@@ -31,7 +35,12 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 
 	if len(workerComma) > 0 {
 		workersP := strings.Split(workerComma, ",")
-		workers = data.GetWorkers(tx, nil)
+
+		workers, err = data.GetWorkers(tx, nil)
+		if err != nil {
+			return err
+		}
+
 		diff := utils.Difference(workersP, workers)
 		if len(diff) > 0 {
 			panic(fmt.Errorf("invalid input, workers not belong to this bucket %v", diff))
@@ -41,11 +50,17 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 
 	if len(workerComma) == 0 && len(labelComma) > 0 {
 		labelsP := strings.Split(labelComma, ",")
-		workers = data.GetWorkers(tx, labelsP)
+		workers, err = data.GetWorkers(tx, labelsP)
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(labelComma) == 0 && len(workerComma) == 0 {
-		workers = data.GetWorkers(tx, nil)
+		workers, err = data.GetWorkers(tx, nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	if concurrency < 1 {
@@ -55,11 +70,17 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 	workers = utils.Unique(workers)
 
 	if !disableCheck {
-		data.ValidateBucketUpdateSeq(tx, workers)
+		err = data.ValidateBucketUpdateSeq(tx, workers)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, workerIP := range workers {
-		worker.KeyScan(workerIP)
+		err = worker.KeyScan(workerIP)
+		if err != nil {
+			return err
+		}
 	}
 
 	commandFile := path.Join(bucket.WorkspaceLocation, "command.sh")
@@ -71,7 +92,7 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 
 	var wait sync.WaitGroup
 	var mu sync.Mutex
-	var errs []error
+	var errs map[string]error
 	semaphore := make(chan struct{}, concurrency)
 
 	for _, workerIP := range workers {
@@ -90,23 +111,27 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 			}
 			mu.Lock()
 			if err != nil {
-				errs = append(errs, err)
+				errs[wp] = err
 			}
 			mu.Unlock()
 		}(workerIP)
 	}
 
 	wait.Wait()
+
 	if healthcheck {
 		jobs := data.GetJobs(tx)
 		for _, job := range jobs {
-			err := health_check.Execute(tx, true, job)
-			utils.Check(err)
+			err := health_check.HealthCheck(tx, true, job, true)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	if len(errs) > 0 {
-		return errs[0]
+		return &RunCommandError{Err: errs}
 	}
+
 	return nil
 }

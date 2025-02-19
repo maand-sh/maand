@@ -1,11 +1,24 @@
 package gc
 
 import (
-	"database/sql"
-	"maand/utils"
+	"maand/data"
+	"maand/kv"
 )
 
-func Collect(tx *sql.Tx) {
+func Collect() error {
+	db, err := data.GetDatabase(true)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	// TODO : clean allocation hash first
 	deletes := []string{
 		"DELETE FROM allocations WHERE removed = 1",
@@ -13,9 +26,23 @@ func Collect(tx *sql.Tx) {
 
 	for _, query := range deletes {
 		_, err := tx.Exec(query)
-		utils.Check(err)
+		if err != nil {
+			return data.NewDatabaseError(err)
+		}
 	}
 
-	err := utils.GetKVStore().GC(tx, -1)
-	utils.Check(err)
+	err = kv.GetKVStore().GC(tx, -1)
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return data.NewDatabaseError(err)
+	}
+
+	if err = data.UpdateJournalModeDefault(db); err != nil {
+		return err
+	}
+
+	return nil
 }
