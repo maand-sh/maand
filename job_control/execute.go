@@ -103,6 +103,7 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 				var waitWorker sync.WaitGroup
 
 				for i := 0; i < workerCount; i += parallelBatchCount {
+
 					batchSize := min(parallelBatchCount, workerCount-i) // Process up to 2 workers at a time
 					for j := 0; j < batchSize; j++ {
 						workerIP := allocatedWorkers[i+j]

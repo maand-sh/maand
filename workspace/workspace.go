@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"maand/bucket"
 	"maand/utils"
@@ -58,7 +59,7 @@ func (ws *DefaultWorkspace) GetJobManifest(jobName string) (Manifest, error) {
 	var manifest Manifest
 	err = json.Unmarshal(f, &manifest)
 	if err != nil {
-		return Manifest{}, err
+		return Manifest{}, fmt.Errorf("invalid manifest file format %s : %w", jobName, err)
 	}
 	return manifest, nil
 }

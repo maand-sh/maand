@@ -6,17 +6,6 @@ import (
 	"maand/job_control"
 )
 
-func runCmd(cmd *cobra.Command, args []string) error {
-	flags := cmd.Flags()
-	workersComma, _ := flags.GetString("workers")
-	healthCheck, _ := flags.GetBool("health_check")
-	err := job_control.Execute(args[0], workersComma, args[1], healthCheck)
-	if err != nil {
-		fmt.Println(err)
-	}
-	return nil
-}
-
 var jobRunCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Runs job target, ex: start, stop and restarts",
@@ -104,4 +93,5 @@ func init() {
 		cmd.Flags().String("health_check", "", "adds health check")
 	}
 	jobRunCmd.Flags().String("target", "", "")
+	_ = jobRunCmd.MarkFlagRequired("target")
 }
