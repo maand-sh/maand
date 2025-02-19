@@ -44,11 +44,11 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		minCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMinCPU(manifest))
 		if err != nil {
-			return err
+			return fmt.Errorf("error extracting minimum cpu frequency in MHz, job %s: %v", job, err)
 		}
 		maxCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMaxCPU(manifest))
 		if err != nil {
-			return err
+			return fmt.Errorf("error extracting maximum cpu frequency in MHz, job %s: %v", job, err)
 		}
 
 		if minCPUMhz != 0 && maxCPUMhz == 0 {
@@ -60,11 +60,11 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		minMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMinMemory(manifest))
 		if err != nil {
-			return err
+			return fmt.Errorf("error extracting minimum memory in MB, job %s: %v", job, err)
 		}
 		maxMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMaxMemory(manifest))
 		if err != nil {
-			return err
+			return fmt.Errorf("error extracting maximum memory in MB, job %s: %v", job, err)
 		}
 		if minMemoryMb != 0 && maxMemoryMb == 0.0 {
 			maxMemoryMb = minMemoryMb
@@ -136,7 +136,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			commandPath := path.Join(bucket.WorkspaceLocation, "jobs", job, "_modules", fmt.Sprintf("%s.py", command.Name))
 			_, err := os.Stat(commandPath)
 			if os.IsNotExist(err) {
-				return fmt.Errorf("%s.py does not exist, registered for job %s", commandPath, job)
+				return fmt.Errorf("%s does not exist, registered for job %s", commandPath, job)
 			}
 
 			query := `

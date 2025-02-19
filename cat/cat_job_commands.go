@@ -64,5 +64,9 @@ func JobCommands() error {
 		return data.NewDatabaseError(err)
 	}
 
+	if err = data.UpdateJournalModeDefault(db); err != nil {
+		return err
+	}
+
 	return nil
 }

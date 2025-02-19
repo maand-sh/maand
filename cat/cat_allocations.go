@@ -20,7 +20,6 @@ func Allocations() error {
 	if err != nil {
 		return data.NewDatabaseError(err)
 	}
-
 	defer func() {
 		_ = tx.Rollback()
 	}()
@@ -65,6 +64,10 @@ func Allocations() error {
 	err = tx.Commit()
 	if err != nil {
 		return data.NewDatabaseError(err)
+	}
+
+	if err = data.UpdateJournalModeDefault(db); err != nil {
+		return err
 	}
 
 	return nil
