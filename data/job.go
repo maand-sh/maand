@@ -8,17 +8,23 @@ import (
 	"path"
 )
 
-func GetJobs(tx *sql.Tx) []string {
+func GetJobs(tx *sql.Tx) ([]string, error) {
 	rows, err := tx.Query("SELECT name FROM job")
-	utils.Check(err)
+	if err != nil {
+		return nil, NewDatabaseError(err)
+	}
+
 	jobs := make([]string, 0)
 	for rows.Next() {
 		var name string
 		err := rows.Scan(&name)
-		utils.Check(err)
+		if err != nil {
+			return nil, NewDatabaseError(err)
+		}
+
 		jobs = append(jobs, name)
 	}
-	return jobs
+	return jobs, nil
 }
 
 func GetJobMemoryLimits(tx *sql.Tx, job string) (string, string, error) {

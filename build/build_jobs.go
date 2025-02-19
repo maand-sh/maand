@@ -210,7 +210,10 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 	}
 
 	workspaceJobs := ws.GetJobs()
-	availableJobs := data.GetJobs(tx)
+	availableJobs, err := data.GetJobs(tx)
+	if err != nil {
+		return err
+	}
 
 	// remove missing jobs
 	diffs := utils.Difference(availableJobs, workspaceJobs)
