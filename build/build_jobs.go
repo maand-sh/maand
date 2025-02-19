@@ -3,6 +3,7 @@ package build
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"maand/bucket"
@@ -16,7 +17,7 @@ import (
 
 var removedJobs []string
 
-func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) {
+func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 	for _, job := range ws.GetJobs() {
 		jobID := workspace.GetHashUUID(job)
@@ -31,33 +32,45 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) {
 
 		for _, stmt := range deletes {
 			_, err := tx.Exec(stmt, jobID)
-			utils.Check(err)
+			if err != nil {
+				return err
+			}
 		}
 
-		manifest := ws.GetJobManifest(job)
+		manifest, err := ws.GetJobManifest(job)
+		if err != nil {
+			return err
+		}
 
 		minCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMinCPU(manifest))
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 		maxCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMaxCPU(manifest))
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 
 		if minCPUMhz != 0 && maxCPUMhz == 0 {
 			maxCPUMhz = minCPUMhz
 		}
 		if minCPUMhz > maxCPUMhz {
-			panic(fmt.Errorf("job %s, minCPUMhz > maxCPUMhz: %f", job, minCPUMhz))
+			return fmt.Errorf("job %s, minCPUMhz > maxCPUMhz: %f", job, minCPUMhz)
 		}
 
 		minMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMinMemory(manifest))
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 		maxMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMaxMemory(manifest))
-		utils.Check(err)
-
+		if err != nil {
+			return err
+		}
 		if minMemoryMb != 0 && maxMemoryMb == 0.0 {
 			maxMemoryMb = minMemoryMb
 		}
 		if minMemoryMb > maxMemoryMb {
-			panic(fmt.Errorf("job %s, minMemoryMb > maxMemoryMb: %f", job, minMemoryMb))
+			return fmt.Errorf("job %s, minMemoryMb > maxMemoryMb: %f", job, minMemoryMb)
 		}
 
 		version := workspace.GetVersion(manifest)
@@ -73,93 +86,126 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) {
 			fmt.Sprintf("%v", maxCPUMhz),
 			workspace.GetUpdateParallelCount(manifest),
 		)
-		utils.Check(err)
+		if err != nil {
+			return data.NewDatabaseError(err)
+		}
 
 		for _, selector := range manifest.Selectors {
 			_, err := tx.Exec("INSERT INTO job_selectors (job_id, selector) VALUES (?, ?)", jobID, selector)
-			utils.Check(err)
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
 		}
 
 		for name, port := range manifest.Resources.Ports {
-
 			prefix := fmt.Sprintf("%s_port_", job)
 			if !strings.HasPrefix(name, prefix) {
-				panic(fmt.Sprintf("invalid port name, name: %s, should have prefix : %s", name, prefix))
+				return fmt.Errorf("invalid port name, name: %s, should have prefix : %s", name, prefix)
 			}
 
 			var portUsedJob string
 			row := tx.QueryRow("SELECT (SELECT name FROM job WHERE job_id = jp.job_id) as job FROM job_ports jp WHERE port = ?", port)
-			_ = row.Scan(&portUsedJob)
-			if portUsedJob != "" {
-				panic(fmt.Sprintf("port can't be reused, port: %d, jobs (%s, %s)", port, job, portUsedJob))
+			err = row.Scan(&portUsedJob)
+			if !errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("port can't be reused, port: %d, jobs (%s, %s)", port, job, portUsedJob)
+			}
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
 			}
 
 			_, err = tx.Exec("INSERT INTO job_ports (job_id, name, port) VALUES (?, ?, ?)", jobID, name, port)
-			utils.Check(err)
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
 		}
 
 		for _, command := range workspace.GetCommands(manifest) {
 			if !strings.HasPrefix(command.Name, "command_") {
-				panic(fmt.Sprintf("invalid command name, name: %s, should have prefix : %s", command.Name, "command_"))
+				return fmt.Errorf("invalid command name, name: %s, should have prefix : %s", command.Name, "command_")
 			}
 			if len(command.ExecutedOn) == 0 {
-				panic(fmt.Sprintf("job %s, job_command %s required have a executed_on", job, command.Name))
+				return fmt.Errorf("job %s, job_command %s required have a executed_on", job, command.Name)
 			}
 			diffs := utils.Difference(command.ExecutedOn, []string{"post_build", "health_check", "direct", "pre_deploy", "post_deploy"})
 			if len(diffs) > 0 {
-				panic(fmt.Sprintf("job %s, job_command %s not valid executed_on %v", job, command.Name, diffs))
+				return fmt.Errorf("job %s, job_command %s not valid executed_on %v", job, command.Name, diffs)
 			}
 			if command.DependsOn.Job == job {
-				panic(fmt.Sprintf("job %s, job_command %s invalid configuration, self referencing", job, command.Name))
+				return fmt.Errorf("job %s, job_command %s invalid configuration, self referencing", job, command.Name)
+			}
+			commandPath := path.Join(bucket.WorkspaceLocation, "jobs", job, "_modules", fmt.Sprintf("%s.py", command.Name))
+			_, err := os.Stat(commandPath)
+			if os.IsNotExist(err) {
+				return fmt.Errorf("%s.py does not exist, registered for job %s", commandPath, job)
 			}
 
-			commandPath := path.Join(bucket.WorkspaceLocation, "jobs", job, "_modules", fmt.Sprintf("%s.py", command.Name))
-			if _, err := os.Stat(commandPath); os.IsNotExist(err) {
-				panic(fmt.Sprintf("%s does not exist, registered for job %s", commandPath, job))
-			}
 			query := `
 				INSERT INTO job_commands (job_id, job, name, executed_on, depend_on_job, depend_on_command, depend_on_config) 
 				VALUES (?, ?, ?, ?, ?, ?, ?)
 			`
 			for _, executedOn := range command.ExecutedOn {
 				jsonData, err := json.Marshal(command.DependsOn.Config)
-				utils.Check(err)
+				if err != nil {
+					return err
+				}
 
 				_, err = tx.Exec(query, jobID, job, command.Name, executedOn, command.DependsOn.Job, command.DependsOn.Command, string(jsonData))
-				utils.Check(err)
+				if err != nil {
+					return data.NewDatabaseError(err)
+				}
 			}
 		}
 
-		if _, err := os.Stat(path.Join(workspace.GetJobFilePath(job), "Makefile")); os.IsNotExist(err) {
-			utils.Check(fmt.Errorf("makefile is required, job %s", job))
+		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "Makefile"))
+		if os.IsNotExist(err) {
+			return fmt.Errorf("'Makefile' is required, job %s", job)
 		}
 
 		query = `INSERT INTO job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)`
 		err = workspace.WalkJobFiles(job, func(path string, d fs.DirEntry, err error) error {
-			utils.Check(err)
-
-			var data = []byte("")
-			if !d.IsDir() {
-				data, err = os.ReadFile(workspace.GetJobFilePath(path))
-				utils.Check(err)
+			if err != nil {
+				return err
 			}
-			_, err = tx.Exec(query, jobID, path, data, d.IsDir())
-			utils.Check(err)
+
+			var content = []byte("")
+			if !d.IsDir() {
+				content, err = os.ReadFile(workspace.GetJobFilePath(path))
+				if err != nil {
+					return err
+				}
+			}
+			_, err = tx.Exec(query, jobID, path, content, d.IsDir())
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
 			return err
 		})
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 
 		// hash update manifest's cert config
 		certData, err := json.Marshal(manifest.Certs)
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
+
 		currentHash, err := utils.MD5Content(certData)
-		utils.Check(err)
-		utils.UpdateHash(tx, "build_certs", job, currentHash)
+		if err != nil {
+			return err
+		}
+
+		err = data.UpdateHash(tx, "build_certs", job, currentHash)
+		if err != nil {
+			return err
+		}
 
 		query = `INSERT INTO job_certs (job_id, name, pkcs8, subject) VALUES (?, ?, ?, ?)`
 		for name, config := range manifest.Certs {
 			_, err = tx.Exec(query, jobID, name, config.PKCS8, config.Subject)
-			utils.Check(err)
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
 		}
 	}
 
@@ -172,8 +218,13 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) {
 	for _, job := range diffs {
 		removedJobs = append(removedJobs, job)
 		_, err := tx.Exec("DELETE FROM job WHERE name = ?", job)
-		utils.Check(err)
+		if err != nil {
+			return data.NewDatabaseError(err)
+		}
 		_, err = tx.Exec("DELETE FROM hash WHERE namespace = 'build_certs' AND key = ?", job)
-		utils.Check(err)
+		if err != nil {
+			return data.NewDatabaseError(err)
+		}
 	}
+	return nil
 }

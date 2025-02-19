@@ -2,9 +2,7 @@ package utils
 
 import (
 	"crypto/md5"
-	"database/sql"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,64 +13,14 @@ import (
 	"sync"
 )
 
-func MD5Content(content []byte) (string, error) {
-	hash := md5.New()
-	hash.Write(content)
-	md5Hash := hash.Sum(nil)
-	return hex.EncodeToString(md5Hash), nil
-}
-
-func UpdateHash(tx *sql.Tx, namespace, key, hash string) {
-	var dbCurrentHash string
-	row := tx.QueryRow("SELECT current_hash FROM hash WHERE namespace = ? AND key = ?", namespace, key)
-	err := row.Scan(&dbCurrentHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		_, err = tx.Exec("INSERT INTO hash (namespace, key, current_hash) VALUES (?, ?, ?)", namespace, key, hash)
-		Check(err)
-	} else {
-		_, err = tx.Exec("UPDATE hash SET current_hash = ? WHERE namespace = ? AND key = ?", hash, namespace, key)
-		Check(err)
-	}
-	Check(err)
-}
-
-func HashChanged(tx *sql.Tx, namespace, key string) bool {
-	var dbCurrentHash, dbPreviousHash string
-	row := tx.QueryRow("SELECT ifnull(current_hash, '') as current_hash, ifnull(previous_hash, '') as previous_hash FROM hash WHERE namespace = ? AND key = ?", namespace, key)
-	err := row.Scan(&dbCurrentHash, &dbPreviousHash)
-	if errors.Is(err, sql.ErrNoRows) || dbCurrentHash != dbPreviousHash {
-		return true
-	}
-	return false
-}
-
-func PromoteHash(tx *sql.Tx, namespace, key string) {
-	_, err := tx.Exec("UPDATE hash SET previous_hash = current_hash WHERE namespace = ? AND key = ?", namespace, key)
-	Check(err)
-}
-
-func RemoveHash(tx *sql.Tx, namespace, key string) {
-	_, err := tx.Exec("DELETE FROM hash WHERE namespace = ? AND key = ?", namespace, key)
-	Check(err)
-}
-
-func GetPreviousHash(tx *sql.Tx, namespace, key string) string {
-	var previousHash string
-	row := tx.QueryRow("SELECT ifnull(previous_hash, '') FROM hash WHERE namespace = ? AND key = ?", namespace, key)
-	err := row.Scan(&previousHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ""
-	}
-	Check(err)
-	return previousHash
-}
-
 func CalculateFileMD5(filePath string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("error opening file %s: %v", filePath, err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	hash := md5.New()
 	if _, err := io.Copy(hash, f); err != nil {
@@ -141,4 +89,11 @@ func CalculateDirMD5(folderPath string) (string, error) {
 	}
 
 	return hex.EncodeToString(globalHash.Sum(nil)), nil
+}
+
+func MD5Content(content []byte) (string, error) {
+	hash := md5.New()
+	hash.Write(content)
+	md5Hash := hash.Sum(nil)
+	return hex.EncodeToString(md5Hash), nil
 }

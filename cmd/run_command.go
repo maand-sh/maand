@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"github.com/spf13/cobra"
 	"maand/run_command"
-	"maand/utils"
 )
 
 var runCommandCmd = &cobra.Command{
@@ -19,7 +19,9 @@ var runCommandCmd = &cobra.Command{
 		healthCheck, _ := flags.GetBool("health_check")
 
 		err := run_command.Execute(workerStr, labelStr, concurrency, shCommand, disableCheck, healthCheck)
-		utils.Check(err)
+		if err != nil {
+			fmt.Println(err)
+		}
 	},
 }
 

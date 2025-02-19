@@ -1,69 +1,136 @@
 package build
 
 import (
+	"database/sql"
 	"maand/bucket"
 	"maand/data"
 	"maand/job_command"
+	"maand/kv"
 	"maand/utils"
 	"maand/workspace"
 	"os"
 )
 
-func Execute() {
+func runPostBuild(tx *sql.Tx) error {
+	maxDeploymentSequence, err := data.GetMaxDeploymentSeq(tx)
+	if err != nil {
+		return err
+	}
+
+	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
+		jobs := data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+		for _, job := range jobs {
+			postBuildCommands, err := data.GetJobCommands(tx, job, "post_build")
+			if err != nil {
+				return err
+			}
+
+			if len(postBuildCommands) == 0 {
+				continue
+			}
+			for _, command := range postBuildCommands {
+				err := job_command.JobCommand(tx, job, command, "post_build", 1, true)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func Execute() error {
 	db, err := data.GetDatabase(true)
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 	defer func() {
 		_ = db.Close()
 		_ = os.RemoveAll(bucket.TempLocation)
 	}()
 
 	tx, err := db.Begin()
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 	defer func() {
 		_ = tx.Rollback()
 	}()
 
 	ws := workspace.GetWorkspace()
 
-	Workers(tx, ws)
-	Jobs(tx, ws)
-	Allocations(tx, ws)
-	DeploymentSequence(tx)
-	Variables(tx)
-	Certs(tx)
+	err = Workers(tx, ws)
+	if err != nil {
+		return err
+	}
 
-	err = utils.GetKVStore().GC(tx, 7)
-	utils.Check(err)
+	err = Jobs(tx, ws)
+	if err != nil {
+		return err
+	}
 
-	// resource validation
+	err = Allocations(tx, ws)
+	if err != nil {
+		return err
+	}
+
+	err = DeploymentSequence(tx)
+	if err != nil {
+		return err
+	}
+
+	err = Variables(tx)
+	if err != nil {
+		return err
+	}
+
+	err = Certs(tx)
+	if err != nil {
+		return err
+	}
+
+	// TODO: resource validation
+
+	err = kv.GetKVStore().GC(tx, 7)
+	if err != nil {
+		return err
+	}
+
 	err = tx.Commit()
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 
-	_, _ = db.Exec("VACUUM")
+	_, err = db.Exec("VACUUM")
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 
 	tx, err = db.Begin()
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 	defer func() {
 		_ = tx.Rollback()
 	}()
 
-	maxDeploymentSequence := data.GetMaxDeploymentSeq(tx)
-	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
-		jobs := data.GetJobsByDeploymentSeq(tx, deploymentSeq)
-		for _, job := range jobs {
-			postBuildCommands := data.GetJobCommands(tx, job, "post_build")
-			if len(postBuildCommands) == 0 {
-				continue
-			}
-			for _, command := range postBuildCommands {
-				err = job_command.Execute(tx, job, command, "post_build", 1)
-				utils.Check(err)
-			}
-		}
+	err = runPostBuild(tx)
+	if err != nil {
+		return err
 	}
 
-	err = tx.Commit()
-	utils.Check(err)
+	if err := tx.Commit(); err != nil {
+		return data.NewDatabaseError(err)
+	}
 
-	_ = utils.ExecuteCommand([]string{"sync"})
+	if err = data.UpdateJournalModeDefault(db); err != nil {
+		return err
+	}
+
+	err = utils.ExecuteCommand([]string{"sync"})
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

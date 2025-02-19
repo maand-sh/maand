@@ -6,6 +6,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 	"maand/bucket"
 	"maand/data"
+	"maand/kv"
 	"maand/utils"
 	"maand/workspace"
 	"os"
@@ -14,37 +15,70 @@ import (
 	"strings"
 )
 
-func Variables(tx *sql.Tx) {
-	processWorkerData(tx)
-	processJobData(tx)
-	processLabelData(tx)
-	processBucketConf(tx)
+func Variables(tx *sql.Tx) error {
+	err := processWorkerData(tx)
+	if err != nil {
+		return err
+	}
+	err = processJobData(tx)
+	if err != nil {
+		return err
+	}
+	err = processLabelData(tx)
+	if err != nil {
+		return err
+	}
+	err = processBucketConf(tx)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func processWorkerData(tx *sql.Tx) {
-	workers := data.GetWorkers(tx, nil)
+func processWorkerData(tx *sql.Tx) error {
+	workers, err := data.GetWorkers(tx, nil)
+	if err != nil {
+		return err
+	}
 
 	for _, workerIP := range workers {
 		workerKV := make(map[string]string)
 
-		workerID := data.GetWorkerID(tx, workerIP)
+		workerID, err := data.GetWorkerID(tx, workerIP)
+		if err != nil {
+			return err
+		}
+
 		workerKV["worker_ip"] = workerIP
 		workerKV["worker_id"] = workerID
 
-		workerLabels := data.GetWorkerLabels(tx, workerID)
+		workerLabels, err := data.GetWorkerLabels(tx, workerID)
+		if err != nil {
+			return err
+		}
 		workerKV["labels"] = strings.Join(workerLabels, ",")
 
 		for _, label := range workerLabels {
-			labelWorkers := data.GetWorkers(tx, []string{label})
+			labelWorkers, err := data.GetWorkers(tx, []string{label})
+			if err != nil {
+				return err
+			}
 			peers := utils.Difference(labelWorkers, []string{workerIP})
 			if len(peers) > 0 {
 				workerKV[fmt.Sprintf("%s_peers", label)] = strings.Join(peers, ",")
 			}
 		}
 
-		labels := data.GetLabels(tx)
+		labels, err := data.GetLabels(tx)
+		if err != nil {
+			return err
+		}
+
 		for _, label := range labels {
-			labelWorkers := data.GetWorkers(tx, []string{label})
+			labelWorkers, err := data.GetWorkers(tx, []string{label})
+			if err != nil {
+				return err
+			}
 
 			index := -1 // Default value if workerIP is not found
 			for i, worker := range labelWorkers {
@@ -58,38 +92,69 @@ func processWorkerData(tx *sql.Tx) {
 			}
 		}
 
-		availableCPUMhz := data.GetWorkerCPU(tx, workerIP)
+		availableCPUMhz, err := data.GetWorkerCPU(tx, workerIP)
+		if err != nil {
+			return err
+		}
 		workerKV["worker_cpu_mhz"] = availableCPUMhz
-		availableMemoryMb := data.GetWorkerMemory(tx, workerIP)
+
+		availableMemoryMb, err := data.GetWorkerMemory(tx, workerIP)
+		if err != nil {
+			return err
+		}
 		workerKV["worker_memory_mb"] = availableMemoryMb
-		workerKV["jobs"] = strings.Join(data.GetAllocatedJobs(tx, workerIP), ",")
+
+		allocatedJobs, err := data.GetAllocatedJobs(tx, workerIP)
+		if err != nil {
+			return err
+		}
+		workerKV["jobs"] = strings.Join(allocatedJobs, ",")
 
 		workerKVNamespace := fmt.Sprintf("maand/worker/%s", workerIP)
-		err := storeKeyValues(tx, workerKVNamespace, workerKV)
-		utils.Check(err)
+		err = storeKeyValues(tx, workerKVNamespace, workerKV)
+		if err != nil {
+			return err
+		}
 
-		tags := data.GetWorkerTags(tx, workerID)
+		tags, err := data.GetWorkerTags(tx, workerID)
+		if err != nil {
+			return err
+		}
 		tagsNS := fmt.Sprintf("maand/worker/%s/tags", workerIP)
 		err = storeKeyValues(tx, tagsNS, tags)
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, workerIP := range removedWorkers {
 		ns := fmt.Sprintf("maand/worker/%s", workerIP)
-		keys, _ := utils.GetKVStore().GetKeys(tx, ns)
+		keys, _ := kv.GetKVStore().GetKeys(tx, ns)
 
 		for _, key := range keys {
-			err := utils.GetKVStore().Delete(tx, ns, key)
-			utils.Check(err)
+			err := kv.GetKVStore().Delete(tx, ns, key)
+			if err != nil {
+				return err
+			}
 		}
 	}
+
+	return nil
 }
 
-func processLabelData(tx *sql.Tx) {
-	labels := data.GetLabels(tx)
+func processLabelData(tx *sql.Tx) error {
+	labels, err := data.GetLabels(tx)
+	if err != nil {
+		return err
+	}
+
 	workerKV := make(map[string]string)
 	for _, label := range labels {
-		labelWorkers := data.GetWorkers(tx, []string{label})
+		labelWorkers, err := data.GetWorkers(tx, []string{label})
+		if err != nil {
+			return err
+		}
+
 		if len(labelWorkers) > 0 {
 			workerKV[fmt.Sprintf("%s_label_id", label)] = workspace.GetHashUUID(label)
 			workerKV[fmt.Sprintf("%s_nodes", label)] = strings.Join(labelWorkers, ",")
@@ -99,133 +164,187 @@ func processLabelData(tx *sql.Tx) {
 			workerKV[fmt.Sprintf("%s_%d", label, idx)] = node
 		}
 	}
-	err := storeKeyValues(tx, "maand/worker", workerKV)
-	utils.Check(err)
+	return storeKeyValues(tx, "maand/worker", workerKV)
 }
 
-func processBucketConf(tx *sql.Tx) {
+func processBucketConf(tx *sql.Tx) error {
 	var bucketConfig = make(map[string]string)
 
 	bucketConfPath := path.Join(bucket.WorkspaceLocation, "bucket.conf")
 
 	if _, err := os.Stat(bucketConfPath); err == nil {
 		bucketData, err := os.ReadFile(bucketConfPath)
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 
 		err = toml.Unmarshal(bucketData, &bucketConfig)
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 	}
 
 	jobPorts := make(map[string]string)
 	availableJobs := data.GetJobs(tx)
 	for _, job := range availableJobs {
 		rows, err := tx.Query("SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
-		utils.Check(err)
+		if err != nil {
+			return data.NewDatabaseError(err)
+		}
 
 		for rows.Next() {
 			var name, value string
 			err := rows.Scan(&name, &value)
-			utils.Check(err)
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
 
 			jobPorts[name] = value
 		}
 	}
 
 	err := storeKeyValues(tx, "vars/bucket", bucketConfig)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 	err = storeKeyValues(tx, "maand", jobPorts)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func getJobConf(job string) map[string]string {
+func getJobConf(job string) (map[string]string, error) {
 	var config = make(map[string]map[string]string)
 
 	bucketJobConf := path.Join(bucket.WorkspaceLocation, "bucket.jobs.conf")
 	if _, err := os.Stat(bucketJobConf); err == nil {
 		bucketData, err := os.ReadFile(bucketJobConf)
-		utils.Check(err)
+		if err != nil {
+			return nil, err
+		}
 
 		err = toml.Unmarshal(bucketData, &config)
-		utils.Check(err)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if _, ok := config[job]; !ok {
 		config[job] = make(map[string]string)
 	}
 
-	return config[job]
+	return config[job], nil
 }
 
-func processJobData(tx *sql.Tx) {
+func processJobData(tx *sql.Tx) error {
 	for _, job := range data.GetJobs(tx) {
 
 		jobKV := make(map[string]string)
 
 		jobKV["job_id"] = workspace.GetHashUUID(job)
 		jobKV["name"] = job
-		jobKV["version"] = data.GetJobVersion(tx, job)
-		jobKV["selectors"] = strings.Join(data.GetJobSelectors(tx, job), ",")
 
-		minMemory, maxMemory := data.GetJobMemoryLimits(tx, job)
+		version, err := data.GetJobVersion(tx, job)
+		if err != nil {
+			return err
+		}
+		jobKV["version"] = version
+
+		jobSelectors, err := data.GetJobSelectors(tx, job)
+		if err != nil {
+			return err
+		}
+		jobKV["selectors"] = strings.Join(jobSelectors, ",")
+
+		minMemory, maxMemory, err := data.GetJobMemoryLimits(tx, job)
+		if err != nil {
+			return err
+		}
 		jobKV["min_memory_mb"] = minMemory
 		jobKV["max_memory_mb"] = maxMemory
 
-		minCPU, maxCPU := data.GetJobCPULimits(tx, job)
+		minCPU, maxCPU, err := data.GetJobCPULimits(tx, job)
+		if err != nil {
+			return err
+		}
 		jobKV["min_cpu_mhz"] = minCPU
 		jobKV["max_cpu_mhz"] = maxCPU
 
-		jobConfig := getJobConf(job)
+		jobConfig, err := getJobConf(job)
+		if err != nil {
+			return err
+		}
 
 		if _, ok := jobConfig["memory"]; ok {
 			memory, err := utils.ExtractSizeInMB(jobConfig["memory"])
-			utils.Check(err)
+			if err != nil {
+				return err
+			}
+
 			jobKV["memory"] = fmt.Sprintf("%v", memory)
 		} else {
-			_, maxMemoryLimit := data.GetJobMemoryLimits(tx, job)
+			_, maxMemoryLimit, err := data.GetJobMemoryLimits(tx, job)
+			if err != nil {
+				return err
+			}
 			jobKV["memory"] = maxMemoryLimit
 		}
 		if _, ok := jobConfig["cpu"]; ok {
 			cpu, err := utils.ExtractCPUFrequencyInMHz(jobConfig["cpu"])
-			utils.Check(err)
+			if err != nil {
+				return err
+			}
+
 			jobKV["cpu"] = fmt.Sprintf("%v", cpu)
 		} else {
-			_, maxCPULimit := data.GetJobCPULimits(tx, job)
+			_, maxCPULimit, err := data.GetJobCPULimits(tx, job)
+			if err != nil {
+				return err
+			}
 			jobKV["cpu"] = maxCPULimit
 		}
 
 		namespace := fmt.Sprintf("maand/job/%s", job)
-		err := storeKeyValues(tx, namespace, jobKV)
-		utils.Check(err)
+		err = storeKeyValues(tx, namespace, jobKV)
+		if err != nil {
+			return err
+		}
 
 		namespace = fmt.Sprintf("vars/bucket/job/%s", job)
 		err = storeKeyValues(tx, namespace, jobConfig)
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 	}
 
 	for _, job := range removedJobs {
 		nss := []string{fmt.Sprintf("maand/job/%s", job), fmt.Sprintf("vars/job/%s", job)}
 		for _, ns := range nss {
 			err := storeKeyValues(tx, ns, make(map[string]string))
-			utils.Check(err)
+			if err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
-func storeKeyValues(tx *sql.Tx, namespace string, kv map[string]string) error {
+func storeKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) error {
 	var availableKeys []string
-	for key, value := range kv {
-		if err := utils.GetKVStore().Put(tx, namespace, key, value, 0); err != nil {
+	for key, value := range keyValues {
+		if err := kv.GetKVStore().Put(tx, namespace, key, value, 0); err != nil {
 			return fmt.Errorf("failed to store key-value pair (%s: %s): %w", key, value, err)
 		}
 		availableKeys = append(availableKeys, key)
 	}
 
-	allKeys, err := utils.GetKVStore().GetKeys(tx, namespace)
+	allKeys, err := kv.GetKVStore().GetKeys(tx, namespace)
 	utils.Check(err)
 
 	diffs := utils.Difference(allKeys, availableKeys)
 	for _, diff := range diffs {
-		err := utils.GetKVStore().Delete(tx, namespace, diff)
+		err := kv.GetKVStore().Delete(tx, namespace, diff)
 		utils.Check(err)
 	}
 

@@ -7,9 +7,16 @@ import (
 	"sync"
 )
 
-func ValidateBucketUpdateSeq(tx *sql.Tx, workers []string) {
-	bucketID := GetBucketID(tx)
-	updateSeq := GetUpdateSeq(tx)
+func ValidateBucketUpdateSeq(tx *sql.Tx, workers []string) error {
+	bucketID, err := GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+
+	updateSeq, err := GetUpdateSeq(tx)
+	if err != nil {
+		return err
+	}
 
 	var errs = make(map[string]error)
 
@@ -18,7 +25,10 @@ func ValidateBucketUpdateSeq(tx *sql.Tx, workers []string) {
 
 	for _, workerIP := range workers {
 		wait.Add(1)
-		workerID := GetWorkerID(tx, workerIP)
+		workerID, err := GetWorkerID(tx, workerIP)
+		if err != nil {
+			return err
+		}
 		go func(tWorkerID, tWorkerIP string) {
 			defer wait.Done()
 			err := worker.ExecuteCommand(tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/worker.py %s %s %d", bucketID, bucketID, tWorkerID, updateSeq)}, nil)
@@ -42,4 +52,6 @@ func ValidateBucketUpdateSeq(tx *sql.Tx, workers []string) {
 			panic(fmt.Sprintf("update seq mismatch, worker %s", workerIP))
 		}
 	}
+
+	return nil
 }

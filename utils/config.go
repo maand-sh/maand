@@ -35,12 +35,18 @@ func GetMaandConf() MaandConf {
 	return MaandConf{}
 }
 
-func WriteMaandConf(conf *MaandConf) {
+func WriteMaandConf(conf *MaandConf) error {
 	data, err := toml.Marshal(conf)
-	Check(err)
-	maandConfPath := path.Join(bucket.Location, "maand.conf")
-	if _, err := os.Stat(maandConfPath); os.IsNotExist(err) {
-		err = os.WriteFile(maandConfPath, data, os.ModePerm)
-		Check(err)
+	if err != nil {
+		return err
 	}
+
+	confPath := path.Join(bucket.Location, "maand.conf")
+	if _, err := os.Stat(confPath); os.IsNotExist(err) {
+		err = os.WriteFile(confPath, data, os.ModePerm)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

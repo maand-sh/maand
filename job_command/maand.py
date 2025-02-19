@@ -7,6 +7,10 @@ def get_job():
     return os.environ.get("JOB")
 
 
+def get_command():
+    return os.environ.get("COMMAND")
+
+
 def get_allocation_ip():
     return os.environ.get("ALLOCATION_IP")
 
@@ -75,8 +79,8 @@ def kv_get(cursor, namespace, key):
 
 def get_requesters(cursor):
     cursor.execute(
-        "SELECT depend_on_job, depend_on_command, depend_on_config FROM job_commands WHERE depend_on_job = ?",
-        (get_job(),),
+        "SELECT depend_on_job, depend_on_command, depend_on_config FROM job_commands WHERE depend_on_job = ? AND depend_on_command = ?",
+        (get_job(),get_command(),),
     )
     rows = cursor.fetchall()
     reqs = []

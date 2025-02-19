@@ -12,23 +12,27 @@ import (
 type DefaultWorkspace struct {
 }
 
-func (ws *DefaultWorkspace) GetWorkers() []Worker {
+func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 	data, err := os.ReadFile(path.Join(bucket.WorkspaceLocation, "workers.json"))
 	if os.IsNotExist(err) {
-		return []Worker{}
+		return []Worker{}, nil
 	}
-	utils.Check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	var dataWorkers []Worker
 	err = json.Unmarshal(data, &dataWorkers)
-	utils.Check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	var workers []Worker
 	for idx, dataWorker := range dataWorkers {
 		worker := NewWorker(dataWorker.Host, dataWorker.Labels, dataWorker.Memory, dataWorker.CPU, dataWorker.Tags, idx)
 		workers = append(workers, worker)
 	}
-	return workers
+	return workers, nil
 }
 
 func (ws *DefaultWorkspace) GetJobs() []string {
@@ -44,16 +48,19 @@ func (ws *DefaultWorkspace) GetJobs() []string {
 	return jobs
 }
 
-func (ws *DefaultWorkspace) GetJobManifest(jobName string) Manifest {
+func (ws *DefaultWorkspace) GetJobManifest(jobName string) (Manifest, error) {
 	manifestFile := path.Join(bucket.WorkspaceLocation, "jobs", jobName, "manifest.json")
 	f, err := os.ReadFile(manifestFile)
-	utils.Check(err)
+	if err != nil {
+		return Manifest{}, err
+	}
 
 	var manifest Manifest
 	err = json.Unmarshal(f, &manifest)
-	utils.Check(err)
-
-	return manifest
+	if err != nil {
+		return Manifest{}, err
+	}
+	return manifest, nil
 }
 
 func (ws *DefaultWorkspace) GetDisabled() DisabledAllocations {

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 )
 
-func rsync(bucketID, workerIP string) {
+func rsync(bucketID, workerIP string) error {
 	conf := utils.GetMaandConf()
 	user := conf.SSHUser
 	keyFilePath, _ := filepath.Abs(path.Join(bucket.SecretLocation, conf.SSHKeyFile))
@@ -55,6 +55,5 @@ func rsync(bucketID, workerIP string) {
 	cmd.Stdout = nil
 	cmd.Stderr = os.Stderr
 
-	err := cmd.Run()
-	utils.Check(err)
+	return cmd.Run()
 }

@@ -2,13 +2,19 @@ package build
 
 import (
 	"database/sql"
+	"errors"
 	"maand/data"
 	"maand/utils"
 	"maand/workspace"
 )
 
-func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) {
-	for _, workerIP := range data.GetWorkers(tx, nil) {
+func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
+	workers, err := data.GetWorkers(tx, nil)
+	if err != nil {
+		return err
+	}
+
+	for _, workerIP := range workers {
 
 		query := `
 			SELECT DISTINCT j.name
@@ -32,61 +38,79 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) {
 		`
 
 		rows, err := tx.Query(query, workerIP)
-		utils.Check(err)
+		if err != nil {
+			return data.NewDatabaseError(err)
+		}
 
 		var assignedJobs []string
 		for rows.Next() {
 			var job string
 			err = rows.Scan(&job)
-			utils.Check(err)
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
+
 			assignedJobs = append(assignedJobs, job)
 
-			allocID := data.GetAllocationID(tx, workerIP, job)
+			allocID, err := data.GetAllocationID(tx, workerIP, job)
+			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				return err
+			}
+
 			if allocID == "" {
 				allocID = workspace.GetHashUUID(job + "|" + workerIP)
 			}
+
 			query = "INSERT OR REPLACE INTO allocations (alloc_id, job, worker_ip, disabled, removed, deployment_seq) VALUES (?, ?, ?, ?, ?, ?)"
-			_, err := tx.Exec(query, allocID, job, workerIP, 0, 0, 0)
-			utils.Check(err)
+			_, err = tx.Exec(query, allocID, job, workerIP, 0, 0, 0)
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
 		}
 
 		// handle missing allocations
-		allocatedJobs := data.GetAllocatedJobs(tx, workerIP)
+		allocatedJobs, err := data.GetAllocatedJobs(tx, workerIP)
+		if err != nil {
+			return err
+		}
+
 		diffs := utils.Difference(allocatedJobs, assignedJobs)
 		for _, deletedJob := range diffs {
 			_, err := tx.Exec("UPDATE allocations SET removed = 1 WHERE job = ? AND worker_ip = ?", deletedJob, workerIP)
-			utils.Check(err)
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
 		}
 	}
 
-	_, err := tx.Exec("UPDATE allocations SET removed = 1 WHERE worker_ip NOT IN (SELECT worker_ip FROM worker)")
-	utils.Check(err)
+	_, err = tx.Exec("UPDATE allocations SET removed = 1 WHERE worker_ip NOT IN (SELECT worker_ip FROM worker)")
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 
 	disabledAllocations := ws.GetDisabled()
 	for _, workerIP := range disabledAllocations.Workers {
 		_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE worker_ip = ?", workerIP)
-		utils.Check(err)
+		if err != nil {
+			return data.NewDatabaseError(err)
+		}
 	}
 
 	for job, obj := range disabledAllocations.Jobs {
 		if len(obj.Workers) == 0 {
 			_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ?", job)
-			utils.Check(err)
+			if err != nil {
+				return data.NewDatabaseError(err)
+			}
 		} else {
 			for _, workerIP := range obj.Workers {
 				_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ? AND worker_ip = ?", job, workerIP)
-				utils.Check(err)
+				if err != nil {
+					return data.NewDatabaseError(err)
+				}
 			}
 		}
 	}
 
-	//for _, workerIP := range data.GetWorkers(tx, nil) {
-	//	for _, job := range data.GetAllocatedJobs(tx, workerIP) {
-	//		allocID := data.GetAllocationID(tx, workerIP, job)
-	//		if data.IsAllocationDisabled(tx, workerIP, job) == 1 {
-	//			_, err := tx.Exec("UPDATE hash SET previous_hash = NULL WHERE namespace = ? AND key = ?", fmt.Sprintf("%s_allocation", job), allocID)
-	//			utils.Check(err)
-	//		}
-	//	}
-	//}
+	return nil
 }

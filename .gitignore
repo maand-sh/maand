@@ -1,5 +1,5 @@
-.DS_Store
-__pycache__
-venv
 .idea
+go.sum
 maand
+.DS_Store
+tests/test_project

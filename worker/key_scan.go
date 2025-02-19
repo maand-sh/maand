@@ -6,10 +6,22 @@ import (
 	"os"
 )
 
-func KeyScan(workerIP string) {
+type KeyScanError struct {
+	WorkerIP string
+	Err      error
+}
+
+func (e KeyScanError) Error() string {
+	return e.Err.Error()
+}
+
+func KeyScan(workerIP string) error {
 	if os.Getenv("CONTAINER") == "1" {
 		cmd := fmt.Sprintf(`ssh-keyscan -H %s >> ~/.ssh/known_hosts`, workerIP)
 		err := utils.ExecuteCommand([]string{"mkdir -p ~/.ssh", cmd})
-		utils.Check(err)
+		if err != nil {
+			return &KeyScanError{WorkerIP: workerIP, Err: err}
+		}
 	}
+	return nil
 }

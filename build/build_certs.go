@@ -7,33 +7,48 @@ import (
 	"crypto/x509/pkix"
 	"database/sql"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"maand/bucket"
 	"maand/data"
+	"maand/kv"
 	"maand/utils"
 	"math/big"
 	"net"
 	"os"
 	"path"
-	"strings"
 	"time"
 )
 
-func Certs(tx *sql.Tx) {
+func Certs(tx *sql.Tx) error {
 	caHash, err := utils.CalculateFileMD5(path.Join(bucket.SecretLocation, "ca.crt"))
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
-	utils.UpdateHash(tx, "build", "ca", caHash)
+	err = data.UpdateHash(tx, "build", "ca", caHash)
+	if err != nil {
+		return err
+	}
 
-	workers := data.GetWorkers(tx, nil)
+	workers, err := data.GetWorkers(tx, nil)
+	if err != nil {
+		return err
+	}
 
 	for _, workerIP := range workers {
 		workerDirPath := path.Join(bucket.TempLocation, "workers", workerIP)
 
-		jobs := data.GetAllocatedJobs(tx, workerIP)
+		jobs, err := data.GetAllocatedJobs(tx, workerIP)
+		if err != nil {
+			return err
+		}
+
 		for _, job := range jobs {
 			rows, err := tx.Query("SELECT name FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
-			utils.Check(err)
+			if err != nil {
+				return err
+			}
 
 			ns := fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP)
 
@@ -41,98 +56,148 @@ func Certs(tx *sql.Tx) {
 			for rows.Next() {
 				jobDir := path.Join(workerDirPath, "jobs", job)
 				err = os.MkdirAll(path.Join(jobDir, "certs"), os.ModePerm)
-				utils.Check(err)
+				if err != nil {
+					return err
+				}
 
-				updateCerts := utils.HashChanged(tx, "build", "ca")
+				updateCerts, err := data.HashChanged(tx, "build", "ca")
+				if err != nil {
+					return err
+				}
 
 				var certName string
 				err = rows.Scan(&certName)
-				utils.Check(err)
+				if err != nil {
+					return err
+				}
 
 				certName = fmt.Sprintf("certs/%s", certName)
 				certPath := path.Join(jobDir, certName)
 
-				vKey, err := utils.GetKVStore().Get(tx, ns, certName+".key")
-				if err != nil && !strings.Contains(err.Error(), "not found") {
-					utils.Check(err)
+				vKey, err := kv.GetKVStore().Get(tx, ns, certName+".key")
+				var errNotFound = kv.NewNotFoundError(ns, certName+".key")
+				if err != nil && !errors.As(err, &errNotFound) {
+					return err
 				}
 				if len(vKey) > 0 {
 					err = os.WriteFile(certPath+".key", []byte(vKey), os.ModePerm)
-					utils.Check(err)
+					if err != nil {
+						return err
+					}
 				}
 
-				vCrt, err := utils.GetKVStore().Get(tx, ns, certName+".crt")
-				if err != nil && !strings.Contains(err.Error(), "not found") {
-					utils.Check(err)
+				vCrt, err := kv.GetKVStore().Get(tx, ns, certName+".crt")
+				errNotFound = kv.NewNotFoundError(ns, certName+".crt")
+				if err != nil && !errors.As(err, &errNotFound) {
+					return err
 				}
 				if len(vCrt) > 0 {
 					err = os.WriteFile(certPath+".crt", []byte(vCrt), os.ModePerm)
-					utils.Check(err)
+					if err != nil {
+						return err
+					}
 
 					maandConf := utils.GetMaandConf()
-					if !updateCerts && IsCertExpiringSoon(certPath+".crt", maandConf.CertsRenewalBuffer) {
+					certExpired, err := IsCertExpiringSoon(certPath+".crt", maandConf.CertsRenewalBuffer)
+					if err != nil {
+						return err
+					}
+
+					if !updateCerts && certExpired {
 						updateCerts = true
 					}
 				}
-				if !updateCerts && utils.HashChanged(tx, "build_certs", job) {
+
+				jobHashChanged, err := data.HashChanged(tx, "build_certs", job)
+				if err != nil {
+					return err
+				}
+
+				if !updateCerts && jobHashChanged {
 					updateCerts = true
 				}
 
 				if updateCerts {
 					maandConf := utils.GetMaandConf()
-					GenerateCert(jobDir, certName, pkix.Name{CommonName: "maand"}, workerIP, maandConf.CertsTTL)
+					err = GenerateCert(jobDir, certName, pkix.Name{CommonName: "maand"}, workerIP, maandConf.CertsTTL)
+					if err != nil {
+						return err
+					}
 				}
 
 				certPub, err := os.ReadFile(certPath + ".crt")
-				utils.Check(err)
+				if err != nil {
+					return err
+				}
 				certPri, err := os.ReadFile(certPath + ".key")
-				utils.Check(err)
+				if err != nil {
+					return err
+				}
 
 				certsMap[certName+".crt"] = string(certPub)
 				certsMap[certName+".key"] = string(certPri)
 			}
 
 			err = storeKeyValues(tx, ns, certsMap)
-			utils.Check(err)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
 	// update moved after completion of all allocations
 	for _, workerIP := range workers {
-		jobs := data.GetAllocatedJobs(tx, workerIP)
+		jobs, err := data.GetAllocatedJobs(tx, workerIP)
+		if err != nil {
+			return err
+		}
+
 		for _, job := range jobs {
-			utils.PromoteHash(tx, "build_certs", job)
+			err = data.PromoteHash(tx, "build_certs", job)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
-	utils.PromoteHash(tx, "build", "ca")
+	err = data.PromoteHash(tx, "build", "ca")
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-func GenerateCert(path, name string, subject pkix.Name, ipAddress string, ttlDays int) {
+func GenerateCert(path, name string, subject pkix.Name, ipAddress string, ttlDays int) error {
 	// Load CA certificate
 	caCertPEM, err := os.ReadFile(fmt.Sprintf("%s/ca.crt", bucket.SecretLocation))
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	caKeyPEM, err := os.ReadFile(fmt.Sprintf("%s/ca.key", bucket.SecretLocation))
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	// Decode CA certificate
 	caCertBlock, _ := pem.Decode(caCertPEM)
-	utils.Check(err)
-
 	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	// Decode CA private key
 	caKeyBlock, _ := pem.Decode(caKeyPEM)
-	utils.Check(err)
-
 	caKey, err := x509.ParsePKCS1PrivateKey(caKeyBlock.Bytes)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	// Generate new certificate
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	now := time.Now()
 	template := x509.Certificate{
@@ -147,45 +212,57 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddress string, ttlDay
 	}
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	// Sign certificate with CA
 	certBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, &privateKey.PublicKey, caKey)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	// Save certificate
 	certFile, err := os.Create(fmt.Sprintf("%s/%s.crt", path, name))
 	utils.Check(err)
+	defer func() {
+		_ = certFile.Close()
+	}()
 
 	err = pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	// Save private key
 	keyFile, err := os.Create(fmt.Sprintf("%s/%s.key", path, name))
 	utils.Check(err)
+	defer func() {
+		_ = keyFile.Close()
+	}()
 
 	err = pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
-	err = certFile.Close()
-	utils.Check(err)
-
-	err = keyFile.Close()
-	utils.Check(err)
+	return nil
 }
 
-func IsCertExpiringSoon(certPath string, days int) bool {
+func IsCertExpiringSoon(certPath string, days int) (bool, error) {
 	certPEM, err := os.ReadFile(certPath)
-	utils.Check(err)
+	if err != nil {
+		return false, err
+	}
 
 	block, _ := pem.Decode(certPEM)
-	utils.Check(err)
-
 	cert, err := x509.ParseCertificate(block.Bytes)
-	utils.Check(err)
+	if err != nil {
+		return false, err
+	}
 
 	expiryDate := cert.NotAfter.UTC().Add(time.Duration(days) * 24 * time.Hour)
 	checkDate := time.Now().UTC()
 
-	return expiryDate.Before(checkDate)
+	return expiryDate.Before(checkDate), nil
 }

@@ -1,17 +1,20 @@
 package cat
 
 import (
-	"fmt"
+	"database/sql"
+	"errors"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"maand/data"
 	"maand/utils"
 	"strings"
 )
 
-func KV() {
+func KV() error {
 
 	db, err := data.GetDatabase(true)
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 	defer func() {
 		_ = db.Close()
 	}()
@@ -22,16 +25,21 @@ func KV() {
 		_ = tx.Rollback()
 	}()
 
+	count := 0
 	query := "SELECT count(*) FROM key_value"
 	row := tx.QueryRow(query)
-	workerCount := 0
-	if _ = row.Scan(&workerCount); workerCount == 0 {
-		fmt.Println("No key values found")
-		return
+	err = row.Scan(&count)
+	if errors.Is(err, sql.ErrNoRows) || count == 0 {
+		return &NotFoundError{Domain: "key values"}
+	}
+	if err != nil {
+		return data.NewDatabaseError(err)
 	}
 
 	rows, err := tx.Query(`SELECT namespace, key, value, version, ttl, created_date, deleted FROM cat_kv`)
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 
 	t := utils.GetTable(table.Row{"Namespace", "Key", "Value", "Version", "ttl", "createdDate", "deleted"})
 
@@ -45,7 +53,9 @@ func KV() {
 		var deleted int
 
 		err = rows.Scan(&namespace, &key, &value, &version, &ttl, &createdDate, &deleted)
-		utils.Check(err)
+		if err != nil {
+			return data.NewDatabaseError(err)
+		}
 
 		if strings.HasPrefix(key, "certs/") {
 			value = strings.Split(value, "\n")[0]
@@ -55,4 +65,10 @@ func KV() {
 	}
 
 	t.Render()
+
+	if err := tx.Commit(); err != nil {
+		return data.NewDatabaseError(err)
+	}
+
+	return nil
 }
