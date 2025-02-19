@@ -120,7 +120,12 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 	wait.Wait()
 
 	if healthcheck {
-		jobs := data.GetJobs(tx)
+
+		jobs, err := data.GetJobs(tx)
+		if err != nil {
+			return err
+		}
+
 		for _, job := range jobs {
 			err := health_check.HealthCheck(tx, true, job, true)
 			if err != nil {

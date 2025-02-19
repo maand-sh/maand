@@ -184,8 +184,12 @@ func processBucketConf(tx *sql.Tx) error {
 		}
 	}
 
+	availableJobs, err := data.GetJobs(tx)
+	if err != nil {
+		return err
+	}
+
 	jobPorts := make(map[string]string)
-	availableJobs := data.GetJobs(tx)
 	for _, job := range availableJobs {
 		rows, err := tx.Query("SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
 		if err != nil {
@@ -203,7 +207,7 @@ func processBucketConf(tx *sql.Tx) error {
 		}
 	}
 
-	err := storeKeyValues(tx, "vars/bucket", bucketConfig)
+	err = storeKeyValues(tx, "vars/bucket", bucketConfig)
 	if err != nil {
 		return err
 	}
@@ -238,7 +242,12 @@ func getJobConf(job string) (map[string]string, error) {
 }
 
 func processJobData(tx *sql.Tx) error {
-	for _, job := range data.GetJobs(tx) {
+	jobs, err := data.GetJobs(tx)
+	if err != nil {
+		return err
+	}
+
+	for _, job := range jobs {
 
 		jobKV := make(map[string]string)
 

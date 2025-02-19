@@ -83,11 +83,14 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 		return err
 	}
 
+	jobs, err := data.GetJobs(tx)
+	if err != nil {
+		return err
+	}
+
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var errJobs = make(map[string]error)
-	jobs := data.GetJobs(tx)
-
 	for _, job := range jobs {
 		if len(jobsFilter) > 0 {
 			if len(utils.Intersection(jobsFilter, []string{job})) == 0 {

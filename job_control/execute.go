@@ -67,9 +67,7 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 				}
 			}
 		} else {
-			for _, job := range jobs {
-				selectedJobs = append(selectedJobs, job)
-			}
+			selectedJobs = append(selectedJobs, jobs...)
 		}
 
 		var wait sync.WaitGroup
