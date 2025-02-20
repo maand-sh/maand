@@ -48,8 +48,8 @@ func GetCommands(manifest Manifest) []AllocationCommand {
 	var commands []AllocationCommand
 	for name, command := range manifest.Commands {
 		command.Name = name
-		if command.DependsOn.Config == nil {
-			command.DependsOn.Config = make(map[string]interface{})
+		if command.Demands.Config == nil {
+			command.Demands.Config = make(map[string]interface{})
 		}
 		commands = append(commands, command)
 	}

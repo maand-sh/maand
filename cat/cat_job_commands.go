@@ -38,27 +38,27 @@ func JobCommands() error {
 		return data.NewDatabaseError(err)
 	}
 
-	rows, err := tx.Query(`SELECT job, command_name, executed_on, depend_on_job, depend_on_command, depend_on_config FROM cat_job_commands`)
+	rows, err := tx.Query(`SELECT job, command_name, executed_on, demand_job, demand_command, demand_config FROM cat_job_commands`)
 	if err != nil {
 		return data.NewDatabaseError(err)
 	}
 
-	t := utils.GetTable(table.Row{"job", "command_name", "executed_on", "depend_on_job", "depend_on_command", "depend_on_config"})
+	t := utils.GetTable(table.Row{"job", "command_name", "executed_on", "demand_job", "demand_command", "demand_config"})
 
 	for rows.Next() {
 		var jobName string
 		var commandName string
 		var executedOn string
-		var dependOnJob string
-		var dependOnCommand string
-		var dependOnConfig string
+		var demandJob string
+		var demandCommand string
+		var demandConfig string
 
-		err = rows.Scan(&jobName, &commandName, &executedOn, &dependOnJob, &dependOnCommand, &dependOnConfig)
+		err = rows.Scan(&jobName, &commandName, &executedOn, &demandJob, &demandCommand, &demandConfig)
 		if err != nil {
 			return data.NewDatabaseError(err)
 		}
 
-		t.AppendRows([]table.Row{{jobName, commandName, executedOn, dependOnJob, dependOnCommand, dependOnConfig}})
+		t.AppendRows([]table.Row{{jobName, commandName, executedOn, demandJob, demandCommand, demandConfig}})
 	}
 
 	t.Render()

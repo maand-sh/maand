@@ -132,13 +132,23 @@ func processWorkerData(tx *sql.Tx) error {
 	}
 
 	for _, workerIP := range removedWorkers {
-		ns := fmt.Sprintf("maand/worker/%s", workerIP)
-		keys, _ := kv.GetKVStore().GetKeys(tx, ns)
+		nss := []string{fmt.Sprintf("maand/worker/%s", workerIP)}
+		workerJobs, err := data.GetAllocatedJobs(tx, workerIP)
+		if err != nil {
+			return err
+		}
 
-		for _, key := range keys {
-			err := kv.GetKVStore().Delete(tx, ns, key)
-			if err != nil {
-				return err
+		for _, job := range workerJobs {
+			nss = append(nss, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
+		}
+
+		for _, ns := range nss {
+			keys, _ := kv.GetKVStore().GetKeys(tx, ns)
+			for _, key := range keys {
+				err := kv.GetKVStore().Delete(tx, ns, key)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -332,7 +342,14 @@ func processJobData(tx *sql.Tx) error {
 	}
 
 	for _, job := range removedJobs {
-		nss := []string{fmt.Sprintf("maand/job/%s", job), fmt.Sprintf("vars/job/%s", job)}
+		nss := []string{fmt.Sprintf("maand/job/%s", job), fmt.Sprintf("vars/job/%s", job), fmt.Sprintf("vars/bucket/job/%s", job)}
+		jobWorkers, err := data.GetAllocatedWorkers(tx, job)
+		if err != nil {
+			return err
+		}
+		for _, workerIP := range jobWorkers {
+			nss = append(nss, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
+		}
 		for _, ns := range nss {
 			err := storeKeyValues(tx, ns, make(map[string]string))
 			if err != nil {
@@ -340,6 +357,7 @@ func processJobData(tx *sql.Tx) error {
 			}
 		}
 	}
+
 	return nil
 }
 
