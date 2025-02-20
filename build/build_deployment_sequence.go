@@ -11,12 +11,12 @@ import (
 func DeploymentSequence(tx *sql.Tx) error {
 	query := `
 		 WITH RECURSIVE job_command_seq AS (
-			SELECT jc.job, 0 AS level FROM job_commands jc WHERE jc.depend_on_job = ''
+			SELECT jc.job, 0 AS level FROM job_commands jc WHERE jc.demand_job = ''
 
 			UNION ALL
 
 			SELECT jc.job, jcs.level + 1 AS level
-			FROM job_commands jc INNER JOIN job_command_seq jcs ON jc.depend_on_job = jcs.job
+			FROM job_commands jc INNER JOIN job_command_seq jcs ON jc.demand_job = jcs.job
 		)
 		UPDATE allocations SET deployment_seq = t.deployment_seq FROM (
 		SELECT

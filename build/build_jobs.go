@@ -134,7 +134,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			if len(diffs) > 0 {
 				return fmt.Errorf("job %s, job_command %s not valid executed_on %v", job, command.Name, diffs)
 			}
-			if command.DependsOn.Job == job {
+			if command.Demands.Job == job {
 				return fmt.Errorf("job %s, job_command %s invalid configuration, self referencing", job, command.Name)
 			}
 			commandPath := path.Join(bucket.WorkspaceLocation, "jobs", job, "_modules", fmt.Sprintf("%s.py", command.Name))
@@ -144,16 +144,16 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			}
 
 			query := `
-				INSERT INTO job_commands (job_id, job, name, executed_on, depend_on_job, depend_on_command, depend_on_config) 
+				INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config) 
 				VALUES (?, ?, ?, ?, ?, ?, ?)
 			`
 			for _, executedOn := range command.ExecutedOn {
-				jsonData, err := json.Marshal(command.DependsOn.Config)
+				jsonData, err := json.Marshal(command.Demands.Config)
 				if err != nil {
 					return err
 				}
 
-				_, err = tx.Exec(query, jobID, job, command.Name, executedOn, command.DependsOn.Job, command.DependsOn.Command, string(jsonData))
+				_, err = tx.Exec(query, jobID, job, command.Name, executedOn, command.Demands.Job, command.Demands.Command, string(jsonData))
 				if err != nil {
 					return data.NewDatabaseError(err)
 				}

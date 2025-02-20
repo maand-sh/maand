@@ -21,11 +21,11 @@ type DisabledAllocations struct {
 type AllocationCommand struct {
 	Name       string
 	ExecutedOn []string `json:"executed_on"`
-	DependsOn  struct {
+	Demands    struct {
 		Job     string                 `json:"job"`
 		Command string                 `json:"command"`
 		Config  map[string]interface{} `json:"config"`
-	} `json:"depends_on"`
+	} `json:"demands"`
 }
 
 type Manifest struct {

@@ -48,7 +48,7 @@ func SetupMaand(tx *sql.Tx) error {
 		"CREATE TABLE IF NOT EXISTS job_ports (job_id TEXT, name TEXT, port INT)",
 		"CREATE TABLE IF NOT EXISTS job_certs (job_id TEXT, name TEXT, pkcs8 INT, subject TEXT)",
 		"CREATE TABLE IF NOT EXISTS job_files (job_id TEXT, path TEXT, content BLOB, isdir BOOL)",
-		"CREATE TABLE IF NOT EXISTS job_commands (job_id TEXT, job TEXT, name TEXT, executed_on TEXT, depend_on_job TEXT, depend_on_command TEXT, depend_on_config TEXT)",
+		"CREATE TABLE IF NOT EXISTS job_commands (job_id TEXT, job TEXT, name TEXT, executed_on TEXT, demand_job TEXT, demand_command TEXT, demand_config TEXT)",
 
 		"CREATE TABLE IF NOT EXISTS key_value (key TEXT, value TEXT, namespace TEXT, version INT, ttl TEXT, created_date TEXT, deleted INT)",
 		"CREATE TABLE IF NOT EXISTS hash (namespace TEXT, key TEXT, current_hash TEXT, previous_hash TEXT, PRIMARY KEY(namespace, key))",
@@ -61,8 +61,8 @@ func SetupMaand(tx *sql.Tx) error {
 			                ifnull((SELECT DISTINCT deployment_seq FROM allocations wj WHERE wj.job = j.name), 0) AS deployment_seq, 
 			                ifnull((SELECT GROUP_CONCAT(selector) FROM job_selectors jl WHERE jl.job_id = j.job_id), '') as selectors 
 			FROM job j ORDER BY deployment_seq, name`,
-		`CREATE VIEW IF NOT EXISTS cat_job_commands (job, command_name, executed_on, depend_on_job, depend_on_command, depend_on_config) AS 
-			SELECT job, name as command_name, executed_on, depend_on_job, depend_on_command, depend_on_config  FROM job_commands ORDER BY job, name`,
+		`CREATE VIEW IF NOT EXISTS cat_job_commands (job, command_name, executed_on, demand_job, demand_command, demand_config) AS 
+			SELECT job, name as command_name, executed_on, demand_job, demand_command, demand_config  FROM job_commands ORDER BY job, name`,
 		`CREATE VIEW IF NOT EXISTS cat_kv (namespace, key, value, version, ttl, created_date, deleted) AS 
 			SELECT * FROM (
 				SELECT namespace, key, (CASE WHEN LENGTH(value) > 50 THEN substr(value, 1, 50) || '...' ELSE value END) as value, 
