@@ -13,6 +13,8 @@ import (
 )
 
 func JobPorts() error {
+	// TODO: jobs filter
+
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)

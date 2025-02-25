@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/fs"
 	"maand/bucket"
-	"maand/utils"
 	"os"
 	"path"
 )
@@ -40,9 +39,11 @@ func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 	return workers, nil
 }
 
-func (ws *DefaultWorkspace) GetJobs() []string {
+func (ws *DefaultWorkspace) GetJobs() ([]string, error) {
 	paths, err := fs.Glob(os.DirFS(path.Join(bucket.WorkspaceLocation, "jobs")), "*/manifest.json")
-	utils.Check(err)
+	if err != nil {
+		return nil, err
+	}
 
 	var jobs []string
 	for idx := range paths {
@@ -50,7 +51,7 @@ func (ws *DefaultWorkspace) GetJobs() []string {
 		jobName := path.Dir(manifestFile)
 		jobs = append(jobs, jobName)
 	}
-	return jobs
+	return jobs, nil
 }
 
 func (ws *DefaultWorkspace) GetJobManifest(jobName string) (Manifest, error) {
@@ -68,19 +69,23 @@ func (ws *DefaultWorkspace) GetJobManifest(jobName string) (Manifest, error) {
 	return manifest, nil
 }
 
-func (ws *DefaultWorkspace) GetDisabled() DisabledAllocations {
+func (ws *DefaultWorkspace) GetDisabled() (DisabledAllocations, error) {
 	disabledFile := path.Join(bucket.WorkspaceLocation, "disabled.json")
 	f, err := os.ReadFile(disabledFile)
 	if os.IsNotExist(err) {
-		return DisabledAllocations{}
+		return DisabledAllocations{}, nil
 	}
-	utils.Check(err)
+	if err != nil {
+		return DisabledAllocations{}, err
+	}
 
 	var disabledAllocations DisabledAllocations
 	err = json.Unmarshal(f, &disabledAllocations)
-	utils.Check(err)
+	if err != nil {
+		return DisabledAllocations{}, err
+	}
 
-	return disabledAllocations
+	return disabledAllocations, nil
 }
 
 func GetWorkspace() *DefaultWorkspace {

@@ -5,6 +5,7 @@
 package gc
 
 import (
+	"fmt"
 	"maand/data"
 	"maand/kv"
 )
@@ -23,9 +24,22 @@ func Collect() error {
 		_ = tx.Rollback()
 	}()
 
-	// TODO : clean allocation hash first
 	deletes := []string{
 		"DELETE FROM allocations WHERE removed = 1",
+	}
+
+	rows, err := tx.Query("SELECT job, alloc_id FROM allocations WHERE removed = 1")
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+
+	for rows.Next() {
+		var job string
+		var allocID string
+		if err := rows.Scan(&job, &allocID); err != nil {
+			return data.NewDatabaseError(err)
+		}
+		deletes = append(deletes, fmt.Sprintf("DELETE FROM hash WHERE namespace = '%s' AND key = '%s'", fmt.Sprintf("%s_allocation", job), allocID))
 	}
 
 	for _, query := range deletes {

@@ -5,18 +5,16 @@
 package job_command
 
 import (
+	"context"
 	"database/sql"
 	_ "embed"
 	"fmt"
 	"maand/bucket"
 	"maand/data"
-	"maand/kv"
 	"maand/utils"
-	"maand/worker"
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
 	"sync"
 )
 
@@ -28,15 +26,6 @@ func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose
 	if err != nil {
 		return err
 	}
-
-	for _, workerIP := range workers {
-		err := worker.KeyScan(workerIP)
-		if err != nil {
-			return err
-		}
-	}
-
-	// TODO: bucket validation
 
 	allowedCommands, err := data.GetJobCommands(tx, job, event)
 	if err != nil {
@@ -53,7 +42,6 @@ func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose
 	}
 
 	for _, workerIP := range workers {
-
 		workerDir := bucket.GetTempWorkerPath(workerIP)
 		err := os.MkdirAll(workerDir, os.ModePerm)
 		if err != nil {
@@ -74,6 +62,17 @@ func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose
 		}
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Start the server in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		server := NewServer(tx, job, command, event)
+		errChan <- server.Start(ctx)
+	}()
+	defer cancel()
+
 	allocErrors := map[string]error{}
 	var semaphore = make(chan struct{}, concurrency)
 	var wait sync.WaitGroup
@@ -88,17 +87,22 @@ func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose
 			return err
 		}
 
-		go func(tWorkerIndex int, tWorkerIP string, tDisabled int) {
+		allocID, err := data.GetAllocationID(tx, workerIP, job)
+		if err != nil {
+			return err
+		}
+
+		go func(tAllocID string, tWorkerIndex int, tWorkerIP string, tDisabled int) {
 			defer wait.Done()
 			defer func() { <-semaphore }()
 
-			err := runAllocationCommand(job, tWorkerIndex, tWorkerIP, tDisabled, command, event, verbose)
+			err := runAllocationCommand(tAllocID, job, tWorkerIndex, tWorkerIP, tDisabled, command, event, verbose)
 			if err != nil {
 				mu.Lock()
 				allocErrors[tWorkerIP] = err
 				mu.Unlock()
 			}
-		}(workerIndex, workerIP, disabled)
+		}(allocID, workerIndex, workerIP, disabled)
 	}
 
 	_ = utils.ExecuteCommand([]string{"sync"})
@@ -143,7 +147,7 @@ func Execute(job, command, event string, concurrency int, verbose bool) error {
 	return nil
 }
 
-func runAllocationCommand(job string, workerIndex int, workerIP string, tDisabled int, command, event string, verbose bool) error {
+func runAllocationCommand(allocID string, job string, workerIndex int, workerIP string, disabled int, command, event string, verbose bool) error {
 	workerDir := bucket.GetTempWorkerPath(workerIP)
 	jobDir := path.Join(workerDir, "jobs", job)
 	commandPath := fmt.Sprintf("%s.py", command)
@@ -152,14 +156,13 @@ func runAllocationCommand(job string, workerIndex int, workerIP string, tDisable
 	cmd.Dir = path.Join(jobDir, "_modules")
 
 	envs := os.Environ()
-	envs = append(envs, "ALLOCATION_INDEX="+strconv.Itoa(workerIndex))
-	envs = append(envs, "ALLOCATION_IP="+workerIP)
-	envs = append(envs, fmt.Sprintf("ALLOCATION_DISABLED=%d", tDisabled))
-	envs = append(envs, "JOB="+job)
-	envs = append(envs, "EVENT="+event)
-	envs = append(envs, "DB_PATH="+bucket.GetDatabaseAbsPath())
-	envs = append(envs, "COMMAND="+command)
-	envs = append(envs, fmt.Sprintf("SESSION_EPOCH=%d", kv.GetKVStore().GlobalUnix))
+	envs = append(envs, fmt.Sprintf("ALLOCATION_ID=%s", allocID))
+	envs = append(envs, fmt.Sprintf("ALLOCATION_INDEX=%d", workerIndex))
+	envs = append(envs, fmt.Sprintf("ALLOCATION_IP=%s", workerIP))
+	envs = append(envs, fmt.Sprintf("ALLOCATION_DISABLED=%d", disabled))
+	envs = append(envs, fmt.Sprintf("JOB=%s", job))
+	envs = append(envs, fmt.Sprintf("EVENT=%s", event))
+	envs = append(envs, fmt.Sprintf("COMMAND=%s", command))
 	cmd.Env = envs
 
 	if verbose {
@@ -167,5 +170,10 @@ func runAllocationCommand(job string, workerIndex int, workerIP string, tDisable
 		cmd.Stderr = os.Stdout
 	}
 
-	return cmd.Run()
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("error running allocation command: %v", err)
+	}
+
+	return nil
 }

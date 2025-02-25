@@ -8,7 +8,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"maand/utils"
 	"strings"
 )
 
@@ -41,7 +40,9 @@ func GetWorkers(tx *sql.Tx, labels []string) ([]string, error) {
 	if len(labels) > 0 {
 		query := fmt.Sprintf("SELECT DISTINCT worker_ip FROM worker w JOIN worker_labels wl ON w.worker_id = wl.worker_id WHERE label in ('%s') ORDER BY position", strings.Join(labels, `','`))
 		rows, err := tx.Query(query)
-		utils.Check(err)
+		if err != nil {
+			return workers, NewDatabaseError(err)
+		}
 		err = readRows(rows)
 		if err != nil {
 			return workers, NewDatabaseError(err)

@@ -6,6 +6,7 @@ package build
 
 import (
 	"database/sql"
+	"fmt"
 	"maand/bucket"
 	"maand/data"
 	"maand/job_command"
@@ -22,7 +23,11 @@ func runPostBuild(tx *sql.Tx) error {
 	}
 
 	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
-		jobs := data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+		jobs, err := data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+		if err != nil {
+			return err
+		}
+
 		for _, job := range jobs {
 			postBuildCommands, err := data.GetJobCommands(tx, job, "post_build")
 			if err != nil {
@@ -35,7 +40,7 @@ func runPostBuild(tx *sql.Tx) error {
 			for _, command := range postBuildCommands {
 				err := job_command.JobCommand(tx, job, command, "post_build", 1, true)
 				if err != nil {
-					return err
+					return fmt.Errorf("post_build failed: %v", err)
 				}
 			}
 		}

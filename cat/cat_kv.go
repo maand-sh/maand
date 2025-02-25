@@ -15,6 +15,8 @@ import (
 
 func KV() error {
 
+	// TODO: namespace filter
+
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)
@@ -24,7 +26,10 @@ func KV() error {
 	}()
 
 	tx, err := db.Begin()
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+
 	defer func() {
 		_ = tx.Rollback()
 	}()

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"maand/job_command"
-	"maand/utils"
 )
 
 var jobCommandCmd = &cobra.Command{
@@ -20,7 +19,7 @@ var jobCommandCmd = &cobra.Command{
 		verbose, _ := flags.GetBool("verbose")
 		concurrency, _ := flags.GetInt("concurrency")
 		if concurrency < 1 {
-			utils.Check(fmt.Errorf("concurrency must be at least 1"))
+			fmt.Println("concurrency must be at least 1")
 		}
 
 		job := args[0]

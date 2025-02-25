@@ -116,17 +116,7 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		return err
 	}
 
-	allowedNamespaces := []string{
-		"maand",
-		"vars/bucket",
-		"maand/worker",
-		fmt.Sprintf("maand/worker/%s", workerIP),
-		fmt.Sprintf("maand/worker/%s/tags", workerIP),
-		fmt.Sprintf("maand/job/%s", job),
-		fmt.Sprintf("vars/bucket/job/%s", job),
-		fmt.Sprintf("vars/job/%s", job),
-		fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP),
-	}
+	allowedNamespaces := data.GetAllowedNamespaces(job, workerIP)
 
 	funcMap := template.FuncMap{
 		"get": func(ns, key string) string {
@@ -182,6 +172,10 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 			return err
 		}
 
+		if err = os.Remove(templateAbsPath); err != nil {
+			return err
+		}
+
 		tmpl, err := template.New("template").Funcs(funcMap).Parse(string(templateContent))
 		if err != nil {
 			return err //TODO: handle with template error
@@ -201,11 +195,6 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		}
 
 		err = file.Close()
-		if err != nil {
-			return err
-		}
-
-		err = os.Remove(templateAbsPath)
 		if err != nil {
 			return err
 		}
@@ -541,7 +530,7 @@ func handleNewAllocations(tx *sql.Tx, bucketID string, jobs []string) error {
 
 			if len(newAllocations) > 0 {
 
-				var waitWorker sync.WaitGroup
+				var workerWait sync.WaitGroup
 				var parallelBatchCount = len(newAllocations)
 
 				workerCount := len(newAllocations)
@@ -561,11 +550,11 @@ func handleNewAllocations(tx *sql.Tx, bucketID string, jobs []string) error {
 							continue
 						}
 
-						waitWorker.Add(1)
+						workerWait.Add(1)
 						semaphore <- struct{}{} // Acquire slot
 
 						go func(tWorkerIP string) {
-							defer waitWorker.Done()
+							defer workerWait.Done()
 							defer func() { <-semaphore }() // Release slot after execution
 
 							err := worker.ExecuteCommand(tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s start --jobs %s", bucketID, bucketID, tJob)}, nil)
@@ -575,7 +564,7 @@ func handleNewAllocations(tx *sql.Tx, bucketID string, jobs []string) error {
 						}(workerIP)
 					}
 
-					waitWorker.Wait()
+					workerWait.Wait()
 
 					err := health_check.HealthCheck(tx, true, tJob, true)
 					if err != nil {
@@ -658,10 +647,9 @@ func handleUpdatedAllocations(tx *sql.Tx, bucketID string, jobs []string) error 
 
 func handleStoppedAllocations(tx *sql.Tx, bucketID string, jobs []string) error {
 
-	stopAllocation := func(tWorkerIP string, tJob string) {
+	stopAllocation := func(tWorkerIP string, tJob string) error {
 		err := worker.ExecuteCommand(tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s stop --jobs %s", bucketID, bucketID, tJob)}, nil)
-		fmt.Println(err)
-		// TODO: error handling
+		return err
 	}
 
 	for _, job := range jobs {
@@ -694,7 +682,11 @@ func handleStoppedAllocations(tx *sql.Tx, bucketID string, jobs []string) error 
 				if previousHash == "" {
 					continue // ignore if already disabled by maand
 				}
-				go stopAllocation(workerIP, job)
+
+				err = stopAllocation(workerIP, job)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -747,8 +739,8 @@ func Execute(jobsFilter []string) error {
 	}
 
 	defer func() {
-		_ = db.Close()
 		_ = os.RemoveAll(bucket.TempLocation)
+		_ = db.Close()
 	}()
 
 	err = os.RemoveAll(bucket.TempLocation)
@@ -793,17 +785,14 @@ func Execute(jobsFilter []string) error {
 		return err
 	}
 
-	for _, workerIP := range workers {
-		err = worker.KeyScan(workerIP)
-		if err != nil {
-			return err
-		}
-	}
-
 	// removing all jobs fails on deps seq
 	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
 
-		var availableJobs = data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+		var availableJobs, err = data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+		if err != nil {
+			return err
+		}
+
 		var jobs []string
 		for _, job := range availableJobs {
 			if len(jobsFilter) > 0 && len(utils.Intersection(jobsFilter, []string{job})) == 0 {

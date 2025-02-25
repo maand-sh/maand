@@ -13,12 +13,6 @@ import (
 	"strings"
 )
 
-func Check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
 func ExtractSizeInMB(sizeString string) (float64, error) {
 	unitToMB := map[string]float64{
 		"MB": 1,

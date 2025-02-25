@@ -92,7 +92,11 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		return data.NewDatabaseError(err)
 	}
 
-	disabledAllocations := ws.GetDisabled()
+	disabledAllocations, err := ws.GetDisabled()
+	if err != nil {
+		return err
+	}
+
 	for _, workerIP := range disabledAllocations.Workers {
 		_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE worker_ip = ?", workerIP)
 		if err != nil {
