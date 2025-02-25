@@ -15,7 +15,11 @@ import (
 )
 
 func rsync(bucketID, workerIP string) error {
-	conf := utils.GetMaandConf()
+	conf, err := utils.GetMaandConf()
+	if err != nil {
+		return err
+	}
+
 	user := conf.SSHUser
 	keyFilePath, _ := filepath.Abs(path.Join(bucket.SecretLocation, conf.SSHKeyFile))
 	useSUDO := conf.UseSUDO
@@ -50,11 +54,10 @@ func rsync(bucketID, workerIP string) error {
 		"--exclude=jobs/*/_modules",
 		fmt.Sprintf("--rsync-path=%s", remoteRS),
 		fmt.Sprintf("--filter=merge %s", ruleFilePath),
-		fmt.Sprintf("--rsh=ssh -o BatchMode=true -o ConnectTimeout=10 -i '%s'", keyFilePath),
+		fmt.Sprintf("--rsh=ssh -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i '%s'", keyFilePath),
 		fmt.Sprintf("%s/", workerDir),
 		fmt.Sprintf("%s@%s:/opt/worker/%s", user, workerIP, bucketID),
 	}
-
 	cmd := exec.Command(rs, rsOptions...)
 	cmd.Stdout = nil
 	cmd.Stderr = os.Stderr

@@ -371,12 +371,16 @@ func storeKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) e
 	}
 
 	allKeys, err := kv.GetKVStore().GetKeys(tx, namespace)
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
 
 	diffs := utils.Difference(allKeys, availableKeys)
 	for _, diff := range diffs {
 		err := kv.GetKVStore().Delete(tx, namespace, diff)
-		utils.Check(err)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

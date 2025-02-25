@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"github.com/spf13/cobra"
 	"maand/bucket"
-	"maand/utils"
 	"os"
 	"path"
 	"strings"
@@ -45,7 +44,7 @@ var jobCreateCmd = &cobra.Command{
 			_ = os.WriteFile(path.Join(jobDir, "manifest.json"), manifestContent, 0644)
 			_ = os.WriteFile(path.Join(jobDir, "Makefile"), makefile, 0644)
 		} else {
-			utils.Check(fmt.Errorf("job directory already exists: %s", job))
+			fmt.Printf("job directory already exists: %s\n", job)
 		}
 	},
 }
@@ -53,4 +52,5 @@ var jobCreateCmd = &cobra.Command{
 func init() {
 	jobCmd.AddCommand(jobCreateCmd)
 	jobCreateCmd.Flags().StringP("selectors", "s", "", "comma seperated selectors")
+	// TODO: other manifest input for ease access.
 }

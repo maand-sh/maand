@@ -12,9 +12,16 @@ import (
 	"maand/utils"
 )
 
-// TODO: job's filter
-
 func Allocations() error {
+
+	// TODO: job's filter
+	// TODO: worker filter
+
+	//var jobsFilter []string
+	//if jobsComma != "" {
+	//	jobsFilter = strings.Split(jobsComma, ",")
+	//}
+
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)
@@ -41,12 +48,12 @@ func Allocations() error {
 		return data.NewDatabaseError(err)
 	}
 
+	t := utils.GetTable(table.Row{"allocation_id", "worker_ip", "job", "disabled", "removed"})
+
 	rows, err := tx.Query("SELECT alloc_id, worker_ip, job, disabled, removed FROM cat_allocations")
 	if err != nil {
 		return data.NewDatabaseError(err)
 	}
-
-	t := utils.GetTable(table.Row{"allocation_id", "worker_ip", "job", "disabled", "removed"})
 
 	for rows.Next() {
 		var allocID string

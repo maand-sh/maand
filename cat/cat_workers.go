@@ -13,6 +13,9 @@ import (
 )
 
 func Workers() error {
+
+	// TODO: labels filter
+
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)

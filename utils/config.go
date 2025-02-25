@@ -20,23 +20,27 @@ type MaandConf struct {
 	CertsRenewalBuffer int    `toml:"certs_renewal_buffer"`
 }
 
-func GetMaandConf() MaandConf {
+func GetMaandConf() (MaandConf, error) {
 	maandConf := path.Join(bucket.Location, "maand.conf")
 	if _, err := os.Stat(maandConf); err == nil {
 		maandData, err := os.ReadFile(maandConf)
-		Check(err)
+		if err != nil {
+			return MaandConf{}, err
+		}
 
 		var maandConf MaandConf
 		err = toml.Unmarshal(maandData, &maandConf)
-		Check(err)
+		if err != nil {
+			return MaandConf{}, err
+		}
 
 		if maandConf.CertsTTL == 0 {
 			maandConf.CertsTTL = 60
 		}
 
-		return maandConf
+		return maandConf, nil
 	}
-	return MaandConf{}
+	return MaandConf{}, nil
 }
 
 func WriteMaandConf(conf *MaandConf) error {

@@ -134,3 +134,18 @@ func UpdateJournalModeWAL(db *sql.DB) error {
 	}
 	return nil
 }
+
+func GetAllowedNamespaces(job, workerIP string) []string {
+	allowedNamespaces := []string{
+		"maand",
+		"vars/bucket",
+		"maand/worker",
+		fmt.Sprintf("maand/worker/%s", workerIP),
+		fmt.Sprintf("maand/worker/%s/tags", workerIP),
+		fmt.Sprintf("maand/job/%s", job),
+		fmt.Sprintf("vars/bucket/job/%s", job),
+		fmt.Sprintf("vars/job/%s", job),
+		fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP),
+	}
+	return allowedNamespaces
+}

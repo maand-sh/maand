@@ -17,10 +17,15 @@ import (
 
 func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 	db, err := data.GetDatabase(true)
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
 
 	tx, err := db.Begin()
-	utils.Check(err)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+
 	defer func() {
 		_ = tx.Rollback()
 	}()
@@ -62,7 +67,10 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
 
 		var selectedJobs []string
-		var jobs = data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+		var jobs, err = data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+		if err != nil {
+			return err
+		}
 
 		if len(jobsFilter) > 0 {
 			for _, job := range jobs {
@@ -85,13 +93,6 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 				allocatedWorkers, err := data.GetActiveAllocations(tx, job)
 				if err != nil {
 					fmt.Println(err)
-				}
-
-				for _, workerIP := range allocatedWorkers {
-					err = worker.KeyScan(workerIP)
-					if err != nil {
-						log.Println(err)
-					}
 				}
 
 				parallelBatchCount, err := data.GetUpdateParallelCount(tx, job)
@@ -129,7 +130,9 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 					waitWorker.Wait()
 					if healthCheck {
 						err = health_check.HealthCheck(tx, true, job, true)
-						utils.Check(err)
+						if err != nil {
+							fmt.Println(err)
+						}
 					}
 				}
 

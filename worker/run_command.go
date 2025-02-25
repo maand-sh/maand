@@ -14,7 +14,11 @@ import (
 )
 
 func ExecuteCommand(workerIP string, commands []string, env []string) error {
-	conf := utils.GetMaandConf()
+	conf, err := utils.GetMaandConf()
+	if err != nil {
+		return err
+	}
+
 	user := conf.SSHUser
 	keyFilePath, _ := filepath.Abs(path.Join(bucket.SecretLocation, conf.SSHKeyFile))
 	useSudo := conf.UseSUDO
@@ -23,7 +27,9 @@ func ExecuteCommand(workerIP string, commands []string, env []string) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(scriptPath) // Clean up the script file after execution
+	defer func() {
+		_ = os.Remove(scriptPath)
+	}()
 
 	sh := "bash"
 	if useSudo {
@@ -31,7 +37,7 @@ func ExecuteCommand(workerIP string, commands []string, env []string) error {
 	}
 
 	sshCmd := fmt.Sprintf(
-		"ssh -q -o BatchMode=true -o ConnectTimeout=10 -i '%s' %s@%s 'timeout 300 %s' < %s",
+		"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i '%s' %s@%s 'timeout 300 %s' < %s",
 		keyFilePath, user, workerIP, sh, scriptPath,
 	)
 
@@ -39,7 +45,11 @@ func ExecuteCommand(workerIP string, commands []string, env []string) error {
 }
 
 func ExecuteFileCommand(workerIP string, scriptPath string, env []string) error {
-	conf := utils.GetMaandConf()
+	conf, err := utils.GetMaandConf()
+	if err != nil {
+		return err
+	}
+
 	user := conf.SSHUser
 	keyFilePath, _ := filepath.Abs(path.Join(bucket.SecretLocation, conf.SSHKeyFile))
 	useSudo := conf.UseSUDO
@@ -50,7 +60,7 @@ func ExecuteFileCommand(workerIP string, scriptPath string, env []string) error 
 	}
 
 	sshCmd := fmt.Sprintf(
-		"ssh -q -o BatchMode=true -o ConnectTimeout=10 -i %s %s@%s '%s' < %s",
+		"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i %s %s@%s '%s' < %s",
 		keyFilePath, user, workerIP, sh, scriptPath,
 	)
 

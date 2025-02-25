@@ -68,35 +68,21 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 	}
 
 	if concurrency < 1 {
-		utils.Check(fmt.Errorf("concurrency must be at least 1"))
+		return fmt.Errorf("concurrency must be at least 1")
 	}
 
 	workers = utils.Unique(workers)
 
-	if !disableCheck {
-		err = data.ValidateBucketUpdateSeq(tx, workers)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, workerIP := range workers {
-		err = worker.KeyScan(workerIP)
-		if err != nil {
-			return err
-		}
-	}
-
 	commandFile := path.Join(bucket.WorkspaceLocation, "command.sh")
 	if len(shCommand) == 0 {
 		if _, err := os.Stat(commandFile); os.IsNotExist(err) {
-			utils.Check(fmt.Errorf("run commands required --cmd argument or command file"))
+			return fmt.Errorf("run commands required --cmd argument or command file")
 		}
 	}
 
 	var wait sync.WaitGroup
 	var mu sync.Mutex
-	var errs map[string]error
+	var errs = make(map[string]error)
 	semaphore := make(chan struct{}, concurrency)
 
 	for _, workerIP := range workers {
@@ -115,6 +101,7 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 			}
 			mu.Lock()
 			if err != nil {
+
 				errs[wp] = err
 			}
 			mu.Unlock()
@@ -124,7 +111,6 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 	wait.Wait()
 
 	if healthcheck {
-
 		jobs, err := data.GetJobs(tx)
 		if err != nil {
 			return err
@@ -139,7 +125,7 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 	}
 
 	if len(errs) > 0 {
-		return &RunCommandError{Err: errs}
+		return &RunCommandError{Errs: errs}
 	}
 
 	return nil

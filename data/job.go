@@ -7,7 +7,6 @@ package data
 import (
 	"database/sql"
 	"fmt"
-	"maand/utils"
 	"os"
 	"path"
 )
@@ -188,16 +187,21 @@ func GetUpdateParallelCount(tx *sql.Tx, job string) (int, error) {
 	return updateParallelCount, nil
 }
 
-func GetJobsByDeploymentSeq(tx *sql.Tx, deploymentSeq int) []string {
+func GetJobsByDeploymentSeq(tx *sql.Tx, deploymentSeq int) ([]string, error) {
 	var jobs []string
 	rows, err := tx.Query("SELECT DISTINCT job FROM allocations WHERE deployment_seq = ?", deploymentSeq)
-	utils.Check(err)
+	if err != nil {
+		return nil, NewDatabaseError(err)
+	}
+
 	for rows.Next() {
 		var job string
 		err = rows.Scan(&job)
-		utils.Check(err)
+		if err != nil {
+			return nil, NewDatabaseError(err)
+		}
 
 		jobs = append(jobs, job)
 	}
-	return jobs
+	return jobs, nil
 }

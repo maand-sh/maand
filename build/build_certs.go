@@ -101,7 +101,11 @@ func Certs(tx *sql.Tx) error {
 						return err
 					}
 
-					maandConf := utils.GetMaandConf()
+					maandConf, err := utils.GetMaandConf()
+					if err != nil {
+						return err
+					}
+
 					certExpired, err := IsCertExpiringSoon(certPath+".crt", maandConf.CertsRenewalBuffer)
 					if err != nil {
 						return err
@@ -122,7 +126,11 @@ func Certs(tx *sql.Tx) error {
 				}
 
 				if updateCerts {
-					maandConf := utils.GetMaandConf()
+					maandConf, err := utils.GetMaandConf()
+					if err != nil {
+						return err
+					}
+
 					err = GenerateCert(jobDir, certName, pkix.Name{CommonName: "maand"}, workerIP, maandConf.CertsTTL)
 					if err != nil {
 						return err
@@ -228,7 +236,10 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddress string, ttlDay
 
 	// Save certificate
 	certFile, err := os.Create(fmt.Sprintf("%s/%s.crt", path, name))
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
+
 	defer func() {
 		_ = certFile.Close()
 	}()
@@ -240,7 +251,10 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddress string, ttlDay
 
 	// Save private key
 	keyFile, err := os.Create(fmt.Sprintf("%s/%s.key", path, name))
-	utils.Check(err)
+	if err != nil {
+		return err
+	}
+
 	defer func() {
 		_ = keyFile.Close()
 	}()

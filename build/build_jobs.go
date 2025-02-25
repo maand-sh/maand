@@ -23,7 +23,12 @@ var removedJobs []string
 
 func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
-	for _, job := range ws.GetJobs() {
+	wsJobs, err := ws.GetJobs()
+	if err != nil {
+		return err
+	}
+
+	for _, job := range wsJobs {
 		jobID := workspace.GetHashUUID(job)
 
 		deletes := []string{
@@ -213,7 +218,11 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		}
 	}
 
-	workspaceJobs := ws.GetJobs()
+	workspaceJobs, err := ws.GetJobs()
+	if err != nil {
+		return err
+	}
+
 	availableJobs, err := data.GetJobs(tx)
 	if err != nil {
 		return err

@@ -77,15 +77,15 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 		jobsFilter = strings.Split(strings.Trim(jobsComma, ""), ",")
 	}
 
-	workers, err := data.GetWorkers(tx, nil)
-	if err != nil {
-		return err
-	}
-
-	err = data.ValidateBucketUpdateSeq(tx, workers)
-	if err != nil {
-		return err
-	}
+	//workers, err := data.GetWorkers(tx, nil)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//err = data.ValidateBucketUpdateSeq(tx, workers)
+	//if err != nil {
+	//	return err
+	//}
 
 	jobs, err := data.GetJobs(tx)
 	if err != nil {

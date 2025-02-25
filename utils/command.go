@@ -27,7 +27,9 @@ func GenerateScript(commands []string, env []string) (string, error) {
 	script := strings.Join(scriptLines, "\n")
 
 	err := os.WriteFile(scriptPath, []byte(script), 0700)
-	Check(err)
+	if err != nil {
+		return "", err
+	}
 
 	return scriptPath, nil
 }
@@ -36,13 +38,19 @@ func ExecuteShellCommand(cmdString string, prefix string) error {
 	cmd := exec.Command("bash", "-c", cmdString)
 
 	stdout, err := cmd.StdoutPipe()
-	Check(err)
+	if err != nil {
+		return err
+	}
 
 	stderr, err := cmd.StderrPipe()
-	Check(err)
+	if err != nil {
+		return err
+	}
 
 	err = cmd.Start()
-	Check(err)
+	if err != nil {
+		return err
+	}
 
 	handleOutput := func(pipe io.ReadCloser, label string) {
 		scanner := bufio.NewScanner(pipe)
@@ -52,18 +60,28 @@ func ExecuteShellCommand(cmdString string, prefix string) error {
 		if scanner.Err() != nil && scanner.Err().Error() == "read |0: file already closed" {
 			return
 		}
-		Check(scanner.Err())
+		if err := scanner.Err(); err != nil {
+			fmt.Printf("[%s] %s\n", label, err.Error())
+		}
 	}
 
 	go handleOutput(stdout, prefix)
 	go handleOutput(stderr, prefix)
 
-	return cmd.Wait()
+	err = cmd.Wait()
+	if err != nil {
+		return fmt.Errorf("command failed: %w", err)
+	}
+
+	return nil
 }
 
 func ExecuteCommand(commands []string) error {
 	scriptPath, err := GenerateScript(commands, nil)
-	Check(err)
+	if err != nil {
+		return err
+	}
+
 	defer func() {
 		_ = os.Remove(scriptPath)
 	}()
