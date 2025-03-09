@@ -7,9 +7,11 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/spf13/cobra"
+	"log"
 	"maand/initialize"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
 var initCmd = &cobra.Command{
@@ -18,8 +20,7 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := initialize.Execute()
 		if errors.Is(err, initialize.BucketAlreadyInitializedErr) {
-			fmt.Println(err)
-			os.Exit(1)
+			log.Fatalln(err)
 		}
 		if err != nil {
 			fmt.Println("unable to initialize bucket", err)

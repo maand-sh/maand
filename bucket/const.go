@@ -6,7 +6,6 @@ package bucket
 
 import (
 	"path"
-	"path/filepath"
 )
 
 var Location = "."
@@ -22,9 +21,4 @@ func UpdatePath() {
 
 func GetTempWorkerPath(workerIP string) string {
 	return path.Join(TempLocation, "workers", workerIP)
-}
-
-func GetDatabaseAbsPath() string {
-	p, _ := filepath.Abs(path.Join(Location, "data", "maand.db"))
-	return p
 }

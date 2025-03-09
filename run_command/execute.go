@@ -73,12 +73,43 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 
 	workers = utils.Unique(workers)
 
+	var content []byte
 	commandFile := path.Join(bucket.WorkspaceLocation, "command.sh")
 	if len(shCommand) == 0 {
 		if _, err := os.Stat(commandFile); os.IsNotExist(err) {
 			return fmt.Errorf("run commands required --cmd argument or command file")
 		}
+		content, err = os.ReadFile(commandFile)
+		if err != nil {
+			return err
+		}
+	} else {
+		content = []byte(shCommand)
 	}
+
+	err = os.MkdirAll(bucket.TempLocation, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(path.Join(bucket.TempLocation, "command.sh"), content, 0644)
+	if err != nil {
+		return err
+	}
+	commandFile = "command.sh"
+
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+
+	dockerClient, err := bucket.SetupBucketContainer(bucketID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = dockerClient.Stop()
+	}()
 
 	var wait sync.WaitGroup
 	var mu sync.Mutex
@@ -92,16 +123,9 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 		go func(wp string) {
 			defer wait.Done()
 			defer func() { <-semaphore }()
-
-			var err error
-			if len(shCommand) > 0 {
-				err = worker.ExecuteCommand(wp, []string{shCommand}, nil)
-			} else {
-				err = worker.ExecuteFileCommand(wp, commandFile, nil)
-			}
+			err := worker.ExecuteFileCommand(dockerClient, wp, commandFile, nil)
 			mu.Lock()
 			if err != nil {
-
 				errs[wp] = err
 			}
 			mu.Unlock()
@@ -117,7 +141,7 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 		}
 
 		for _, job := range jobs {
-			err := health_check.HealthCheck(tx, true, job, true)
+			err := health_check.HealthCheck(tx, dockerClient, true, job, true)
 			if err != nil {
 				return err
 			}

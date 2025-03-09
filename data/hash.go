@@ -46,26 +46,25 @@ func HashChanged(tx *sql.Tx, namespace, key string) (bool, error) {
 	return false, nil
 }
 
-func PromoteHash(tx *sql.Tx, namespace, key string) error {
-	_, err := tx.Exec("UPDATE hash SET previous_hash = current_hash WHERE namespace = ? AND key = ?", namespace, key)
+func PromoteHash(tx *sql.Tx, namespace, key string) (err error) {
+	_, err = tx.Exec("UPDATE hash SET previous_hash = current_hash WHERE namespace = ? AND key = ?", namespace, key)
 	if err != nil {
 		return NewDatabaseError(err)
 	}
 	return nil
 }
 
-func RemoveHash(tx *sql.Tx, namespace, key string) error {
-	_, err := tx.Exec("DELETE FROM hash WHERE namespace = ? AND key = ?", namespace, key)
+func RemoveHash(tx *sql.Tx, namespace, key string) (err error) {
+	_, err = tx.Exec("DELETE FROM hash WHERE namespace = ? AND key = ?", namespace, key)
 	if err != nil {
 		return NewDatabaseError(err)
 	}
 	return nil
 }
 
-func GetPreviousHash(tx *sql.Tx, namespace, key string) (string, error) {
-	var previousHash string
+func GetPreviousHash(tx *sql.Tx, namespace, key string) (previousHash string, err error) {
 	row := tx.QueryRow("SELECT ifnull(previous_hash, '') FROM hash WHERE namespace = ? AND key = ?", namespace, key)
-	err := row.Scan(&previousHash)
+	err = row.Scan(&previousHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", nil
 	}

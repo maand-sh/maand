@@ -8,20 +8,24 @@ import (
 	"fmt"
 	"maand/bucket"
 	"maand/utils"
-	"os"
-	"os/exec"
+	"maand/worker"
 	"path"
-	"path/filepath"
+	"strings"
 )
 
-func rsync(bucketID, workerIP string) error {
+func rsync(dockerClient *bucket.DockerClient, bucketID, workerIP string) error {
 	conf, err := utils.GetMaandConf()
 	if err != nil {
 		return err
 	}
 
+	err = worker.KeyScan(dockerClient, workerIP)
+	if err != nil {
+		return err
+	}
+
 	user := conf.SSHUser
-	keyFilePath, _ := filepath.Abs(path.Join(bucket.SecretLocation, conf.SSHKeyFile))
+	keyFilePath := path.Join("/bucket", "secrets", conf.SSHKeyFile)
 	useSUDO := conf.UseSUDO
 
 	rs := "rsync"
@@ -31,8 +35,8 @@ func rsync(bucketID, workerIP string) error {
 		remoteRS = "sudo /usr/bin/rsync"
 	}
 
-	ruleFilePath := path.Join(bucket.TempLocation, "workers", fmt.Sprintf("%s.rsync", workerIP))
-	workerDir := path.Join(bucket.TempLocation, "workers", workerIP)
+	ruleFilePath := path.Join("/bucket", "tmp", "workers", fmt.Sprintf("%s.rsync", workerIP))
+	workerDir := path.Join("/bucket", "tmp", "workers", workerIP)
 
 	rsOptions := []string{
 		"--timeout=30",
@@ -52,15 +56,17 @@ func rsync(bucketID, workerIP string) error {
 		"--exclude=jobs/*/data",
 		"--exclude=jobs/*/logs",
 		"--exclude=jobs/*/_modules",
-		fmt.Sprintf("--rsync-path=%s", remoteRS),
-		fmt.Sprintf("--filter=merge %s", ruleFilePath),
-		fmt.Sprintf("--rsh=ssh -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i '%s'", keyFilePath),
+		fmt.Sprintf("--rsync-path='%s'", remoteRS),
+		fmt.Sprintf("--filter='merge %s'", ruleFilePath),
+		fmt.Sprintf("--rsh='ssh -o BatchMode=true -o ConnectTimeout=10 -i %s'", keyFilePath),
 		fmt.Sprintf("%s/", workerDir),
 		fmt.Sprintf("%s@%s:/opt/worker/%s", user, workerIP, bucketID),
 	}
-	cmd := exec.Command(rs, rsOptions...)
-	cmd.Stdout = nil
-	cmd.Stderr = os.Stderr
 
-	return cmd.Run()
+	cmd := append([]string{rs}, rsOptions...)
+	if err = dockerClient.Exec(workerIP, []string{strings.Join(cmd, " ")}, nil, true); err != nil {
+		return err
+	}
+
+	return nil
 }

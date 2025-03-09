@@ -1,3 +1,7 @@
+// Copyright 2025 Kiruba Sankar Swaminathan. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 package job_command
 
 import (
@@ -11,37 +15,37 @@ import (
 	"net/http"
 )
 
-func newMux(tx *sql.Tx, job, command, event string) *http.ServeMux {
+func newMux(tx *sql.Tx) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/kv", handleKV(tx, job, command, event))
-	mux.HandleFunc("/demands", handleDemands(tx, job, command, event))
+	mux.HandleFunc("/kv", handleKV(tx))
+	mux.HandleFunc("/demands", handleDemands(tx))
 	return mux
 }
 
-func handleKV(tx *sql.Tx, job, command, event string) http.HandlerFunc {
+func handleKV(tx *sql.Tx) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
-			handleKVGet(w, r, tx, job, command, event)
+			handleKVGet(w, r, tx)
 		case http.MethodPut:
-			handleKVPut(w, r, tx, job, command, event)
+			handleKVPut(w, r, tx)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}
 }
 
-func handleDemands(tx *sql.Tx, job, command, event string) http.HandlerFunc {
+func handleDemands(tx *sql.Tx) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
 		}
-		handleDemandsGet(w, r, tx, job, command, event)
+		handleDemandsGet(w, r, tx)
 	}
 }
 
-func validateRequest(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job string) (workerIP string, body io.ReadCloser, err error) {
+func validateRequest(w http.ResponseWriter, r *http.Request, tx *sql.Tx) (job, allocationIP string, body io.ReadCloser, err error) {
 	allocID := r.Header.Get(headerAllocID)
 	if allocID == "" {
 		httpErrors.MissingAllocID.Write(w)
@@ -49,7 +53,7 @@ func validateRequest(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job str
 		return
 	}
 
-	err = tx.QueryRow("SELECT worker_ip FROM allocations WHERE alloc_id = ? AND job = ?", allocID, job).Scan(&workerIP)
+	err = tx.QueryRow("SELECT job, worker_ip FROM allocations WHERE alloc_id = ?", allocID).Scan(&job, &allocationIP)
 	if errors.Is(err, sql.ErrNoRows) {
 		httpErrors.InvalidAllocID.Write(w)
 		err = fmt.Errorf("invalid allocation id")
@@ -62,8 +66,8 @@ func validateRequest(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job str
 	return
 }
 
-func handleKVGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, command, event string) {
-	workerIP, body, err := validateRequest(w, r, tx, job)
+func handleKVGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
+	job, allocationIP, body, err := validateRequest(w, r, tx)
 	if err != nil {
 		return
 	}
@@ -77,7 +81,7 @@ func handleKVGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, comman
 		return
 	}
 
-	if err := validateKVRequest(req, job, workerIP, false); err != nil {
+	if err := validateKVRequest(req, job, allocationIP, false); err != nil {
 		err.Write(w)
 		return
 	}
@@ -96,8 +100,8 @@ func handleKVGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, comman
 	})
 }
 
-func handleKVPut(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, command, event string) {
-	workerIP, body, err := validateRequest(w, r, tx, job)
+func handleKVPut(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
+	job, allocationIP, body, err := validateRequest(w, r, tx)
 	if err != nil {
 		return
 	}
@@ -111,11 +115,12 @@ func handleKVPut(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, comman
 		return
 	}
 
-	if err := validateKVRequest(req, job, workerIP, true); err != nil {
+	if err := validateKVRequest(req, job, allocationIP, true); err != nil {
 		err.Write(w)
 		return
 	}
 
+	event := r.Header.Get(headerEvent)
 	if event == "health_check" {
 		log.Printf("KV put not allowed in health check")
 		httpErrors.BadRequestBody.Write(w)
@@ -132,8 +137,8 @@ func handleKVPut(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, comman
 	w.WriteHeader(http.StatusOK)
 }
 
-func handleDemandsGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, command, event string) {
-	_, body, err := validateRequest(w, r, tx, job)
+func handleDemandsGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
+	job, _, body, err := validateRequest(w, r, tx)
 	if err != nil {
 		return
 	}
@@ -141,6 +146,7 @@ func handleDemandsGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, c
 		_ = body.Close()
 	}()
 
+	command := r.Header.Get(headerCommand)
 	rows, err := tx.Query(`
 		SELECT job AS requester_job, 
 		       name AS requester_job_command, 
@@ -148,10 +154,12 @@ func handleDemandsGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx, job, c
 		FROM job_commands 
 		WHERE demand_job = ? AND demand_command = ?`,
 		job, command)
+
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
+
 	defer func() {
 		_ = rows.Close()
 	}()

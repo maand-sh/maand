@@ -6,8 +6,9 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"maand/job_command"
+
+	"github.com/spf13/cobra"
 )
 
 var jobCommandCmd = &cobra.Command{
@@ -17,6 +18,7 @@ var jobCommandCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		flags := cmd.Flags()
 		verbose, _ := flags.GetBool("verbose")
+
 		concurrency, _ := flags.GetInt("concurrency")
 		if concurrency < 1 {
 			fmt.Println("concurrency must be at least 1")
@@ -25,7 +27,7 @@ var jobCommandCmd = &cobra.Command{
 		job := args[0]
 		command := args[1]
 
-		err := job_command.Execute(job, command, "direct", concurrency, verbose)
+		err := job_command.Execute(job, command, "cli", concurrency, verbose, []string{})
 		if err != nil {
 			fmt.Println(err)
 		}
@@ -34,6 +36,6 @@ var jobCommandCmd = &cobra.Command{
 
 func init() {
 	maandCmd.AddCommand(jobCommandCmd)
-	maandCmd.Flags().BoolP("verbose", "", false, "")
-	maandCmd.Flags().IntP("concurrency", "", 1, "")
+	jobCommandCmd.Flags().BoolP("verbose", "", false, "")
+	jobCommandCmd.Flags().IntP("concurrency", "", 1, "")
 }

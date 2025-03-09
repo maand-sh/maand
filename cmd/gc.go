@@ -5,9 +5,10 @@
 package cmd
 
 import (
-	"github.com/spf13/cobra"
 	"log"
 	"maand/gc"
+
+	"github.com/spf13/cobra"
 )
 
 var gcCmd = &cobra.Command{
@@ -16,7 +17,7 @@ var gcCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := gc.Collect()
 		if err != nil {
-			log.Println(err)
+			log.Fatalln(err)
 		}
 	},
 }

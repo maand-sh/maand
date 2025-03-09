@@ -11,12 +11,27 @@ import (
 	"maand/data"
 	"maand/job_command"
 	"maand/kv"
-	"maand/utils"
 	"maand/workspace"
 	"os"
 )
 
 func runPostBuild(tx *sql.Tx) error {
+	cancel := job_command.SetupServer(tx)
+	defer cancel()
+
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+
+	dockerClient, err := bucket.SetupBucketContainer(bucketID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = dockerClient.Stop()
+	}()
+
 	maxDeploymentSequence, err := data.GetMaxDeploymentSeq(tx)
 	if err != nil {
 		return err
@@ -38,7 +53,7 @@ func runPostBuild(tx *sql.Tx) error {
 				continue
 			}
 			for _, command := range postBuildCommands {
-				err := job_command.JobCommand(tx, job, command, "post_build", 1, true)
+				err := job_command.JobCommand(tx, dockerClient, job, command, "post_build", 1, true, []string{})
 				if err != nil {
 					return fmt.Errorf("post_build failed: %v", err)
 				}
@@ -98,6 +113,11 @@ func Execute() error {
 		return err
 	}
 
+	err = Container(tx)
+	if err != nil {
+		return err
+	}
+
 	// TODO: resource validation
 
 	err = kv.GetKVStore().GC(tx, 7)
@@ -130,15 +150,6 @@ func Execute() error {
 
 	if err := tx.Commit(); err != nil {
 		return data.NewDatabaseError(err)
-	}
-
-	if err = data.UpdateJournalModeDefault(db); err != nil {
-		return err
-	}
-
-	err = utils.ExecuteCommand([]string{"sync"})
-	if err != nil {
-		return err
 	}
 
 	return nil

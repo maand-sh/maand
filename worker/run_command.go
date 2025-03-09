@@ -8,50 +8,30 @@ import (
 	"fmt"
 	"maand/bucket"
 	"maand/utils"
-	"os"
 	"path"
-	"path/filepath"
 )
 
-func ExecuteCommand(workerIP string, commands []string, env []string) error {
-	conf, err := utils.GetMaandConf()
+func ExecuteCommand(dockerClient *bucket.DockerClient, workerIP string, commands []string, env []string) error {
+	commandScriptFileName, err := utils.GenerateCommandScript(commands, env)
 	if err != nil {
 		return err
 	}
-
-	user := conf.SSHUser
-	keyFilePath, _ := filepath.Abs(path.Join(bucket.SecretLocation, conf.SSHKeyFile))
-	useSudo := conf.UseSUDO
-
-	scriptPath, err := utils.GenerateScript(commands, env)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = os.Remove(scriptPath)
-	}()
-
-	sh := "bash"
-	if useSudo {
-		sh = "sudo bash"
-	}
-
-	sshCmd := fmt.Sprintf(
-		"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i '%s' %s@%s 'timeout 300 %s' < %s",
-		keyFilePath, user, workerIP, sh, scriptPath,
-	)
-
-	return utils.ExecuteShellCommand(sshCmd, workerIP)
+	return ExecuteFileCommand(dockerClient, workerIP, commandScriptFileName, env)
 }
 
-func ExecuteFileCommand(workerIP string, scriptPath string, env []string) error {
+func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, commandScriptFileName string, env []string) error {
 	conf, err := utils.GetMaandConf()
 	if err != nil {
 		return err
 	}
 
+	err = KeyScan(dockerClient, workerIP)
+	if err != nil {
+		return err
+	}
+
 	user := conf.SSHUser
-	keyFilePath, _ := filepath.Abs(path.Join(bucket.SecretLocation, conf.SSHKeyFile))
+	keyFilePath := path.Join("/bucket", "secrets", conf.SSHKeyFile)
 	useSudo := conf.UseSUDO
 
 	sh := "bash"
@@ -59,10 +39,16 @@ func ExecuteFileCommand(workerIP string, scriptPath string, env []string) error 
 		sh = "sudo bash"
 	}
 
-	sshCmd := fmt.Sprintf(
-		"ssh -q -o BatchMode=true -o ConnectTimeout=10 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i %s %s@%s '%s' < %s",
-		keyFilePath, user, workerIP, sh, scriptPath,
-	)
+	commandScriptBucketFilePath := path.Join("/bucket", "tmp", commandScriptFileName)
 
-	return utils.ExecuteShellCommand(sshCmd, workerIP)
+	sshCmd := fmt.Sprintf(
+		`ssh -o BatchMode=true -o ConnectTimeout=10 -i %s %s@%s 'timeout 300 %s' < %s`,
+		keyFilePath, user, workerIP, sh, commandScriptBucketFilePath)
+
+	err = dockerClient.Exec(workerIP, []string{sshCmd}, nil, true)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

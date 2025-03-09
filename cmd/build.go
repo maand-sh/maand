@@ -5,9 +5,10 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/spf13/cobra"
+	"log"
 	"maand/build"
+
+	"github.com/spf13/cobra"
 )
 
 var buildCmd = &cobra.Command{
@@ -16,7 +17,7 @@ var buildCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := build.Execute()
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalln(err)
 		}
 	},
 }

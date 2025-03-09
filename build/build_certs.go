@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"database/sql"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"maand/data"
 	"maand/kv"
 	"maand/utils"
+	"maand/workspace"
 	"math/big"
 	"net"
 	"os"
@@ -49,7 +51,7 @@ func Certs(tx *sql.Tx) error {
 		}
 
 		for _, job := range jobs {
-			rows, err := tx.Query("SELECT name FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
+			rows, err := tx.Query("SELECT name, pkcs8, subject FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
 			if err != nil {
 				return err
 			}
@@ -69,8 +71,14 @@ func Certs(tx *sql.Tx) error {
 					return err
 				}
 
-				var certName string
-				err = rows.Scan(&certName)
+				var certName, pkcs8, subject string
+				err = rows.Scan(&certName, &pkcs8, &subject)
+				if err != nil {
+					return err
+				}
+
+				var jobSubject workspace.CertSubject
+				err = json.Unmarshal([]byte(subject), &jobSubject)
 				if err != nil {
 					return err
 				}
@@ -131,7 +139,7 @@ func Certs(tx *sql.Tx) error {
 						return err
 					}
 
-					err = GenerateCert(jobDir, certName, pkix.Name{CommonName: "maand"}, workerIP, maandConf.CertsTTL)
+					err = GenerateCert(jobDir, certName, pkix.Name{CommonName: jobSubject.CommonName}, workerIP, maandConf.CertsTTL)
 					if err != nil {
 						return err
 					}

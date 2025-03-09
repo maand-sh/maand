@@ -7,8 +7,10 @@ package job_control
 import (
 	"fmt"
 	"log"
+	"maand/bucket"
 	"maand/data"
 	"maand/health_check"
+	"maand/job_command"
 	"maand/utils"
 	"maand/worker"
 	"strings"
@@ -30,12 +32,25 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 		_ = tx.Rollback()
 	}()
 
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+
+	dockerClient, err := bucket.SetupBucketContainer(bucketID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = dockerClient.Stop()
+	}()
+
 	workers, err := data.GetWorkers(tx, nil)
 	if err != nil {
 		return err
 	}
 
-	err = data.ValidateBucketUpdateSeq(tx, workers)
+	err = data.ValidateBucketUpdateSeq(tx, dockerClient, workers)
 	if err != nil {
 		return err
 	}
@@ -50,15 +65,11 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 		jobsFilter = strings.Split(jobsComma, ",")
 	}
 
+	// TODO : validate for invalidate job names
 	jobsFilter = utils.Unique(jobsFilter)
 	workersFilter = utils.Unique(workersFilter)
 
 	maxDeploymentSequence, err := data.GetMaxDeploymentSeq(tx)
-	if err != nil {
-		return err
-	}
-
-	bucketID, err := data.GetBucketID(tx)
 	if err != nil {
 		return err
 	}
@@ -95,6 +106,28 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 					fmt.Println(err)
 				}
 
+				commands, err := data.GetJobCommands(tx, job, "job_control")
+				if err != nil {
+					fmt.Println(err)
+				}
+
+				if len(commands) > 0 {
+					for _, command := range commands {
+						err = job_command.JobCommand(tx, dockerClient, job, command, "job_control", len(allocatedWorkers), true, []string{})
+						if err != nil {
+							fmt.Println(err)
+						}
+					}
+
+					if healthCheck {
+						err = health_check.HealthCheck(tx, dockerClient, true, job, true)
+						if err != nil {
+							fmt.Println(err)
+						}
+					}
+					return
+				}
+
 				parallelBatchCount, err := data.GetUpdateParallelCount(tx, job)
 				if err != nil {
 					log.Println(err)
@@ -120,7 +153,7 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 						go func(tWorkerIP string) {
 							defer waitWorker.Done()
 							defer func() { <-semaphore }() // Release slot after execution
-							err = worker.ExecuteCommand(workerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s %s --jobs %s", bucketID, bucketID, target, job)}, nil)
+							err = worker.ExecuteCommand(dockerClient, workerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s %s --jobs %s", bucketID, bucketID, target, job)}, nil)
 							if err != nil {
 								fmt.Println(err)
 							}
@@ -129,7 +162,7 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 
 					waitWorker.Wait()
 					if healthCheck {
-						err = health_check.HealthCheck(tx, true, job, true)
+						err = health_check.HealthCheck(tx, dockerClient, true, job, true)
 						if err != nil {
 							fmt.Println(err)
 						}
@@ -144,10 +177,6 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 
 	if err := tx.Commit(); err != nil {
 		return data.NewDatabaseError(err)
-	}
-
-	if err = data.UpdateJournalModeDefault(db); err != nil {
-		return err
 	}
 
 	return nil

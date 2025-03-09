@@ -5,21 +5,23 @@
 package cmd
 
 import (
-	"os"
+	"log"
+	"maand/cat"
 
 	"github.com/spf13/cobra"
 )
 
-var maandCmd = &cobra.Command{
-	Use:   "maand",
-	Short: "Maand is a agent less workload orchestrator",
+var infoCmd = &cobra.Command{
+	Use:   "info",
+	Short: "Information about the bucket",
 	Run: func(cmd *cobra.Command, args []string) {
-		_ = cmd.Usage()
+		err := cat.Info()
+		if err != nil {
+			log.Fatalln(err)
+		}
 	},
 }
 
-func Execute() {
-	if err := maandCmd.Execute(); err != nil {
-		os.Exit(1)
-	}
+func init() {
+	maandCmd.AddCommand(infoCmd)
 }

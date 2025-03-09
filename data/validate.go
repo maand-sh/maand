@@ -7,11 +7,12 @@ package data
 import (
 	"database/sql"
 	"fmt"
+	"maand/bucket"
 	"maand/worker"
 	"sync"
 )
 
-func ValidateBucketUpdateSeq(tx *sql.Tx, workers []string) error {
+func ValidateBucketUpdateSeq(tx *sql.Tx, dockerClient *bucket.DockerClient, workers []string) error {
 	bucketID, err := GetBucketID(tx)
 	if err != nil {
 		return err
@@ -35,7 +36,7 @@ func ValidateBucketUpdateSeq(tx *sql.Tx, workers []string) error {
 		}
 		go func(tWorkerID, tWorkerIP string) {
 			defer wait.Done()
-			err := worker.ExecuteCommand(tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/worker.py %s %s %d", bucketID, bucketID, tWorkerID, updateSeq)}, nil)
+			err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/worker.py %s %s %d", bucketID, bucketID, tWorkerID, updateSeq)}, nil)
 			if err != nil {
 				mu.Lock()
 				errs[tWorkerIP] = err

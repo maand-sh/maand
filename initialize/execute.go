@@ -25,6 +25,9 @@ import (
 //go:embed Dockerfile
 var dockerFile []byte
 
+//go:embed requirements.txt
+var requirementsFile []byte
+
 var BucketAlreadyInitializedErr = fmt.Errorf("maand is already initialized in this directory")
 
 func Execute() error {
@@ -116,7 +119,13 @@ func Execute() error {
 		}
 	}
 
-	dockerFilePath := path.Join(bucket.Location, "Dockerfile")
+	dockerFolder := path.Join(bucket.WorkspaceLocation, "docker")
+	err = os.MkdirAll(dockerFolder, os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("unable to create docker directory: %w", err)
+	}
+
+	dockerFilePath := path.Join(dockerFolder, "Dockerfile")
 	if _, err := os.Stat(dockerFilePath); os.IsNotExist(err) {
 		err = os.WriteFile(dockerFilePath, dockerFile, os.ModePerm)
 		if err != nil {
@@ -124,9 +133,9 @@ func Execute() error {
 		}
 	}
 
-	requirementFilePath := path.Join(bucket.Location, "requirements.txt")
+	requirementFilePath := path.Join(dockerFolder, "requirements.txt")
 	if _, err := os.Stat(requirementFilePath); os.IsNotExist(err) {
-		err = os.WriteFile(requirementFilePath, []byte(""), os.ModePerm)
+		err = os.WriteFile(requirementFilePath, requirementsFile, os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("unable to create requirements.txt, %w", err)
 		}
@@ -137,12 +146,7 @@ func Execute() error {
 		return data.NewDatabaseError(err)
 	}
 
-	err = data.UpdateJournalModeDefault(db)
-	if err != nil {
-		return err
-	}
-
-	return utils.ExecuteCommand([]string{"sync"})
+	return nil
 }
 
 func generateCA(path string, subject pkix.Name, ttlDays int) error {

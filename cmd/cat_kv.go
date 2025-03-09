@@ -5,9 +5,10 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/spf13/cobra"
+	"log"
 	"maand/cat"
+
+	"github.com/spf13/cobra"
 )
 
 var catKVCmd = &cobra.Command{
@@ -16,7 +17,7 @@ var catKVCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := cat.KV()
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalln(err)
 		}
 	},
 }

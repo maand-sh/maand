@@ -1,10 +1,11 @@
 package main
 
 import (
-	_ "embed"
+	"log"
 	"maand/cmd"
 )
 
 func main() {
+	log.Default().SetFlags(log.Lmsgprefix)
 	cmd.Execute()
 }
