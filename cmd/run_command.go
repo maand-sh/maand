@@ -6,8 +6,9 @@ package cmd
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
 	"maand/run_command"
+
+	"github.com/spf13/cobra"
 )
 
 var runCommandCmd = &cobra.Command{
@@ -18,7 +19,7 @@ var runCommandCmd = &cobra.Command{
 		workerStr, _ := flags.GetString("workers")
 		labelStr, _ := flags.GetString("labels")
 		concurrency, _ := flags.GetInt("concurrency")
-		shCommand, _ := flags.GetString("cmd")
+		shCommand := args[0]
 		disableCheck, _ := flags.GetBool("disable-bucket-update-check")
 		healthCheck, _ := flags.GetBool("health_check")
 
@@ -31,11 +32,9 @@ var runCommandCmd = &cobra.Command{
 
 func init() {
 	maandCmd.AddCommand(runCommandCmd)
-	runCommandCmd.Flags().StringP("cmd", "", "", "inline command")
 	runCommandCmd.Flags().StringP("workers", "w", "", "comma seperated workers")
 	runCommandCmd.Flags().StringP("labels", "l", "", "comma seperated labels")
-	runCommandCmd.Flags().IntP("concurrency", "c", 2, "concurrency")
-	runCommandCmd.Flags().BoolP("disable-bucket-update-check", "d", false, "disable cluster check")
+	runCommandCmd.Flags().IntP("concurrency", "c", 1, "concurrency")
 	runCommandCmd.Flags().BoolP("health_check", "", false, "runs health check")
 	runCommandCmd.Flags().BoolP("local", "", false, "runs local")
 }

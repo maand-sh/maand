@@ -28,6 +28,10 @@ type AllocationCommand struct {
 	} `json:"demands"`
 }
 
+type CertSubject struct {
+	CommonName string `json:"common_name"`
+}
+
 type Manifest struct {
 	Version   string   `json:"version"`
 	Selectors []string `json:"selectors"`
@@ -44,8 +48,8 @@ type Manifest struct {
 	} `json:"resources"`
 	Commands map[string]AllocationCommand `json:"commands"`
 	Certs    map[string]struct {
-		PKCS8   bool   `json:"pkcs8"`
-		Subject string `json:"subject"`
+		PKCS8   bool        `json:"pkcs8"`
+		Subject CertSubject `json:"subject"`
 	} `json:"certs"`
 	UpdateParallelCount int `json:"update_parallel_count"`
 }

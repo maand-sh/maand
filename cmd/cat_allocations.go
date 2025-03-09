@@ -5,9 +5,10 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/spf13/cobra"
+	"log"
 	"maand/cat"
+
+	"github.com/spf13/cobra"
 )
 
 var catAllocationsCmd = &cobra.Command{
@@ -16,7 +17,7 @@ var catAllocationsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		err := cat.Allocations()
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalln(err)
 		}
 	},
 }

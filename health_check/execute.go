@@ -7,6 +7,7 @@ package health_check
 import (
 	"database/sql"
 	"fmt"
+	"maand/bucket"
 	"maand/data"
 	"maand/job_command"
 	"maand/utils"
@@ -15,7 +16,7 @@ import (
 	"time"
 )
 
-func HealthCheck(tx *sql.Tx, wait bool, job string, verbose bool) error {
+func HealthCheck(tx *sql.Tx, dockerClient *bucket.DockerClient, wait bool, job string, verbose bool) error {
 	commands, err := data.GetJobCommands(tx, job, "health_check")
 	if err != nil {
 		return err
@@ -28,7 +29,7 @@ func HealthCheck(tx *sql.Tx, wait bool, job string, verbose bool) error {
 
 	healthCheckFunc := func() error {
 		for _, cmd := range commands {
-			err := job_command.JobCommand(tx, job, cmd, "health_check", 1, verbose)
+			err := job_command.JobCommand(tx, dockerClient, job, cmd, "health_check", 1, verbose, []string{})
 			if err != nil {
 				return err
 			}
@@ -77,15 +78,21 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 		jobsFilter = strings.Split(strings.Trim(jobsComma, ""), ",")
 	}
 
-	//workers, err := data.GetWorkers(tx, nil)
-	//if err != nil {
-	//	return err
-	//}
-	//
-	//err = data.ValidateBucketUpdateSeq(tx, workers)
-	//if err != nil {
-	//	return err
-	//}
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+
+	dockerClient, err := bucket.SetupBucketContainer(bucketID)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = dockerClient.Stop()
+	}()
+
+	cancel := job_command.SetupServer(tx)
+	defer cancel()
 
 	jobs, err := data.GetJobs(tx)
 	if err != nil {
@@ -105,7 +112,7 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 
 		go func(tJob string) {
 			defer wg.Done()
-			hcErr := HealthCheck(tx, wait, tJob, verbose)
+			hcErr := HealthCheck(tx, dockerClient, wait, tJob, verbose)
 			if hcErr != nil {
 				mu.Lock()
 				errJobs[tJob] = hcErr
@@ -120,13 +127,8 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 	}
 
 	//TODO: deal with errors
-	//if len(errJobs) > 0 {
-	//	return fmt.Errorf("%v", errJobs)
-	//}
-
-	err = data.UpdateJournalModeDefault(db)
-	if err != nil {
-		return err
+	if len(errJobs) > 0 {
+		return fmt.Errorf("%v", errJobs)
 	}
 
 	return nil

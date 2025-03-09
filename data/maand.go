@@ -22,12 +22,7 @@ func GetDatabase(failIfNotFound bool) (*sql.DB, error) {
 		}
 	}
 
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_busy_timeout=5000&_locking_mode=NORMAL&_txlock=deferred", DbFile))
-	if err != nil {
-		return nil, NewDatabaseError(err)
-	}
-
-	err = UpdateJournalModeWAL(db)
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_busy_timeout=5000", DbFile))
 	if err != nil {
 		return nil, NewDatabaseError(err)
 	}
@@ -117,22 +112,6 @@ func GetMaxDeploymentSeq(tx *sql.Tx) (int, error) {
 		return -1, NewDatabaseError(err)
 	}
 	return updateSeq, nil
-}
-
-func UpdateJournalModeDefault(db *sql.DB) error {
-	_, err := db.Exec("PRAGMA journal_mode = DELETE;")
-	if err != nil {
-		return NewDatabaseError(err)
-	}
-	return nil
-}
-
-func UpdateJournalModeWAL(db *sql.DB) error {
-	_, err := db.Exec("PRAGMA journal_mode = WAL;")
-	if err != nil {
-		return NewDatabaseError(err)
-	}
-	return nil
 }
 
 func GetAllowedNamespaces(job, workerIP string) []string {

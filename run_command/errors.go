@@ -16,9 +16,15 @@ type RunCommandError struct {
 
 func (e *RunCommandError) Error() string {
 	var message []string
+
 	for workerIP, err := range e.Errs {
-		if errors.Unwrap(err).Error() == "exit status 255" {
+		unwrappedErr := errors.Unwrap(err)
+		if unwrappedErr != nil && unwrappedErr.Error() == "exit status 255" {
 			message = append(message, fmt.Sprintf("worker: %s, timed out", workerIP))
+		}
+
+		if err != nil && err.Error() == "exit status 1" {
+			message = append(message, fmt.Sprintf("worker: %s, exit status 1", workerIP))
 		}
 	}
 	return fmt.Sprintf("Command failed %s", strings.Join(message, "; "))

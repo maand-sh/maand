@@ -1,3 +1,7 @@
+// Copyright 2025 Kiruba Sankar Swaminathan. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 package job_command
 
 import (
@@ -5,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maand/data"
+	"maand/utils"
 	"net/http"
 )
 
@@ -39,11 +45,10 @@ func validateKVRequest(req kvRequest, job, workerIP string, isPut bool) *httpErr
 			return httpErrors.InvalidNamespace
 		}
 	} else {
-		// TODO: limit scope for kv access.
-		//allowed := data.GetAllowedNamespaces(job, workerIP)
-		//if len(utils.Intersection(allowed, []string{req.Namespace})) == 0 {
-		//	return httpErrors.InvalidNamespace
-		//}
+		allowed := data.GetAllowedNamespaces(job, workerIP)
+		if len(utils.Intersection(allowed, []string{req.Namespace})) == 0 {
+			return httpErrors.InvalidNamespace
+		}
 	}
 	return nil
 }

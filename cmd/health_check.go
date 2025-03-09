@@ -5,9 +5,10 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/spf13/cobra"
+	"log"
 	"maand/health_check"
+
+	"github.com/spf13/cobra"
 )
 
 var healthCheckCmd = &cobra.Command{
@@ -20,7 +21,7 @@ var healthCheckCmd = &cobra.Command{
 		verbose, _ := flags.GetBool("verbose")
 		err := health_check.Execute(wait, verbose, jobsComma)
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalln(err)
 		}
 	},
 }

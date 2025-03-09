@@ -135,7 +135,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			if len(command.ExecutedOn) == 0 {
 				return fmt.Errorf("job %s, job_command %s required have a executed_on", job, command.Name)
 			}
-			diffs := utils.Difference(command.ExecutedOn, []string{"post_build", "health_check", "direct", "pre_deploy", "post_deploy"})
+			diffs := utils.Difference(command.ExecutedOn, []string{"post_build", "health_check", "cli", "pre_deploy", "post_deploy", "job_control"})
 			if len(diffs) > 0 {
 				return fmt.Errorf("job %s, job_command %s not valid executed_on %v", job, command.Name, diffs)
 			}
@@ -211,7 +211,12 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		query = `INSERT INTO job_certs (job_id, name, pkcs8, subject) VALUES (?, ?, ?, ?)`
 		for name, config := range manifest.Certs {
-			_, err = tx.Exec(query, jobID, name, config.PKCS8, config.Subject)
+
+			subject, err := json.Marshal(config.Subject)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(query, jobID, name, config.PKCS8, subject)
 			if err != nil {
 				return data.NewDatabaseError(err)
 			}

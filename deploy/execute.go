@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -49,6 +50,8 @@ type AllocationData struct {
 	AllocationID string `json:"allocation_id"`
 	Job          string `json:"job"`
 	WorkerData
+	BucketPath string
+	JobPath    string
 }
 
 func updateCerts(tx *sql.Tx, job, workerIP string) error {
@@ -60,6 +63,12 @@ func updateCerts(tx *sql.Tx, job, workerIP string) error {
 		return data.NewDatabaseError(err)
 	}
 
+	certsDir := path.Join(jobDir, "certs")
+	err = os.MkdirAll(certsDir, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
 	for rows.Next() {
 		var name string
 		err = rows.Scan(&name)
@@ -67,13 +76,7 @@ func updateCerts(tx *sql.Tx, job, workerIP string) error {
 			return data.NewDatabaseError(err)
 		}
 
-		certsDir := path.Join(jobDir, "certs")
-		err := os.MkdirAll(certsDir, os.ModePerm)
-		if err != nil {
-			return err
-		}
-
-		pubCert, err := kv.GetKVStore().Get(tx, fmt.Sprintf("maand/worker/%s", workerIP), fmt.Sprintf("certs/%s.crt", name))
+		pubCert, err := kv.GetKVStore().Get(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), fmt.Sprintf("certs/%s.crt", name))
 		if err != nil {
 			return err
 		}
@@ -83,7 +86,7 @@ func updateCerts(tx *sql.Tx, job, workerIP string) error {
 			return err
 		}
 
-		priCert, err := kv.GetKVStore().Get(tx, fmt.Sprintf("maand/worker/%s", workerIP), fmt.Sprintf("certs/%s.key", name))
+		priCert, err := kv.GetKVStore().Get(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), fmt.Sprintf("certs/%s.key", name))
 		if err != nil {
 			return err
 		}
@@ -93,6 +96,17 @@ func updateCerts(tx *sql.Tx, job, workerIP string) error {
 			return err
 		}
 	}
+
+	pubCaCert, err := kv.GetKVStore().Get(tx, "maand/worker", "certs/ca.crt")
+	if err != nil {
+		return err
+	}
+
+	err = os.WriteFile(path.Join(jobDir, "certs", "ca.crt"), []byte(pubCaCert), os.ModePerm)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -143,6 +157,32 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
 		"join":  strings.Join,
+		"add": func(a, b int) int {
+			return a + b
+		},
+		"sub": func(a, b int) int {
+			return a - b
+		},
+		"mul": func(a, b int) int {
+			return a * b
+		},
+		"div": func(a, b int) int {
+			return a / b
+		},
+		"int": func(s interface{}) int {
+			switch v := s.(type) {
+			case int:
+				return v
+			case string:
+				i, err := strconv.Atoi(v)
+				if err != nil {
+					panic(err)
+				}
+				return i
+			default:
+				panic("expected a string or an int")
+			}
+		},
 	}
 
 	workerData, err := getWorkerData(tx, workerIP)
@@ -155,10 +195,14 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		return err
 	}
 
+	bucketID, err := data.GetBucketID(tx)
+
 	templateData := AllocationData{
 		AllocationID: allocID,
 		Job:          job,
 		WorkerData:   workerData,
+		BucketPath:   fmt.Sprintf("/opt/worker/%s", bucketID),
+		JobPath:      fmt.Sprintf("/opt/worker/%s/jobs/%s", bucketID, job),
 	}
 
 	for _, jobTemplate := range jobTemplates {
@@ -346,7 +390,7 @@ func prepareJobsFiles(tx *sql.Tx, jobs []string) error {
 	return nil
 }
 
-func executePreJobCommands(tx *sql.Tx, jobs []string) error {
+func executePreJobCommands(tx *sql.Tx, dockerClient *bucket.DockerClient, jobs []string) error {
 	for _, job := range jobs {
 		commands, err := data.GetJobCommands(tx, job, "pre_deploy")
 		if err != nil {
@@ -357,7 +401,7 @@ func executePreJobCommands(tx *sql.Tx, jobs []string) error {
 			continue
 		}
 		for _, command := range commands {
-			err := job_command.JobCommand(tx, job, command, "pre_deploy", 1, true)
+			err := job_command.JobCommand(tx, dockerClient, job, command, "pre_deploy", 1, true, []string{})
 			if err != nil {
 				return err
 			}
@@ -366,21 +410,19 @@ func executePreJobCommands(tx *sql.Tx, jobs []string) error {
 	return nil
 }
 
-func executePostJobCommands(tx *sql.Tx, jobs []string) error {
-	for _, job := range jobs {
-		commands, err := data.GetJobCommands(tx, job, "post_deploy")
+func executePostJobCommands(tx *sql.Tx, dockerClient *bucket.DockerClient, job string) error {
+	commands, err := data.GetJobCommands(tx, job, "post_deploy")
+	if err != nil {
+		return err
+	}
+
+	if len(commands) == 0 {
+		return nil
+	}
+	for _, command := range commands {
+		err := job_command.JobCommand(tx, dockerClient, job, command, "post_deploy", 1, true, []string{})
 		if err != nil {
 			return err
-		}
-
-		if len(commands) == 0 {
-			continue
-		}
-		for _, command := range commands {
-			err := job_command.JobCommand(tx, job, command, "post_deploy", 1, true)
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -436,49 +478,47 @@ func updateAllocationHash(tx *sql.Tx, jobs []string) error {
 	return nil
 }
 
-func promoteAllocationHash(tx *sql.Tx, jobs []string) error {
-	for _, job := range jobs {
-		allocatedWorkers, err := data.GetAllocatedWorkers(tx, job)
+func promoteAllocationHash(tx *sql.Tx, job string) error {
+	allocatedWorkers, err := data.GetAllocatedWorkers(tx, job)
+	if err != nil {
+		return err
+	}
+
+	for _, workerIP := range allocatedWorkers {
+		allocID, err := data.GetAllocationID(tx, workerIP, job)
 		if err != nil {
 			return err
 		}
 
-		for _, workerIP := range allocatedWorkers {
-			allocID, err := data.GetAllocationID(tx, workerIP, job)
-			if err != nil {
-				return err
-			}
+		disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
+		if err != nil {
+			return err
+		}
 
-			disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
+		if disabled == 1 {
+			_, err := tx.Exec("UPDATE hash SET previous_hash = NULL WHERE namespace = ? AND key = ?", fmt.Sprintf("%s_allocation", job), allocID)
 			if err != nil {
 				return err
 			}
-
-			if disabled == 1 {
-				_, err := tx.Exec("UPDATE hash SET previous_hash = NULL WHERE namespace = ? AND key = ?", fmt.Sprintf("%s_allocation", job), allocID)
-				if err != nil {
-					return err
-				}
-				continue
-			}
-			err = data.PromoteHash(tx, fmt.Sprintf("%s_allocation", job), allocID)
-			if err != nil {
-				return err
-			}
+			continue
+		}
+		err = data.PromoteHash(tx, fmt.Sprintf("%s_allocation", job), allocID)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func syncWorkerFiles(bucketID, workerIP string) error {
-	err := worker.ExecuteCommand(workerIP, []string{fmt.Sprintf("mkdir -p /opt/worker/%s", bucketID)}, nil)
+func syncWorkerFiles(dockerClient *bucket.DockerClient, bucketID, workerIP string) error {
+	err := worker.ExecuteCommand(dockerClient, workerIP, []string{fmt.Sprintf("mkdir -p /opt/worker/%s", bucketID)}, nil)
 	if err != nil {
 		return err
 	}
-	return rsync(bucketID, workerIP)
+	return rsync(dockerClient, bucketID, workerIP)
 }
 
-func syncWorkers(bucketID string, workers []string, jobs []string, applyRules bool) error {
+func syncWorkers(dockerClient *bucket.DockerClient, bucketID string, workers []string, jobs []string, applyRules bool) error {
 	var wait sync.WaitGroup
 	semaphore := make(chan struct{}, len(workers))
 
@@ -503,9 +543,9 @@ func syncWorkers(bucketID string, workers []string, jobs []string, applyRules bo
 		go func(tBucketID, tWorkerIP string) {
 			defer wait.Done()
 			defer func() { <-semaphore }()
-			err = syncWorkerFiles(tBucketID, tWorkerIP)
+			err = syncWorkerFiles(dockerClient, tBucketID, tWorkerIP)
 			if err != nil {
-				log.Printf("rsync failed on worker %s", workerIP)
+				log.Printf("rsync failed on worker %s, %v", workerIP, err)
 			}
 		}(bucketID, workerIP)
 	}
@@ -514,141 +554,116 @@ func syncWorkers(bucketID string, workers []string, jobs []string, applyRules bo
 	return nil
 }
 
-func handleNewAllocations(tx *sql.Tx, bucketID string, jobs []string) error {
-	var wait sync.WaitGroup
-
-	for _, job := range jobs {
-		wait.Add(1)
-
-		go func(tJob string) {
-			defer wait.Done()
-
-			newAllocations, err := data.GetNewAllocations(tx, tJob)
-			if err != nil {
-				fmt.Print(err.Error())
-			}
-
-			if len(newAllocations) > 0 {
-
-				var workerWait sync.WaitGroup
-				var parallelBatchCount = len(newAllocations)
-
-				workerCount := len(newAllocations)
-				semaphore := make(chan struct{}, parallelBatchCount) // Limit to 2 workers at a time
-
-				for i := 0; i < workerCount; i += parallelBatchCount {
-					batchSize := min(parallelBatchCount, workerCount-i) // Process up to 2 workers at a time
-					for j := i; j < batchSize; j++ {
-						workerIP := newAllocations[i+j]
-
-						disabled, err := data.IsAllocationDisabled(tx, workerIP, tJob)
-						if err != nil {
-							fmt.Print(err)
-						}
-
-						if disabled == 1 {
-							continue
-						}
-
-						workerWait.Add(1)
-						semaphore <- struct{}{} // Acquire slot
-
-						go func(tWorkerIP string) {
-							defer workerWait.Done()
-							defer func() { <-semaphore }() // Release slot after execution
-
-							err := worker.ExecuteCommand(tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s start --jobs %s", bucketID, bucketID, tJob)}, nil)
-							if err != nil {
-								log.Printf("unable to start allocation. job %s, worker %s, reason %v", tJob, tWorkerIP, err)
-							}
-						}(workerIP)
-					}
-
-					workerWait.Wait()
-
-					err := health_check.HealthCheck(tx, true, tJob, true)
-					if err != nil {
-						log.Printf("Error in health check: %v", err)
-					}
-				}
-			}
-		}(job)
+func handleNewAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketID string, job string) error {
+	newAllocations, err := data.GetNewAllocations(tx, job)
+	if err != nil {
+		return err
 	}
 
-	wait.Wait()
+	if len(newAllocations) > 0 {
 
-	return nil
-}
+		var workerWait sync.WaitGroup
+		var parallelBatchCount = len(newAllocations)
 
-func handleUpdatedAllocations(tx *sql.Tx, bucketID string, jobs []string) error {
-	var wait sync.WaitGroup
-	for _, job := range jobs {
-		wait.Add(1)
+		workerCount := len(newAllocations)
+		semaphore := make(chan struct{}, parallelBatchCount) // Limit to 2 workers at a time
 
-		go func(tJob string) {
-			defer wait.Done()
+		for i := 0; i < workerCount; i += parallelBatchCount {
+			batchSize := min(parallelBatchCount, workerCount-i) // Process up to 2 workers at a time
+			for j := i; j < batchSize; j++ {
+				workerIP := newAllocations[i+j]
 
-			updatedAllocations, err := data.GetUpdatedAllocations(tx, tJob)
-			if err != nil {
-				fmt.Print(err.Error())
-			}
-
-			if len(updatedAllocations) > 0 {
-				parallelBatchCount, err := data.GetUpdateParallelCount(tx, job)
+				disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
 				if err != nil {
-					fmt.Print(err.Error())
+					return err
 				}
 
-				var waitWorker sync.WaitGroup
-				workerCount := len(updatedAllocations)
-				semaphore := make(chan struct{}, parallelBatchCount) // Limit to parallelBatchCount workers at a time
+				if disabled == 1 {
+					continue
+				}
 
-				for i := 0; i < workerCount; i += parallelBatchCount {
-					// Ensure you don't exceed the bounds of the updatedAllocations slice
-					batchSize := min(parallelBatchCount, workerCount-i)
-					for j := 0; j < batchSize; j++ {
-						workerIP := updatedAllocations[i+j]
-						disabled, err := data.IsAllocationDisabled(tx, workerIP, tJob)
-						if err != nil {
-							fmt.Print(err)
-						}
+				workerWait.Add(1)
+				semaphore <- struct{}{} // Acquire slot
 
-						if disabled == 1 {
-							continue
-						}
+				go func(tWorkerIP string) {
+					defer workerWait.Done()
+					defer func() { <-semaphore }() // Release slot after execution
 
-						waitWorker.Add(1)
-						semaphore <- struct{}{} // Acquire slot
-
-						go func(tWorkerIP string) {
-							defer waitWorker.Done()
-							defer func() { <-semaphore }() // Release slot after execution
-
-							err := worker.ExecuteCommand(tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s restart --jobs %s", bucketID, bucketID, tJob)}, nil)
-							if err != nil {
-								log.Printf("unable to restart allocation. job %s, worker %s, reason %v", tJob, tWorkerIP, err)
-							}
-						}(workerIP)
-					}
-
-					waitWorker.Wait()
-					err := health_check.HealthCheck(tx, true, tJob, true)
+					err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s start --jobs %s", bucketID, bucketID, job)}, nil)
 					if err != nil {
-						log.Printf("Error during health check for job %s: %v", tJob, err)
+						log.Printf("unable to start allocation. job %s, worker %s, reason %v", job, tWorkerIP, err)
 					}
-				}
+				}(workerIP)
 			}
-		}(job)
-	}
-	wait.Wait()
 
+			workerWait.Wait()
+
+			err := health_check.HealthCheck(tx, dockerClient, true, job, true)
+			if err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
-func handleStoppedAllocations(tx *sql.Tx, bucketID string, jobs []string) error {
+func handleUpdatedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketID string, job string) error {
+	updatedAllocations, err := data.GetUpdatedAllocations(tx, job)
+	if err != nil {
+		return err
+	}
+
+	if len(updatedAllocations) > 0 {
+		parallelBatchCount, err := data.GetUpdateParallelCount(tx, job)
+		if err != nil {
+			return err
+		}
+
+		var waitWorker sync.WaitGroup
+		workerCount := len(updatedAllocations)
+		semaphore := make(chan struct{}, parallelBatchCount) // Limit to parallelBatchCount workers at a time
+
+		for i := 0; i < workerCount; i += parallelBatchCount {
+			batchSize := min(parallelBatchCount, workerCount-i)
+			for j := 0; j < batchSize; j++ {
+				workerIP := updatedAllocations[i+j]
+				disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
+				if err != nil {
+					return err
+				}
+
+				if disabled == 1 {
+					continue
+				}
+
+				waitWorker.Add(1)
+				semaphore <- struct{}{} // Acquire slot
+
+				go func(tWorkerIP string) {
+					defer waitWorker.Done()
+					defer func() { <-semaphore }() // Release slot after execution
+
+					err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s restart --jobs %s", bucketID, bucketID, job)}, nil)
+					if err != nil {
+						log.Printf("unable to restart allocation. job %s, worker %s, reason %v", job, tWorkerIP, err)
+					}
+				}(workerIP)
+			}
+
+			waitWorker.Wait()
+			err := health_check.HealthCheck(tx, dockerClient, true, job, true)
+			if err != nil {
+				return fmt.Errorf("error during health check for job %s: %v", job, err)
+			}
+		}
+	}
+	return nil
+}
+
+func handleStoppedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketID string, jobs []string) error {
 
 	stopAllocation := func(tWorkerIP string, tJob string) error {
-		err := worker.ExecuteCommand(tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s stop --jobs %s", bucketID, bucketID, tJob)}, nil)
+		err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s stop --jobs %s", bucketID, bucketID, tJob)}, nil)
 		return err
 	}
 
@@ -697,7 +712,7 @@ func handleStoppedAllocations(tx *sql.Tx, bucketID string, jobs []string) error 
 
 		if len(allocatedWorkers) != len(old) {
 			// run health check only if more than on one active allocation available
-			err := health_check.HealthCheck(tx, true, job, true)
+			err := health_check.HealthCheck(tx, dockerClient, true, job, true)
 			if err != nil {
 				return err
 			}
@@ -732,7 +747,6 @@ func UpdateSeq(db *sql.DB) error {
 }
 
 func Execute(jobsFilter []string) error {
-
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return err
@@ -758,18 +772,6 @@ func Execute(jobsFilter []string) error {
 		return data.NewDatabaseError(err)
 	}
 
-	newTx := func() error {
-		err = tx.Commit()
-		if err != nil {
-			return data.NewDatabaseError(err)
-		}
-		tx, err = db.Begin()
-		if err != nil {
-			return data.NewDatabaseError(err)
-		}
-		return nil
-	}
-
 	bucketID, err := data.GetBucketID(tx)
 	if err != nil {
 		return err
@@ -785,6 +787,19 @@ func Execute(jobsFilter []string) error {
 		return err
 	}
 
+	dockerClient, err := bucket.SetupBucketContainer(bucketID)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = dockerClient.Stop()
+	}()
+
+	cancel := job_command.SetupServer(tx)
+	defer cancel()
+
+	var noErrs = true
 	// removing all jobs fails on deps seq
 	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
 
@@ -801,7 +816,7 @@ func Execute(jobsFilter []string) error {
 			jobs = append(jobs, job)
 		}
 
-		err = handleStoppedAllocations(tx, bucketID, jobs)
+		err = handleStoppedAllocations(tx, dockerClient, bucketID, jobs)
 		if err != nil {
 			return err
 		}
@@ -811,7 +826,7 @@ func Execute(jobsFilter []string) error {
 			return err
 		}
 
-		err = executePreJobCommands(tx, jobs)
+		err = executePreJobCommands(tx, dockerClient, jobs)
 		if err != nil {
 			return err
 		}
@@ -821,12 +836,7 @@ func Execute(jobsFilter []string) error {
 			return err
 		}
 
-		err = syncWorkers(bucketID, workers, jobs, true)
-		if err != nil {
-			return err
-		}
-
-		err = newTx()
+		err = syncWorkers(dockerClient, bucketID, workers, jobs, true)
 		if err != nil {
 			return err
 		}
@@ -836,51 +846,111 @@ func Execute(jobsFilter []string) error {
 			return err
 		}
 
-		err = newTx()
-		if err != nil {
-			return err
+		var wait sync.WaitGroup
+		var mu sync.Mutex
+		var errs []error
+
+		appendErr := func(err error) {
+			mu.Lock()
+			errs = append(errs, err)
+			mu.Unlock()
 		}
 
-		err = handleNewAllocations(tx, bucketID, jobs)
-		if err != nil {
-			return err
+		for _, job := range jobs {
+			wait.Add(1)
+
+			go func(tJob string) {
+				defer wait.Done()
+
+				commands, err := data.GetJobCommands(tx, job, "job_control")
+				if err != nil {
+					fmt.Println(err)
+					appendErr(err)
+				}
+
+				if len(commands) != 0 {
+					allocations, err := data.GetAllocatedWorkers(tx, tJob)
+					if err != nil {
+						fmt.Println(err)
+						appendErr(err)
+					}
+
+					newAllocations, err := data.GetNewAllocations(tx, job)
+					if err != nil {
+						fmt.Println(err)
+						appendErr(err)
+					}
+
+					updatedAllocations, err := data.GetUpdatedAllocations(tx, job)
+					if err != nil {
+						fmt.Println(err)
+						appendErr(err)
+					}
+
+					for _, command := range commands {
+						err := job_command.JobCommand(tx, dockerClient, job, command, "job_control", len(allocations), false, []string{
+							fmt.Sprintf("UPDATED_ALLOCATIONS=%s", strings.Join(updatedAllocations, ",")),
+							fmt.Sprintf("NEW_ALLOCATIONS=%s", strings.Join(newAllocations, ",")),
+						})
+						if err != nil {
+							fmt.Printf("error executing job_control for job %s: %v", tJob, err)
+							appendErr(err)
+						}
+					}
+
+					err = health_check.HealthCheck(tx, dockerClient, true, job, true)
+					if err != nil {
+						fmt.Println(err)
+						appendErr(err)
+					}
+				} else {
+					err = handleNewAllocations(tx, dockerClient, bucketID, tJob)
+					if err != nil {
+						fmt.Println(err)
+						appendErr(err)
+					}
+
+					err = handleUpdatedAllocations(tx, dockerClient, bucketID, tJob)
+					if err != nil {
+						fmt.Println(err)
+						appendErr(err)
+					}
+				}
+
+				err = executePostJobCommands(tx, dockerClient, tJob)
+				if err != nil {
+					fmt.Println(err)
+					appendErr(err)
+				}
+
+				err = promoteAllocationHash(tx, tJob)
+				if err != nil {
+					fmt.Println(err)
+					appendErr(err)
+				}
+
+			}(job)
 		}
 
-		err = handleUpdatedAllocations(tx, bucketID, jobs)
-		if err != nil {
-			return err
-		}
+		wait.Wait()
 
-		err = executePostJobCommands(tx, jobs)
-		if err != nil {
-			return err
-		}
-
-		err = newTx()
-		if err != nil {
-			return err
-		}
-
-		err = promoteAllocationHash(tx, jobs)
-		if err != nil {
-			return err
-		}
-
-		err = newTx()
-		if err != nil {
-			return err
+		if len(errs) > 0 {
+			noErrs = false
+			break
 		}
 	}
 
-	for _, workerIP := range workers {
-		jobs, err := data.GetAllocatedJobs(tx, workerIP)
-		if err != nil {
-			return err
-		}
+	if noErrs {
+		for _, workerIP := range workers {
+			jobs, err := data.GetAllocatedJobs(tx, workerIP)
+			if err != nil {
+				return err
+			}
 
-		err = syncWorkers(bucketID, workers, jobs, false)
-		if err != nil {
-			return err
+			err = syncWorkers(dockerClient, bucketID, workers, jobs, false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -888,9 +958,5 @@ func Execute(jobsFilter []string) error {
 		return data.NewDatabaseError(err)
 	}
 
-	if err = data.UpdateJournalModeDefault(db); err != nil {
-		return err
-	}
-
-	return utils.ExecuteCommand([]string{"sync"})
+	return nil
 }

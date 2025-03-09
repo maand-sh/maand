@@ -1,3 +1,7 @@
+// Copyright 2025 Kiruba Sankar Swaminathan. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 package job_command
 
 import (
@@ -29,6 +33,8 @@ type demandResponse struct {
 
 const (
 	headerAllocID = "X-ALLOCATION-ID"
+	headerEvent   = "EVENT"
+	headerCommand = "COMMAND"
 	serverAddr    = "localhost:8080"
 )
 
@@ -49,10 +55,10 @@ type Server struct {
 	tx *sql.Tx
 }
 
-func NewServer(tx *sql.Tx, job, command, event string) *Server {
+func newServer(tx *sql.Tx) *Server {
 	srv := &http.Server{
 		Addr:         serverAddr,
-		Handler:      newMux(tx, job, command, event),
+		Handler:      newMux(tx),
 		ReadTimeout:  serverConfig.ReadTimeout,
 		WriteTimeout: serverConfig.WriteTimeout,
 		IdleTimeout:  serverConfig.IdleTimeout,
@@ -77,4 +83,15 @@ func (s *Server) Start(ctx context.Context) error {
 	case err := <-errChan:
 		return err
 	}
+}
+
+func SetupServer(tx *sql.Tx) context.CancelFunc {
+	ctx, cancel := context.WithCancel(context.Background())
+	// Start the server in a goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		server := newServer(tx)
+		errChan <- server.Start(ctx)
+	}()
+	return cancel
 }

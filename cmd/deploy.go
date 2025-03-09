@@ -5,11 +5,12 @@
 package cmd
 
 import (
-	"fmt"
-	"github.com/spf13/cobra"
+	"log"
 	"maand/build"
 	"maand/deploy"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
 var deployCmd = &cobra.Command{
@@ -26,13 +27,13 @@ var deployCmd = &cobra.Command{
 		if buildFlag {
 			err := build.Execute()
 			if err != nil {
-				fmt.Println(err)
+				log.Fatalln(err)
 			}
 		}
 
 		err := deploy.Execute(jobsFilter)
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalln(err)
 		}
 	},
 }

@@ -5,28 +5,25 @@
 package job_command
 
 import (
-	"context"
 	"database/sql"
 	_ "embed"
 	"fmt"
 	"maand/bucket"
 	"maand/data"
+	"maand/kv"
 	"maand/utils"
+	"maand/worker"
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"sync"
 )
 
 //go:embed maand.py
 var MaandPy []byte
 
-func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose bool) error {
-	workers, err := data.GetWorkers(tx, nil)
-	if err != nil {
-		return err
-	}
-
+func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, event string, concurrency int, verbose bool, envs []string) error {
 	allowedCommands, err := data.GetJobCommands(tx, job, event)
 	if err != nil {
 		return err
@@ -36,9 +33,51 @@ func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose
 		return &JobCommandNotFoundError{Command: command, Job: job, Event: event}
 	}
 
-	workers, err = data.GetActiveAllocations(tx, job)
+	workers, err := data.GetActiveAllocations(tx, job)
 	if err != nil {
 		return err
+	}
+
+	kvStore := kv.GetKVStore()
+
+	getCerts := func(workerIP string) error {
+		workerDir := bucket.GetTempWorkerPath(workerIP)
+
+		keys, err := kvStore.GetKeys(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
+		if err != nil {
+			return err
+		}
+
+		for _, key := range keys {
+			if !strings.HasPrefix(key, "certs/") {
+				continue
+			}
+
+			content, err := kvStore.Get(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), key)
+			if err != nil {
+				return err
+			}
+
+			err = os.WriteFile(path.Join(workerDir, "jobs", job, "_modules", key), []byte(content), os.ModePerm)
+			if err != nil {
+				return err
+			}
+		}
+
+		caPath := path.Join(workerDir, "jobs", job, "_modules", "certs/ca.crt")
+		if _, err := os.Stat(caPath); os.IsNotExist(err) {
+			content, err := kvStore.Get(tx, fmt.Sprintf("maand/worker"), "certs/ca.crt")
+			if err != nil {
+				return err
+			}
+
+			err = os.WriteFile(caPath, []byte(content), os.ModePerm)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
 	}
 
 	for _, workerIP := range workers {
@@ -54,31 +93,29 @@ func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose
 		}
 
 		moduleDir := path.Join(workerDir, "jobs", job, "_modules")
-		if _, err = os.Stat(moduleDir); err == nil {
-			err = os.WriteFile(path.Join(moduleDir, "maand.py"), MaandPy, os.ModePerm)
-			if err != nil {
-				return err
-			}
+		err = os.WriteFile(path.Join(moduleDir, "maand.py"), MaandPy, os.ModePerm)
+		if err != nil {
+			return err
+		}
+
+		certsDir := path.Join(workerDir, "jobs", job, "_modules", "certs")
+		err = os.MkdirAll(certsDir, os.ModePerm)
+		if err != nil {
+			return err
+		}
+
+		err = getCerts(workerIP)
+		if err != nil {
+			return err
 		}
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start the server in a goroutine
-	errChan := make(chan error, 1)
-	go func() {
-		server := NewServer(tx, job, command, event)
-		errChan <- server.Start(ctx)
-	}()
-	defer cancel()
 
 	allocErrors := map[string]error{}
 	var semaphore = make(chan struct{}, concurrency)
 	var wait sync.WaitGroup
 	var mu sync.Mutex
 
-	for workerIndex, workerIP := range workers {
+	for _, workerIP := range workers {
 		wait.Add(1)
 		semaphore <- struct{}{}
 
@@ -92,20 +129,18 @@ func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose
 			return err
 		}
 
-		go func(tAllocID string, tWorkerIndex int, tWorkerIP string, tDisabled int) {
+		go func(tAllocID string, tWorkerIP string, tDisabled int) {
 			defer wait.Done()
 			defer func() { <-semaphore }()
 
-			err := runAllocationCommand(tAllocID, job, tWorkerIndex, tWorkerIP, tDisabled, command, event, verbose)
+			err := runAllocationCommand(dockerClient, tAllocID, job, tWorkerIP, tDisabled, command, event, verbose, envs)
 			if err != nil {
 				mu.Lock()
 				allocErrors[tWorkerIP] = err
 				mu.Unlock()
 			}
-		}(allocID, workerIndex, workerIP, disabled)
+		}(allocID, workerIP, disabled)
 	}
-
-	_ = utils.ExecuteCommand([]string{"sync"})
 
 	wait.Wait()
 	close(semaphore)
@@ -117,7 +152,7 @@ func JobCommand(tx *sql.Tx, job, command, event string, concurrency int, verbose
 	return nil
 }
 
-func Execute(job, command, event string, concurrency int, verbose bool) error {
+func Execute(job, command, event string, concurrency int, verbose bool, envs []string) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)
@@ -131,7 +166,41 @@ func Execute(job, command, event string, concurrency int, verbose bool) error {
 		_ = tx.Rollback()
 	}()
 
-	err = JobCommand(tx, job, command, event, concurrency, verbose)
+	cancel := SetupServer(tx)
+	defer cancel()
+
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+
+	dockerClient, err := bucket.SetupBucketContainer(bucketID)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = dockerClient.Stop()
+	}()
+
+	workers, err := data.GetWorkers(tx, nil)
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(bucket.TempLocation, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	for _, workerIP := range workers {
+		err = worker.KeyScan(dockerClient, workerIP)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = JobCommand(tx, dockerClient, job, command, event, concurrency, verbose, envs)
 	if err != nil {
 		return err
 	}
@@ -140,26 +209,23 @@ func Execute(job, command, event string, concurrency int, verbose bool) error {
 		return data.NewDatabaseError(err)
 	}
 
-	if err = data.UpdateJournalModeDefault(db); err != nil {
-		return err
-	}
-
 	return nil
 }
 
-func runAllocationCommand(allocID string, job string, workerIndex int, workerIP string, disabled int, command, event string, verbose bool) error {
-	workerDir := bucket.GetTempWorkerPath(workerIP)
+func runAllocationCommand(dockerClient *bucket.DockerClient, allocID string, job string, workerIP string, disabled int, command, event string, verbose bool, pEnvs []string) error {
+	workerDir := path.Join("/bucket", "tmp", "workers", workerIP)
 	jobDir := path.Join(workerDir, "jobs", job)
 	commandPath := fmt.Sprintf("%s.py", command)
 
 	cmd := exec.Command("python3", commandPath)
 	cmd.Dir = path.Join(jobDir, "_modules")
+	// TODO: copy job certs to modules folder
 
 	envs := os.Environ()
+	envs = append(envs, pEnvs...)
 	envs = append(envs, fmt.Sprintf("ALLOCATION_ID=%s", allocID))
-	envs = append(envs, fmt.Sprintf("ALLOCATION_INDEX=%d", workerIndex))
 	envs = append(envs, fmt.Sprintf("ALLOCATION_IP=%s", workerIP))
-	envs = append(envs, fmt.Sprintf("ALLOCATION_DISABLED=%d", disabled))
+	envs = append(envs, fmt.Sprintf("DISABLED=%d", disabled))
 	envs = append(envs, fmt.Sprintf("JOB=%s", job))
 	envs = append(envs, fmt.Sprintf("EVENT=%s", event))
 	envs = append(envs, fmt.Sprintf("COMMAND=%s", command))
@@ -170,9 +236,10 @@ func runAllocationCommand(allocID string, job string, workerIndex int, workerIP 
 		cmd.Stderr = os.Stdout
 	}
 
-	err := cmd.Run()
+	currPath := fmt.Sprintf("cd %s/jobs/%s/_modules", workerDir, job)
+	err := dockerClient.Exec(workerIP, []string{currPath, "python3 " + path.Join(jobDir, "_modules", commandPath)}, envs, verbose)
 	if err != nil {
-		return fmt.Errorf("error running allocation command: %v", err)
+		return err
 	}
 
 	return nil

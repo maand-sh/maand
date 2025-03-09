@@ -178,6 +178,10 @@ func processLabelData(tx *sql.Tx) error {
 			workerKV[fmt.Sprintf("%s_%d", label, idx)] = node
 		}
 	}
+
+	content, err := os.ReadFile(path.Join(bucket.SecretLocation, "ca.crt"))
+	workerKV["certs/ca.crt"] = string(content)
+
 	return storeKeyValues(tx, "maand/worker", workerKV)
 }
 
