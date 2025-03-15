@@ -34,7 +34,7 @@ func (dc *DockerClient) start() (err error) {
 		return err
 	}
 
-	var binds = []string{fmt.Sprintf("%s:/bucket", bucketAbsPath)}
+	var binds = []string{fmt.Sprintf("%s:/bucket:z", bucketAbsPath)}
 
 	resp, err := dc.cli.ContainerCreate(
 		dc.ctx,

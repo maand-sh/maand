@@ -110,7 +110,7 @@ func Certs(tx *sql.Tx) error {
 					return err
 				}
 				if len(vKey) > 0 {
-					err = os.WriteFile(certPath+".key", []byte(vKey), os.ModePerm)
+					err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)), []byte(vKey), os.ModePerm)
 					if err != nil {
 						return err
 					}
@@ -122,7 +122,7 @@ func Certs(tx *sql.Tx) error {
 					return err
 				}
 				if len(vCrt) > 0 {
-					err = os.WriteFile(certPath+".crt", []byte(vCrt), os.ModePerm)
+					err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)), []byte(vCrt), os.ModePerm)
 					if err != nil {
 						return err
 					}
@@ -132,7 +132,7 @@ func Certs(tx *sql.Tx) error {
 						return err
 					}
 
-					certExpired, err := IsCertExpiringSoon(certPath+".crt", maandConf.CertsRenewalBuffer)
+					certExpired, err := IsCertExpiringSoon(path.Join(certPath, fmt.Sprintf("%s.crt", certName)), maandConf.CertsRenewalBuffer)
 					if err != nil {
 						return err
 					}
