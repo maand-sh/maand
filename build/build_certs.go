@@ -37,57 +37,75 @@ func Certs(tx *sql.Tx) error {
 		return err
 	}
 
-	workers, err := data.GetWorkers(tx, nil)
+	jobs, err := data.GetAllAllocatedJobs(tx)
 	if err != nil {
 		return err
 	}
 
-	for _, workerIP := range workers {
-		workerDirPath := path.Join(bucket.TempLocation, "workers", workerIP)
+	updateCerts, err := data.HashChanged(tx, "build", "ca")
+	if err != nil {
+		return err
+	}
 
-		jobs, err := data.GetAllocatedJobs(tx, workerIP)
+	for _, job := range jobs {
+		certsMap := map[string]string{}
+
+		jobDir := path.Join("jobs", job)
+
+		jobHashChanged, err := data.HashChanged(tx, "build_certs", job)
 		if err != nil {
 			return err
 		}
 
-		for _, job := range jobs {
-			rows, err := tx.Query("SELECT name, pkcs8, subject FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
+		if jobHashChanged {
+			updateCerts = true
+		}
+
+		rows, err := tx.Query("SELECT name, pkcs8, one, subject FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
+		if err != nil {
+			return err
+		}
+
+		for rows.Next() {
+
+			var certName, subject string
+			var pkcs8, one int
+
+			err = rows.Scan(&certName, &pkcs8, &one, &subject)
 			if err != nil {
 				return err
 			}
 
-			ns := fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP)
+			var jobSubject workspace.CertSubject
+			err = json.Unmarshal([]byte(subject), &jobSubject)
+			if err != nil {
+				return err
+			}
 
-			certsMap := map[string]string{}
-			for rows.Next() {
-				jobDir := path.Join(workerDirPath, "jobs", job)
-				err = os.MkdirAll(path.Join(jobDir, "certs"), os.ModePerm)
+			workers, err := data.GetActiveAllocations(tx, job)
+			if err != nil {
+				return err
+			}
+
+			if len(workers) == 0 {
+				continue
+			}
+
+			var oneKeyFile []byte
+			var oneCertFile []byte
+
+			for _, workerIP := range workers {
+				ns := fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP)
+
+				certKVName := fmt.Sprintf("certs/%s", certName)
+				certPath := path.Join(bucket.TempLocation, "workers", workerIP, jobDir, "certs")
+				err := os.MkdirAll(certPath, os.ModePerm)
 				if err != nil {
 					return err
 				}
 
-				updateCerts, err := data.HashChanged(tx, "build", "ca")
-				if err != nil {
-					return err
-				}
-
-				var certName, pkcs8, subject string
-				err = rows.Scan(&certName, &pkcs8, &subject)
-				if err != nil {
-					return err
-				}
-
-				var jobSubject workspace.CertSubject
-				err = json.Unmarshal([]byte(subject), &jobSubject)
-				if err != nil {
-					return err
-				}
-
-				certName = fmt.Sprintf("certs/%s", certName)
-				certPath := path.Join(jobDir, certName)
-
-				vKey, err := kv.GetKVStore().Get(tx, ns, certName+".key")
-				var errNotFound = kv.NewNotFoundError(ns, certName+".key")
+				vKey, err := kv.GetKVStore().Get(tx, ns, certKVName+".key")
+				var errNotFound = kv.NewNotFoundError(ns, certKVName+".key")
 				if err != nil && !errors.As(err, &errNotFound) {
 					return err
 				}
@@ -98,8 +116,8 @@ func Certs(tx *sql.Tx) error {
 					}
 				}
 
-				vCrt, err := kv.GetKVStore().Get(tx, ns, certName+".crt")
-				errNotFound = kv.NewNotFoundError(ns, certName+".crt")
+				vCrt, err := kv.GetKVStore().Get(tx, ns, certKVName+".crt")
+				errNotFound = kv.NewNotFoundError(ns, certKVName+".crt")
 				if err != nil && !errors.As(err, &errNotFound) {
 					return err
 				}
@@ -124,55 +142,64 @@ func Certs(tx *sql.Tx) error {
 					}
 				}
 
-				jobHashChanged, err := data.HashChanged(tx, "build_certs", job)
-				if err != nil {
-					return err
-				}
-
-				if !updateCerts && jobHashChanged {
-					updateCerts = true
-				}
-
 				if updateCerts {
 					maandConf, err := utils.GetMaandConf()
 					if err != nil {
 						return err
 					}
 
-					err = GenerateCert(jobDir, certName, pkix.Name{CommonName: jobSubject.CommonName}, workerIP, maandConf.CertsTTL)
-					if err != nil {
-						return err
+					if one == 1 {
+						if len(oneKeyFile) == 0 {
+							err = GenerateCert(certPath, certName, pkix.Name{CommonName: jobSubject.CommonName}, workers, maandConf.CertsTTL)
+							if err != nil {
+								return err
+							}
+							oneCertFile, err = os.ReadFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)))
+							if err != nil {
+								return err
+							}
+							oneKeyFile, err = os.ReadFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)))
+							if err != nil {
+								return err
+							}
+						}
+
+						err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)), oneCertFile, os.ModePerm)
+						if err != nil {
+							return err
+						}
+
+						err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)), oneKeyFile, os.ModePerm)
+						if err != nil {
+							return err
+						}
+
+					} else {
+						err = GenerateCert(certPath, certName, pkix.Name{CommonName: jobSubject.CommonName}, []string{workerIP}, maandConf.CertsTTL)
+						if err != nil {
+							return err
+						}
 					}
 				}
 
-				certPub, err := os.ReadFile(certPath + ".crt")
+				certPub, err := os.ReadFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)))
 				if err != nil {
 					return err
 				}
-				certPri, err := os.ReadFile(certPath + ".key")
+				certPri, err := os.ReadFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)))
 				if err != nil {
 					return err
 				}
 
-				certsMap[certName+".crt"] = string(certPub)
-				certsMap[certName+".key"] = string(certPri)
+				certsMap[certKVName+".crt"] = string(certPub)
+				certsMap[certKVName+".key"] = string(certPri)
+
+				err = storeKeyValues(tx, ns, certsMap)
+				if err != nil {
+					return err
+				}
 			}
 
-			err = storeKeyValues(tx, ns, certsMap)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	// update moved after completion of all allocations
-	for _, workerIP := range workers {
-		jobs, err := data.GetAllocatedJobs(tx, workerIP)
-		if err != nil {
-			return err
-		}
-
-		for _, job := range jobs {
 			err = data.PromoteHash(tx, "build_certs", job)
 			if err != nil {
 				return err
@@ -187,7 +214,7 @@ func Certs(tx *sql.Tx) error {
 	return nil
 }
 
-func GenerateCert(path, name string, subject pkix.Name, ipAddress string, ttlDays int) error {
+func GenerateCert(path, name string, subject pkix.Name, ipAddresses []string, ttlDays int) error {
 	// Load CA certificate
 	caCertPEM, err := os.ReadFile(fmt.Sprintf("%s/ca.crt", bucket.SecretLocation))
 	if err != nil {
@@ -219,11 +246,16 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddress string, ttlDay
 		return err
 	}
 
+	ipList := []net.IP{net.ParseIP("127.0.0.1")}
+	for _, ip := range ipAddresses {
+		ipList = append(ipList, net.ParseIP(ip))
+	}
+
 	now := time.Now()
 	template := x509.Certificate{
 		SerialNumber:          serialNumber,
 		Subject:               subject,
-		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP(ipAddress)},
+		IPAddresses:           ipList,
 		NotBefore:             now,
 		NotAfter:              now.Add(time.Duration(ttlDays) * 24 * time.Hour),
 		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,

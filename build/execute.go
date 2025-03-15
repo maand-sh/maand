@@ -12,7 +12,6 @@ import (
 	"maand/job_command"
 	"maand/kv"
 	"maand/workspace"
-	"os"
 )
 
 func runPostBuild(tx *sql.Tx) error {
@@ -70,7 +69,7 @@ func Execute() error {
 	}
 	defer func() {
 		_ = db.Close()
-		_ = os.RemoveAll(bucket.TempLocation)
+		//_ = os.RemoveAll(bucket.TempLocation)
 	}()
 
 	tx, err := db.Begin()

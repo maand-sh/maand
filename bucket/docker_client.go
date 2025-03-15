@@ -52,11 +52,11 @@ func (dc *DockerClient) start() (err error) {
 		"",
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create bucket container: %v", err)
 	}
 
 	if err := dc.cli.ContainerStart(dc.ctx, resp.ID, container.StartOptions{}); err != nil {
-		return err
+		return fmt.Errorf("unable to start bucket container: %v", err)
 	}
 
 	dc.containerID = resp.ID
@@ -67,11 +67,11 @@ func (dc *DockerClient) start() (err error) {
 func (dc *DockerClient) Stop() error {
 	if dc.containerID != "" {
 		if err := dc.cli.ContainerKill(dc.ctx, dc.containerID, "SIGKILL"); err != nil {
-			return err
+			return fmt.Errorf("unable to stop bucket container: %v", err)
 		}
 
 		if err := dc.cli.ContainerRemove(dc.ctx, dc.containerID, container.RemoveOptions{}); err != nil {
-			return err
+			return fmt.Errorf("unable to remove bucket container: %v", err)
 		}
 	}
 
@@ -93,7 +93,7 @@ sync`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".
 
 	err := os.WriteFile(path.Join(Location, sessionFilePath), []byte(script), os.ModePerm)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create session file: %v", err)
 	}
 
 	if dc.containerID == "" {
@@ -108,7 +108,7 @@ sync`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".
 	}
 	execResp, err := dc.cli.ContainerExecCreate(dc.ctx, dc.containerID, execConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to run exec into bucket container: %v", err)
 	}
 
 	attachResp, err := dc.cli.ContainerExecAttach(dc.ctx, execResp.ID, container.ExecAttachOptions{
@@ -116,7 +116,7 @@ sync`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".
 		Tty:    false,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to attach bucket container: %v", err)
 	}
 
 	defer attachResp.Close()
@@ -139,7 +139,7 @@ sync`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".
 
 	errorCode, err := os.ReadFile(path.Join(Location, sessionOutFilePath))
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to read session file status code: %v", err)
 	}
 
 	if strings.TrimSpace(string(errorCode)) != "0" {
@@ -164,7 +164,7 @@ func BuildBucketContainer(bucketID string) error {
 
 	err = cmd.Start()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to start bucket container: %v", err)
 	}
 
 	handleOutput := func(pipe io.ReadCloser) {
@@ -198,7 +198,7 @@ func IsBucketImageAvailable(bucketID string) (bool, error) {
 
 	err = cmd.Start()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("unable to build bucket container: %v", err)
 	}
 
 	found := false
@@ -228,7 +228,7 @@ func newDockerContainer(baseImage string) (*DockerClient, error) {
 	var ctx = context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating docker client: %w", err)
 	}
 
 	dc := &DockerClient{

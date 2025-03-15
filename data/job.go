@@ -205,3 +205,22 @@ func GetJobsByDeploymentSeq(tx *sql.Tx, deploymentSeq int) ([]string, error) {
 	}
 	return jobs, nil
 }
+
+func GetAllAllocatedJobs(tx *sql.Tx) ([]string, error) {
+	rows, err := tx.Query("SELECT DISTINCT job FROM allocations")
+	if err != nil {
+		return nil, NewDatabaseError(err)
+	}
+
+	jobs := make([]string, 0)
+	for rows.Next() {
+		var job string
+		err := rows.Scan(&job)
+		if err != nil {
+			return nil, NewDatabaseError(err)
+		}
+
+		jobs = append(jobs, job)
+	}
+	return jobs, nil
+}
