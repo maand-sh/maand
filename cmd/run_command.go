@@ -20,10 +20,9 @@ var runCommandCmd = &cobra.Command{
 		labelStr, _ := flags.GetString("labels")
 		concurrency, _ := flags.GetInt("concurrency")
 		shCommand := args[0]
-		disableCheck, _ := flags.GetBool("disable-bucket-update-check")
 		healthCheck, _ := flags.GetBool("health_check")
 
-		err := run_command.Execute(workerStr, labelStr, concurrency, shCommand, disableCheck, healthCheck)
+		err := run_command.Execute(workerStr, labelStr, concurrency, shCommand, healthCheck)
 		if err != nil {
 			fmt.Println(err)
 		}

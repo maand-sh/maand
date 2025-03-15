@@ -17,7 +17,7 @@ import (
 	"sync"
 )
 
-func Execute(workerComma, labelComma string, concurrency int, shCommand string, disableCheck bool, healthcheck bool) error {
+func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, healthcheck bool) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)
@@ -37,30 +37,30 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 
 	var workers []string
 
-	if len(workerComma) > 0 {
-		workersP := strings.Split(workerComma, ",")
+	if len(workerCSV) > 0 {
+		workersArgs := strings.Split(workerCSV, ",")
 
 		workers, err = data.GetWorkers(tx, nil)
 		if err != nil {
 			return err
 		}
 
-		diff := utils.Difference(workersP, workers)
+		diff := utils.Difference(workersArgs, workers)
 		if len(diff) > 0 {
 			panic(fmt.Errorf("invalid input, workers not belong to this bucket %v", diff))
 		}
-		workers = workersP
+		workers = workersArgs
 	}
 
-	if len(workerComma) == 0 && len(labelComma) > 0 {
-		labelsP := strings.Split(labelComma, ",")
+	if len(workerCSV) == 0 && len(labelCSV) > 0 {
+		labelsP := strings.Split(labelCSV, ",")
 		workers, err = data.GetWorkers(tx, labelsP)
 		if err != nil {
 			return err
 		}
 	}
 
-	if len(labelComma) == 0 && len(workerComma) == 0 {
+	if len(labelCSV) == 0 && len(workerCSV) == 0 {
 		workers, err = data.GetWorkers(tx, nil)
 		if err != nil {
 			return err
@@ -77,11 +77,11 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 	commandFile := path.Join(bucket.WorkspaceLocation, "command.sh")
 	if len(shCommand) == 0 {
 		if _, err := os.Stat(commandFile); os.IsNotExist(err) {
-			return fmt.Errorf("run commands required --cmd argument or command file")
+			return fmt.Errorf("run commands required argument input or command file")
 		}
 		content, err = os.ReadFile(commandFile)
 		if err != nil {
-			return err
+			return fmt.Errorf("unable to read command file, %v", err)
 		}
 	} else {
 		content = []byte(shCommand)
@@ -94,7 +94,7 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 
 	err = os.WriteFile(path.Join(bucket.TempLocation, "command.sh"), content, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to copy command file, %v", err)
 	}
 	commandFile = "command.sh"
 
@@ -123,6 +123,7 @@ func Execute(workerComma, labelComma string, concurrency int, shCommand string, 
 		go func(wp string) {
 			defer wait.Done()
 			defer func() { <-semaphore }()
+
 			err := worker.ExecuteFileCommand(dockerClient, wp, commandFile, nil)
 			mu.Lock()
 			if err != nil {

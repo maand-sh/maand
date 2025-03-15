@@ -41,7 +41,7 @@ func SetupMaand(tx *sql.Tx) error {
 		"CREATE TABLE IF NOT EXISTS job (job_id TEXT, name TEXT, version TEXT, min_memory_mb TEXT, max_memory_mb TEXT, min_cpu_mhz TEXT, max_cpu_mhz TEXT, update_parallel_count INT, PRIMARY KEY(name))",
 		"CREATE TABLE IF NOT EXISTS job_selectors (job_id TEXT, selector TEXT)",
 		"CREATE TABLE IF NOT EXISTS job_ports (job_id TEXT, name TEXT, port INT)",
-		"CREATE TABLE IF NOT EXISTS job_certs (job_id TEXT, name TEXT, pkcs8 INT, subject TEXT)",
+		"CREATE TABLE IF NOT EXISTS job_certs (job_id TEXT, name TEXT, pkcs8 INT, one INT, subject TEXT)",
 		"CREATE TABLE IF NOT EXISTS job_files (job_id TEXT, path TEXT, content BLOB, isdir BOOL)",
 		"CREATE TABLE IF NOT EXISTS job_commands (job_id TEXT, job TEXT, name TEXT, executed_on TEXT, demand_job TEXT, demand_command TEXT, demand_config TEXT)",
 
@@ -83,7 +83,7 @@ func GetBucketID(tx *sql.Tx) (string, error) {
 	var bucketID string
 	err := tx.QueryRow("SELECT bucket_id FROM bucket LIMIT 1").Scan(&bucketID)
 	if err != nil {
-		return "", NewDatabaseError(err)
+		return "", fmt.Errorf("unable to get bucket ID: %v", err)
 	}
 	return bucketID, nil
 }

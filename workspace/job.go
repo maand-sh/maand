@@ -49,6 +49,7 @@ type Manifest struct {
 	Commands map[string]AllocationCommand `json:"commands"`
 	Certs    map[string]struct {
 		PKCS8   bool        `json:"pkcs8"`
+		One     bool        `json:"one"`
 		Subject CertSubject `json:"subject"`
 	} `json:"certs"`
 	UpdateParallelCount int `json:"update_parallel_count"`

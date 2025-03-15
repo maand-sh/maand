@@ -17,7 +17,7 @@ import (
 	"sync"
 )
 
-func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
+func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)
@@ -56,18 +56,35 @@ func Execute(jobsComma, workersComma, target string, healthCheck bool) error {
 	}
 
 	var workersFilter []string
-	if len(workersComma) > 0 {
-		workersFilter = strings.Split(workersComma, ",")
+	if len(workersCSV) > 0 {
+		workersFilter = strings.Split(workersCSV, ",")
 	}
 
 	var jobsFilter []string
-	if len(jobsComma) > 0 {
-		jobsFilter = strings.Split(jobsComma, ",")
+	if len(jobsCSV) > 0 {
+		jobsFilter = strings.Split(jobsCSV, ",")
 	}
 
-	// TODO : validate for invalidate job names
 	jobsFilter = utils.Unique(jobsFilter)
 	workersFilter = utils.Unique(workersFilter)
+
+	allJobs, err := data.GetAllAllocatedJobs(tx)
+	if err != nil {
+		return err
+	}
+
+	if len(jobsFilter) > 0 && len(utils.Intersection(allJobs, jobsFilter)) == 0 {
+		return fmt.Errorf("invalid input, jobs %v", jobsFilter)
+	}
+
+	allWorkers, err := data.GetAllWorkers(tx)
+	if err != nil {
+		return err
+	}
+
+	if len(workersFilter) > 0 && len(utils.Intersection(allWorkers, workersFilter)) == 0 {
+		return fmt.Errorf("invalid input, workers %v", workersFilter)
+	}
 
 	maxDeploymentSequence, err := data.GetMaxDeploymentSeq(tx)
 	if err != nil {

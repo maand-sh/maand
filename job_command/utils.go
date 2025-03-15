@@ -9,8 +9,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"maand/data"
-	"maand/utils"
 	"net/http"
 )
 
@@ -39,16 +37,20 @@ func validateKVRequest(req kvRequest, job, workerIP string, isPut bool) *httpErr
 	if req.Namespace == "" || req.Key == "" || (isPut && req.Value == "") {
 		return httpErrors.MissingFields
 	}
+
 	if isPut {
 		expected := fmt.Sprintf("vars/job/%s", job)
 		if req.Namespace != expected {
 			return httpErrors.InvalidNamespace
 		}
-	} else {
-		allowed := data.GetAllowedNamespaces(job, workerIP)
-		if len(utils.Intersection(allowed, []string{req.Namespace})) == 0 {
-			return httpErrors.InvalidNamespace
-		}
 	}
+
+	// else {
+	// 	allowed := data.GetAllowedNamespaces(job, workerIP)
+	// 	if len(utils.Intersection(allowed, []string{req.Namespace})) == 0 {
+	//		return httpErrors.InvalidNamespace
+	//	}
+	// }
+
 	return nil
 }

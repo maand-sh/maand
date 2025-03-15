@@ -209,14 +209,14 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			return err
 		}
 
-		query = `INSERT INTO job_certs (job_id, name, pkcs8, subject) VALUES (?, ?, ?, ?)`
+		query = `INSERT INTO job_certs (job_id, name, pkcs8, one, subject) VALUES (?, ?, ?, ?, ?)`
 		for name, config := range manifest.Certs {
 
 			subject, err := json.Marshal(config.Subject)
 			if err != nil {
 				return err
 			}
-			_, err = tx.Exec(query, jobID, name, config.PKCS8, subject)
+			_, err = tx.Exec(query, jobID, name, config.PKCS8, config.One, subject)
 			if err != nil {
 				return data.NewDatabaseError(err)
 			}
