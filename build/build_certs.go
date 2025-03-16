@@ -48,8 +48,6 @@ func Certs(tx *sql.Tx) error {
 	}
 
 	for _, job := range jobs {
-		certsMap := map[string]string{}
-
 		jobDir := path.Join("jobs", job)
 
 		jobHashChanged, err := data.HashChanged(tx, "build_certs", job)
@@ -65,6 +63,8 @@ func Certs(tx *sql.Tx) error {
 		if err != nil {
 			return err
 		}
+
+		certsMap := map[string]map[string]string{}
 
 		for rows.Next() {
 
@@ -191,10 +191,16 @@ func Certs(tx *sql.Tx) error {
 					return err
 				}
 
-				certsMap[certKVName+".crt"] = string(certPub)
-				certsMap[certKVName+".key"] = string(certPri)
+				if certsMap[ns] == nil {
+					certsMap[ns] = map[string]string{}
+				}
 
-				err = storeKeyValues(tx, ns, certsMap)
+				certsMap[ns][certKVName+".crt"] = string(certPub)
+				certsMap[ns][certKVName+".key"] = string(certPri)
+			}
+
+			for ns, m := range certsMap {
+				err = storeKeyValues(tx, ns, m)
 				if err != nil {
 					return err
 				}
