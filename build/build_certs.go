@@ -198,18 +198,18 @@ func Certs(tx *sql.Tx) error {
 				certsMap[ns][certKVName+".crt"] = string(certPub)
 				certsMap[ns][certKVName+".key"] = string(certPri)
 			}
+		}
 
-			for ns, m := range certsMap {
-				err = storeKeyValues(tx, ns, m)
-				if err != nil {
-					return err
-				}
-			}
-
-			err = data.PromoteHash(tx, "build_certs", job)
+		for ns, cm := range certsMap {
+			err = storeKeyValues(tx, ns, cm)
 			if err != nil {
 				return err
 			}
+		}
+
+		err = data.PromoteHash(tx, "build_certs", job)
+		if err != nil {
+			return err
 		}
 	}
 
