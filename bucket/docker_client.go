@@ -8,6 +8,9 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/google/uuid"
 	"io"
 	"log"
 	"os"
@@ -15,10 +18,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
-	"github.com/google/uuid"
 )
 
 type DockerClient struct {
@@ -28,7 +27,7 @@ type DockerClient struct {
 	containerID string
 }
 
-func (dc *DockerClient) start() (err error) {
+func (dc *DockerClient) Start() (err error) {
 	bucketAbsPath, err := filepath.Abs(path.Join(Location))
 	if err != nil {
 		return err
@@ -56,7 +55,7 @@ func (dc *DockerClient) start() (err error) {
 	}
 
 	if err := dc.cli.ContainerStart(dc.ctx, resp.ID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("unable to start bucket container: %v", err)
+		return fmt.Errorf("unable to Start bucket container: %v", err)
 	}
 
 	dc.containerID = resp.ID
@@ -81,7 +80,7 @@ func (dc *DockerClient) Stop() error {
 	return dc.ctx.Err()
 }
 
-func (dc *DockerClient) Exec(prefix string, command []string, envs []string, verbose bool) error {
+func (dc *DockerClient) Exec(workerIP string, command []string, envs []string, verbose bool) error {
 	sessionFileName := fmt.Sprintf("%s.sh", uuid.NewString())
 	sessionFilePath := path.Join("tmp", sessionFileName)
 	sessionOutFilePath := path.Join("tmp", sessionFileName) + ".out"
@@ -89,12 +88,17 @@ func (dc *DockerClient) Exec(prefix string, command []string, envs []string, ver
 	script := fmt.Sprintf(`#!/bin/bash
 %s
 echo $? > %s
-sync`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".out")
+sync > /dev/null`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".out")
 
 	err := os.WriteFile(path.Join(Location, sessionFilePath), []byte(script), os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("unable to create session file: %v", err)
 	}
+
+	defer func() {
+		_ = os.Remove(path.Join(Location, sessionFilePath))
+		_ = os.Remove(path.Join(Location, sessionOutFilePath))
+	}()
 
 	if dc.containerID == "" {
 		return fmt.Errorf("container not started")
@@ -104,6 +108,7 @@ sync`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".
 		Cmd:          []string{"bash", path.Join("/bucket/tmp", sessionFileName)},
 		AttachStdout: true,
 		AttachStderr: true,
+		Tty:          true,
 		Env:          envs,
 	}
 	execResp, err := dc.cli.ContainerExecCreate(dc.ctx, dc.containerID, execConfig)
@@ -112,8 +117,9 @@ sync`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".
 	}
 
 	attachResp, err := dc.cli.ContainerExecAttach(dc.ctx, execResp.ID, container.ExecAttachOptions{
-		Detach: false,
-		Tty:    false,
+		Detach:      false,
+		Tty:         true,
+		ConsoleSize: nil,
 	})
 	if err != nil {
 		return fmt.Errorf("unable to attach bucket container: %v", err)
@@ -121,20 +127,28 @@ sync`, strings.Join(command, "\n"), path.Join("/bucket/tmp", sessionFileName)+".
 
 	defer attachResp.Close()
 
-	reader := bufio.NewReader(attachResp.Reader)
-	for {
-		line, _, err := reader.ReadLine()
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return err
-		}
+	logFilePath := path.Join(LogLocation, fmt.Sprintf("%s.log", workerIP))
+	if workerIP == "" {
+		logFilePath = path.Join(LogLocation, "maand.log")
+	}
+	f, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, os.ModePerm) // 0666 for read/write for owner, group, others
+	if err != nil {
+		return fmt.Errorf("unable to open log file %s: %w", logFilePath, err)
+	}
+	defer f.Close()
 
-		if len(line) >= 8 && (line[0] == byte(1) || line[0] == byte(2)) {
-			line = line[8:]
+	scanner := bufio.NewScanner(attachResp.Reader)
+	for scanner.Scan() {
+		lineBytes := scanner.Bytes()
+		line := string(lineBytes) // Convert the filtered bytes to a string
+		log.Printf("[%-12s] %s", workerIP, line)
+
+		if _, err := f.WriteString(line + "\n"); err != nil {
+			return fmt.Errorf("unable to write to log file %s: %w", logFilePath, err)
 		}
-		log.Printf("[%-12s] %s", prefix, string(line))
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("reading from container stdout: %v", err)
 	}
 
 	errorCode, err := os.ReadFile(path.Join(Location, sessionOutFilePath))
@@ -164,7 +178,7 @@ func BuildBucketContainer(bucketID string) error {
 
 	err = cmd.Start()
 	if err != nil {
-		return fmt.Errorf("unable to start bucket container: %v", err)
+		return fmt.Errorf("unable to Start bucket container: %v", err)
 	}
 
 	handleOutput := func(pipe io.ReadCloser) {
@@ -246,20 +260,20 @@ func SetupBucketContainer(bucketID string) (*DockerClient, error) {
 		return nil, err
 	}
 
-	err = docker.start()
+	err = docker.Start()
 	if err != nil {
 		return nil, err
 	}
 
-	// sigChan := make(chan os.Signal, 1)
-	// signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	// done := make(chan bool)
-	// go func() {
-	// 	sig := <-sigChan
-	// 	fmt.Println("\nReceived signal:", sig)
-	// 	_ = docker.Stop()
-	// 	done <- true
-	// }()
+	//sigChan := make(chan os.Signal, 1)
+	//signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+	//done := make(chan bool)
+	//go func() {
+	//	sig := <-sigChan
+	//	fmt.Println("\nReceived signal:", sig)
+	//	_ = docker.Stop()
+	//	done <- true
+	//}()
 
 	return docker, err
 }

@@ -15,6 +15,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 )
 
 func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, healthcheck bool) error {
@@ -111,46 +112,55 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, heal
 		_ = dockerClient.Stop()
 	}()
 
-	var wait sync.WaitGroup
-	var mu sync.Mutex
-	var errs = make(map[string]error)
-	semaphore := make(chan struct{}, concurrency)
-
-	for _, workerIP := range workers {
-		wait.Add(1)
-		semaphore <- struct{}{}
-
-		go func(wp string) {
-			defer wait.Done()
-			defer func() { <-semaphore }()
-
-			err := worker.ExecuteFileCommand(dockerClient, wp, commandFile, nil)
-			mu.Lock()
-			if err != nil {
-				errs[wp] = err
-			}
-			mu.Unlock()
-		}(workerIP)
-	}
-
-	wait.Wait()
-
-	if healthcheck {
-		jobs, err := data.GetJobs(tx)
-		if err != nil {
-			return err
+	iterator := utils.NewStringIterator(workers, concurrency)
+	for {
+		batch, hasMore := iterator()
+		if !hasMore {
+			break
 		}
 
-		for _, job := range jobs {
-			err := health_check.HealthCheck(tx, dockerClient, true, job, true)
+		var wait sync.WaitGroup
+		var mu sync.Mutex
+		var errs = make(map[string]error)
+
+		for _, workerIP := range batch {
+			wait.Add(1)
+
+			go func(wp string) {
+				defer wait.Done()
+				err := worker.ExecuteFileCommand(dockerClient, wp, commandFile, nil)
+				mu.Lock()
+				if err != nil {
+					errs[wp] = err
+				}
+				mu.Unlock()
+			}(workerIP)
+		}
+
+		wait.Wait()
+
+		if len(errs) > 0 {
+			var failedWorkers = []string{}
+			for wp, _ := range errs {
+				failedWorkers = append(failedWorkers, wp)
+			}
+			return fmt.Errorf("%s worker(s) failed", strings.Join(failedWorkers, ","))
+		}
+
+		if healthcheck {
+			time.Sleep(10 * time.Second)
+			jobs, err := data.GetJobs(tx)
 			if err != nil {
 				return err
 			}
-		}
-	}
 
-	if len(errs) > 0 {
-		return &RunCommandError{Errs: errs}
+			for _, job := range jobs {
+				err := health_check.HealthCheck(tx, dockerClient, true, job, true)
+				if err != nil {
+					return err
+				}
+			}
+		}
 	}
 
 	return nil

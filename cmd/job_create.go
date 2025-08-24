@@ -7,8 +7,8 @@ package cmd
 import (
 	_ "embed"
 	"encoding/json"
-	"fmt"
 	"github.com/spf13/cobra"
+	"log"
 	"maand/bucket"
 	"os"
 	"path"
@@ -44,7 +44,7 @@ var jobCreateCmd = &cobra.Command{
 			_ = os.WriteFile(path.Join(jobDir, "manifest.json"), manifestContent, 0644)
 			_ = os.WriteFile(path.Join(jobDir, "Makefile"), makefile, 0644)
 		} else {
-			fmt.Printf("job directory already exists: %s\n", job)
+			log.Fatalf("job directory already exists: %s\n", job)
 		}
 	},
 }

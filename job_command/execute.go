@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -229,6 +230,7 @@ func runAllocationCommand(dockerClient *bucket.DockerClient, allocID string, job
 	envs = append(envs, fmt.Sprintf("JOB=%s", job))
 	envs = append(envs, fmt.Sprintf("EVENT=%s", event))
 	envs = append(envs, fmt.Sprintf("COMMAND=%s", command))
+	envs = append(envs, fmt.Sprintf("CONTAINER_HOST=%s", getContainerHost()))
 	cmd.Env = envs
 
 	if verbose {
@@ -243,4 +245,11 @@ func runAllocationCommand(dockerClient *bucket.DockerClient, allocID string, job
 	}
 
 	return nil
+}
+
+func getContainerHost() string {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		return "host.docker.internal"
+	}
+	return "0.0.0.0"
 }

@@ -82,17 +82,40 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			return fmt.Errorf("job %s, minMemoryMb > maxMemoryMb: %f", job, minMemoryMb)
 		}
 
+		jobConfig, err := getJobConf(job)
+		if err != nil {
+			return err
+		}
+
+		var memory = maxMemoryMb
+		if _, ok := jobConfig["memory"]; ok {
+			memory, err = utils.ExtractSizeInMB(jobConfig["memory"])
+			if err != nil {
+				return err
+			}
+		}
+
+		var cpu = maxCPUMhz
+		if _, ok := jobConfig["cpu"]; ok {
+			cpu, err = utils.ExtractCPUFrequencyInMHz(jobConfig["cpu"])
+			if err != nil {
+				return err
+			}
+		}
+
 		version := workspace.GetVersion(manifest)
 		query := `
-			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, min_cpu_mhz, max_cpu_mhz, update_parallel_count) 
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		_, err = tx.Exec(
 			query, jobID, job, version,
 			fmt.Sprintf("%v", minMemoryMb),
 			fmt.Sprintf("%v", maxMemoryMb),
+			fmt.Sprintf("%v", memory),
 			fmt.Sprintf("%v", minCPUMhz),
 			fmt.Sprintf("%v", maxCPUMhz),
+			fmt.Sprintf("%v", cpu),
 			workspace.GetUpdateParallelCount(manifest),
 		)
 		if err != nil {
@@ -149,7 +172,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			}
 
 			query := `
-				INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config) 
+				INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config)
 				VALUES (?, ?, ?, ?, ?, ?, ?)
 			`
 			for _, executedOn := range command.ExecutedOn {
@@ -211,7 +234,6 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		query = `INSERT INTO job_certs (job_id, name, pkcs8, one, subject) VALUES (?, ?, ?, ?, ?)`
 		for name, config := range manifest.Certs {
-
 			subject, err := json.Marshal(config.Subject)
 			if err != nil {
 				return err
@@ -231,6 +253,41 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 	availableJobs, err := data.GetJobs(tx)
 	if err != nil {
 		return err
+	}
+
+	rows, err := tx.Query(`
+		SELECT
+			a.worker_ip, w.available_memory_mb, w.available_cpu_mhz, sum(j.current_memory_mb) as needed_memory, sum(j.current_cpu_mhz) AS needed_cpu
+		FROM
+			allocations a JOIN job j ON j.name = a.job
+				JOIN
+			worker w ON w.worker_ip = a.worker_ip
+		GROUP BY a.worker_ip
+	`)
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+	resourceValidationFailed := false
+	for rows.Next() {
+		var worker_ip string
+		var avaiable_memory_mb, available_cpu_mhz, needed_memory_mb, needed_cpu_mhz float64
+		err = rows.Scan(&worker_ip, &avaiable_memory_mb, &available_cpu_mhz, &needed_memory_mb, &needed_cpu_mhz)
+		if err != nil {
+			return err
+		}
+
+		if avaiable_memory_mb < needed_memory_mb {
+			resourceValidationFailed = true
+			fmt.Printf("worker_ip %s, available memory is %.2f MB, allocated memory is %.2f MB\n", worker_ip, avaiable_memory_mb, needed_memory_mb)
+		}
+		if available_cpu_mhz < available_cpu_mhz {
+			resourceValidationFailed = true
+			fmt.Printf("worker_ip %s, available cpu is %.2f MHZ, allocated cpu is %.2f MHZ\n", worker_ip, available_cpu_mhz, needed_cpu_mhz)
+		}
+	}
+
+	if resourceValidationFailed {
+		return errors.New("validation failed: resource allocation")
 	}
 
 	// remove missing jobs

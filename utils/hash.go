@@ -68,17 +68,17 @@ func CalculateDirMD5(folderPath string) (string, error) {
 	for _, file := range files {
 		wg.Add(1)
 		sem <- struct{}{}
-		go func(file string) {
+		go func(f string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			md5Str, err := CalculateFileMD5(file)
+			md5Str, err := CalculateFileMD5(f)
 			if err != nil {
 				// Print the error and skip the file.
-				fmt.Printf("Error reading file %s: %v\n", file, err)
+				fmt.Printf("Error reading file %s: %v\n", f, err)
 				return
 			}
 			mu.Lock()
-			fileMD5Map[file] = md5Str
+			fileMD5Map[f] = md5Str
 			mu.Unlock()
 		}(file)
 	}

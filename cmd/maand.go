@@ -5,9 +5,8 @@
 package cmd
 
 import (
-	"os"
-
 	"github.com/spf13/cobra"
+	"log"
 )
 
 var maandCmd = &cobra.Command{
@@ -20,6 +19,6 @@ var maandCmd = &cobra.Command{
 
 func Execute() {
 	if err := maandCmd.Execute(); err != nil {
-		os.Exit(1)
+		log.Fatalln(err)
 	}
 }

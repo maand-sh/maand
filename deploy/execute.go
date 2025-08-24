@@ -216,10 +216,6 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 			return err
 		}
 
-		if err = os.Remove(templateAbsPath); err != nil {
-			return err
-		}
-
 		tmpl, err := template.New("template").Funcs(funcMap).Parse(string(templateContent))
 		if err != nil {
 			return err //TODO: handle with template error
@@ -242,7 +238,13 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		if err != nil {
 			return err
 		}
+
+		err = os.Remove(templateAbsPath)
+		if err != nil {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -350,6 +352,7 @@ func prepareWorkersFiles(tx *sql.Tx, workers []string) error {
 			return err
 		}
 	}
+
 	return nil
 }
 
@@ -387,6 +390,7 @@ func prepareJobsFiles(tx *sql.Tx, jobs []string) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -520,6 +524,7 @@ func syncWorkerFiles(dockerClient *bucket.DockerClient, bucketID, workerIP strin
 
 func syncWorkers(dockerClient *bucket.DockerClient, bucketID string, workers []string, jobs []string, applyRules bool) error {
 	var wait sync.WaitGroup
+	var errs = make(map[string]error)
 	semaphore := make(chan struct{}, len(workers))
 
 	for _, workerIP := range workers {
@@ -528,6 +533,7 @@ func syncWorkers(dockerClient *bucket.DockerClient, bucketID string, workers []s
 			for _, job := range jobs {
 				rsyncMergeLines = append(rsyncMergeLines, fmt.Sprintf("+ jobs/%s\n", job))
 			}
+			rsyncMergeLines = append(rsyncMergeLines, "- jobs/**/*.tpl\n")
 			rsyncMergeLines = append(rsyncMergeLines, "- jobs/*\n")
 		}
 
@@ -537,6 +543,10 @@ func syncWorkers(dockerClient *bucket.DockerClient, bucketID string, workers []s
 			return err
 		}
 
+		defer func() {
+			_ = os.Remove(rsyncMergeFilePath)
+		}()
+
 		wait.Add(1)
 		semaphore <- struct{}{}
 
@@ -545,11 +555,19 @@ func syncWorkers(dockerClient *bucket.DockerClient, bucketID string, workers []s
 			defer func() { <-semaphore }()
 			err = syncWorkerFiles(dockerClient, tBucketID, tWorkerIP)
 			if err != nil {
-				log.Printf("rsync failed on worker %s, %v", workerIP, err)
+				errs[tWorkerIP] = err
 			}
 		}(bucketID, workerIP)
 	}
 	wait.Wait()
+
+	if len(errs) > 0 {
+		failedWorkers := make([]string, 0)
+		for wp := range errs {
+			failedWorkers = append(failedWorkers, wp)
+		}
+		return fmt.Errorf("rsync failed on worker(s) : %s", strings.Join(failedWorkers, ","))
+	}
 
 	return nil
 }
@@ -597,11 +615,12 @@ func handleNewAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketI
 			}
 
 			workerWait.Wait()
+		}
 
-			err := health_check.HealthCheck(tx, dockerClient, true, job, true)
-			if err != nil {
-				return err
-			}
+		// When a new allocations get added, maand shouldn't wait for health check to pass before all allocations are online
+		err := health_check.HealthCheck(tx, dockerClient, true, job, true)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -862,71 +881,61 @@ func Execute(jobsFilter []string) error {
 			go func(tJob string) {
 				defer wait.Done()
 
-				commands, err := data.GetJobCommands(tx, job, "job_control")
+				commands, err := data.GetJobCommands(tx, tJob, "job_control")
 				if err != nil {
-					fmt.Println(err)
-					appendErr(err)
+					appendErr(fmt.Errorf("failed to fetach job_control for job %s: %w", tJob, err))
 				}
 
 				if len(commands) != 0 {
 					allocations, err := data.GetAllocatedWorkers(tx, tJob)
 					if err != nil {
-						fmt.Println(err)
-						appendErr(err)
+						appendErr(fmt.Errorf("failed to fetach allocations for job %s: %w", tJob, err))
 					}
 
-					newAllocations, err := data.GetNewAllocations(tx, job)
+					newAllocations, err := data.GetNewAllocations(tx, tJob)
 					if err != nil {
-						fmt.Println(err)
-						appendErr(err)
+						appendErr(fmt.Errorf("failed to fetach new allocations for job %s: %w", tJob, err))
 					}
 
-					updatedAllocations, err := data.GetUpdatedAllocations(tx, job)
+					updatedAllocations, err := data.GetUpdatedAllocations(tx, tJob)
 					if err != nil {
-						fmt.Println(err)
-						appendErr(err)
+						appendErr(fmt.Errorf("failed to fetach updated allocations for job %s: %w", tJob, err))
 					}
 
 					for _, command := range commands {
-						err := job_command.JobCommand(tx, dockerClient, job, command, "job_control", len(allocations), false, []string{
+						err := job_command.JobCommand(tx, dockerClient, tJob, command, "job_control", len(allocations), false, []string{
 							fmt.Sprintf("UPDATED_ALLOCATIONS=%s", strings.Join(updatedAllocations, ",")),
 							fmt.Sprintf("NEW_ALLOCATIONS=%s", strings.Join(newAllocations, ",")),
 						})
 						if err != nil {
-							fmt.Printf("error executing job_control for job %s: %v", tJob, err)
-							appendErr(err)
+							appendErr(fmt.Errorf("error executing job_control for job %s: %w", tJob, err))
 						}
 					}
 
-					err = health_check.HealthCheck(tx, dockerClient, true, job, true)
+					err = health_check.HealthCheck(tx, dockerClient, true, tJob, true)
 					if err != nil {
-						fmt.Println(err)
-						appendErr(err)
+						appendErr(fmt.Errorf("failed to execute health check for job %s: %w", tJob, err))
 					}
 				} else {
-					err = handleNewAllocations(tx, dockerClient, bucketID, tJob)
+					err = handleNewAllocations(tx, dockerClient, bucketID, tJob) // health check part of handleNewAllocations
 					if err != nil {
-						fmt.Println(err)
-						appendErr(err)
+						appendErr(fmt.Errorf("failed to execute start new allocations %s: %w", tJob, err))
 					}
 
-					err = handleUpdatedAllocations(tx, dockerClient, bucketID, tJob)
+					err = handleUpdatedAllocations(tx, dockerClient, bucketID, tJob) // health check part of handleUpdatedAllocations
 					if err != nil {
-						fmt.Println(err)
-						appendErr(err)
+						appendErr(fmt.Errorf("failed to execute restart updated allocations %s: %w", tJob, err))
 					}
 				}
 
 				err = executePostJobCommands(tx, dockerClient, tJob)
 				if err != nil {
-					fmt.Println(err)
-					appendErr(err)
+					appendErr(fmt.Errorf("failed to execute post deploy command for job %s: %w", tJob, err))
 				}
 
 				err = promoteAllocationHash(tx, tJob)
 				if err != nil {
-					fmt.Println(err)
-					appendErr(err)
+					appendErr(fmt.Errorf("failed to update hash for job %s: %w", tJob, err))
 				}
 
 			}(job)
@@ -952,6 +961,15 @@ func Execute(jobsFilter []string) error {
 				return err
 			}
 		}
+	}
+
+	var longMsg = "deployed jobs"
+	if len(jobsFilter) != 0 {
+		longMsg = fmt.Sprintf("deployed jobs %v", jobsFilter)
+	}
+	err = data.Event(tx, "deploy", longMsg)
+	if err != nil {
+		return err
 	}
 
 	if err := tx.Commit(); err != nil {

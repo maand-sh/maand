@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 	"maand/job_command"
 
 	"github.com/spf13/cobra"
@@ -29,7 +30,7 @@ var jobCommandCmd = &cobra.Command{
 
 		err := job_command.Execute(job, command, "cli", concurrency, verbose, []string{})
 		if err != nil {
-			fmt.Println(err)
+			log.Fatalln(err)
 		}
 	},
 }

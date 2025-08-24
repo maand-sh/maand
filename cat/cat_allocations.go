@@ -7,21 +7,14 @@ package cat
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"github.com/jedib0t/go-pretty/v6/table"
 	"maand/data"
 	"maand/utils"
+	"strings"
 )
 
-func Allocations() error {
-
-	// TODO: job's filter
-	// TODO: worker filter
-
-	//var jobsFilter []string
-	//if jobsComma != "" {
-	//	jobsFilter = strings.Split(jobsComma, ",")
-	//}
-
+func Allocations(jobsCSV, workersCSV string) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)
@@ -34,6 +27,37 @@ func Allocations() error {
 	defer func() {
 		_ = tx.Rollback()
 	}()
+
+	var jobsFilter []string
+	if jobsCSV != "" {
+		jobsFilter = strings.Split(jobsCSV, ",")
+	}
+
+	var workersFilter []string
+	if workersCSV != "" {
+		workersFilter = strings.Split(workersCSV, ",")
+	}
+
+	jobsFilter = utils.Unique(jobsFilter)
+	workersFilter = utils.Unique(workersFilter)
+
+	allJobs, err := data.GetAllAllocatedJobs(tx)
+	if err != nil {
+		return err
+	}
+
+	if len(jobsFilter) > 0 && len(utils.Intersection(allJobs, jobsFilter)) == 0 {
+		return fmt.Errorf("invalid input, jobs %v", jobsFilter)
+	}
+
+	allWorkers, err := data.GetAllWorkers(tx)
+	if err != nil {
+		return err
+	}
+
+	if len(workersFilter) > 0 && len(utils.Intersection(allWorkers, workersFilter)) == 0 {
+		return fmt.Errorf("invalid input, workers %v", workersFilter)
+	}
 
 	var workerCount int
 
@@ -50,7 +74,22 @@ func Allocations() error {
 
 	t := utils.GetTable(table.Row{"allocation_id", "worker_ip", "job", "disabled", "removed"})
 
-	rows, err := tx.Query("SELECT alloc_id, worker_ip, job, disabled, removed FROM cat_allocations")
+	query = "SELECT alloc_id, worker_ip, job, disabled, removed FROM cat_allocations"
+	if len(jobsFilter) > 0 || len(workersFilter) > 0 {
+		query = fmt.Sprintf("%s WHERE", query)
+	}
+
+	if len(jobsFilter) > 0 {
+		query = fmt.Sprintf("%s job IN ('%s') ", query, strings.Join(jobsFilter, "','"))
+		if len(workersFilter) > 0 {
+			query = fmt.Sprintf("%s AND", query)
+		}
+	}
+	if len(workersFilter) > 0 {
+		query = fmt.Sprintf("%s worker_ip IN ('%s') ", query, strings.Join(workersFilter, "','"))
+	}
+
+	rows, err := tx.Query(query)
 	if err != nil {
 		return data.NewDatabaseError(err)
 	}
