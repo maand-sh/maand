@@ -5,17 +5,20 @@
 package cmd
 
 import (
+	"github.com/spf13/cobra"
 	"log"
 	"maand/cat"
-
-	"github.com/spf13/cobra"
 )
 
 var catAllocationsCmd = &cobra.Command{
 	Use:   "allocations",
 	Short: "Shows available allocations",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := cat.Allocations()
+		flags := cmd.Flags()
+		jobsStr, _ := flags.GetString("jobs")
+		workersStr, _ := flags.GetString("workers")
+
+		err := cat.Allocations(jobsStr, workersStr)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -24,4 +27,6 @@ var catAllocationsCmd = &cobra.Command{
 
 func init() {
 	catCmd.AddCommand(catAllocationsCmd)
+	catAllocationsCmd.Flags().String("workers", "", "comma separated workers")
+	catAllocationsCmd.Flags().String("jobs", "", "comma separated jobs")
 }

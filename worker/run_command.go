@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"maand/bucket"
 	"maand/utils"
+	"os"
 	"path"
 )
 
@@ -16,6 +17,11 @@ func ExecuteCommand(dockerClient *bucket.DockerClient, workerIP string, commands
 	if err != nil {
 		return err
 	}
+
+	defer func() {
+		_ = os.Remove(path.Join(bucket.TempLocation, commandScriptFileName))
+	}()
+
 	return ExecuteFileCommand(dockerClient, workerIP, commandScriptFileName, env)
 }
 

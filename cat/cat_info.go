@@ -52,7 +52,7 @@ func Info() error {
 	t.SetStyle(table.StyleRounded)
 	t.AppendRow(table.Row{"Bucket ID", bucketID})
 	t.AppendRow(table.Row{"Update Sequence", updateSeq})
-	t.AppendRow(table.Row{"Number of Workers", len(workers)})
+	t.AppendRow(table.Row{"Number of Allocations", len(workers)})
 	t.AppendRow(table.Row{"Number of Jobs", len(jobs)})
 	t.Render()
 

@@ -118,34 +118,34 @@ func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 			go func(tJob string) {
 				defer wait.Done()
 
-				allocatedWorkers, err := data.GetActiveAllocations(tx, job)
+				allocatedWorkers, err := data.GetActiveAllocations(tx, tJob)
 				if err != nil {
 					fmt.Println(err)
 				}
 
-				commands, err := data.GetJobCommands(tx, job, "job_control")
+				commands, err := data.GetJobCommands(tx, tJob, "job_control")
 				if err != nil {
 					fmt.Println(err)
 				}
 
 				if len(commands) > 0 {
 					for _, command := range commands {
-						err = job_command.JobCommand(tx, dockerClient, job, command, "job_control", len(allocatedWorkers), true, []string{})
+						err = job_command.JobCommand(tx, dockerClient, tJob, command, "job_control", len(allocatedWorkers), true, []string{})
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("job %s, job_control command is failed, %s, %w\n", tJob, command, err)
 						}
 					}
 
 					if healthCheck {
-						err = health_check.HealthCheck(tx, dockerClient, true, job, true)
+						err = health_check.HealthCheck(tx, dockerClient, true, tJob, true)
 						if err != nil {
-							fmt.Println(err)
+							fmt.Printf("job %s, health_check failded %w\n", tJob, err)
 						}
 					}
 					return
 				}
 
-				parallelBatchCount, err := data.GetUpdateParallelCount(tx, job)
+				parallelBatchCount, err := data.GetUpdateParallelCount(tx, tJob)
 				if err != nil {
 					log.Println(err)
 				}
@@ -170,16 +170,16 @@ func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 						go func(tWorkerIP string) {
 							defer waitWorker.Done()
 							defer func() { <-semaphore }() // Release slot after execution
-							err = worker.ExecuteCommand(dockerClient, workerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s %s --jobs %s", bucketID, bucketID, target, job)}, nil)
+							err = worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s %s --jobs %s", bucketID, bucketID, target, tJob)}, nil)
 							if err != nil {
-								fmt.Println(err)
+								fmt.Printf("%s worker is failed\n", tWorkerIP)
 							}
 						}(workerIP)
 					}
 
 					waitWorker.Wait()
 					if healthCheck {
-						err = health_check.HealthCheck(tx, dockerClient, true, job, true)
+						err = health_check.HealthCheck(tx, dockerClient, true, tJob, true)
 						if err != nil {
 							fmt.Println(err)
 						}
@@ -190,6 +190,20 @@ func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 		}
 
 		wait.Wait()
+	}
+
+	var shortMsg = fmt.Sprintf("job %s", target)
+	var longMsg = fmt.Sprintf("all jobs", target)
+	if len(jobsFilter) != 0 {
+		longMsg = fmt.Sprintf("jobs %v", jobsFilter)
+	}
+	if len(workersFilter) != 0 {
+		longMsg += fmt.Sprintf(" workers %v", workersFilter)
+	}
+
+	err = data.Event(tx, shortMsg, longMsg)
+	if err != nil {
+		return err
 	}
 
 	if err := tx.Commit(); err != nil {

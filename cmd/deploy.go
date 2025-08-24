@@ -18,11 +18,13 @@ var deployCmd = &cobra.Command{
 	Short: "Deploy bucket to workers",
 	Run: func(cmd *cobra.Command, args []string) {
 		flags := cmd.Flags()
+
 		jobsStr, _ := flags.GetString("jobs")
 		var jobsFilter []string
 		if len(jobsStr) > 0 {
 			jobsFilter = strings.Split(strings.Trim(jobsStr, ""), ",")
 		}
+
 		buildFlag, _ := flags.GetBool("build")
 		if buildFlag {
 			err := build.Execute()

@@ -105,14 +105,14 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 	}
 
 	for job, obj := range disabledAllocations.Jobs {
-		if len(obj.Workers) == 0 {
+		if len(obj.Allocations) == 0 {
 			_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ?", job)
 			if err != nil {
 				return data.NewDatabaseError(err)
 			}
 		} else {
-			for _, workerIP := range obj.Workers {
-				_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ? AND worker_ip = ?", job, workerIP)
+			for _, allocationIP := range obj.Allocations {
+				_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ? AND worker_ip = ?", job, allocationIP)
 				if err != nil {
 					return data.NewDatabaseError(err)
 				}

@@ -19,7 +19,10 @@ var runCommandCmd = &cobra.Command{
 		workerStr, _ := flags.GetString("workers")
 		labelStr, _ := flags.GetString("labels")
 		concurrency, _ := flags.GetInt("concurrency")
-		shCommand := args[0]
+		shCommand := ""
+		if len(args) > 0 {
+			shCommand = args[0]
+		}
 		healthCheck, _ := flags.GetBool("health_check")
 
 		err := run_command.Execute(workerStr, labelStr, concurrency, shCommand, healthCheck)

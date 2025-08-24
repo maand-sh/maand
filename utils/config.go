@@ -18,6 +18,7 @@ type MaandConf struct {
 	SSHKeyFile         string `toml:"ssh_key"`
 	CertsTTL           int    `toml:"certs_ttl"`
 	CertsRenewalBuffer int    `toml:"certs_renewal_buffer"`
+	JobConfigSelector  string `toml:"job_config_selector,omitempty"`
 }
 
 func GetMaandConf() (MaandConf, error) {

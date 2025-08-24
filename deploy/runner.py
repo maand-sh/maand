@@ -20,7 +20,7 @@ def run_job(bucket, job, command):
     """Run the make command for a single job."""
     job_path = f"/opt/worker/{bucket}/jobs/{job}"
     if os.path.exists(job_path):
-        subprocess.run(["make", "-C", job_path, command], check=True)
+        subprocess.run(["make", "-s", "-C", job_path, command], check=True)
 
 
 def run_jobs(bucket, command, job_list):

@@ -13,7 +13,7 @@ import (
 
 type DisabledAllocations struct {
 	Jobs map[string]struct {
-		Workers []string `json:"workers"`
+		Allocations []string `json:"allocations"`
 	} `json:"jobs"`
 	Workers []string `json:"workers"`
 }

@@ -7,7 +7,6 @@ package build
 import (
 	"database/sql"
 	"fmt"
-	"github.com/pelletier/go-toml/v2"
 	"maand/bucket"
 	"maand/data"
 	"maand/kv"
@@ -17,6 +16,8 @@ import (
 	"path"
 	"strconv"
 	"strings"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 func Variables(tx *sql.Tx) error {
@@ -171,8 +172,8 @@ func processLabelData(tx *sql.Tx) error {
 
 		if len(labelWorkers) > 0 {
 			workerKV[fmt.Sprintf("%s_label_id", label)] = workspace.GetHashUUID(label)
-			workerKV[fmt.Sprintf("%s_nodes", label)] = strings.Join(labelWorkers, ",")
-			workerKV[fmt.Sprintf("%s_length", label)] = strconv.Itoa(len(labelWorkers))
+			workerKV[fmt.Sprintf("%s_workers", label)] = strings.Join(labelWorkers, ",")
+			workerKV[fmt.Sprintf("%s_workers_length", label)] = strconv.Itoa(len(labelWorkers))
 		}
 		for idx, node := range labelWorkers {
 			workerKV[fmt.Sprintf("%s_%d", label, idx)] = node
@@ -239,7 +240,18 @@ func processBucketConf(tx *sql.Tx) error {
 func getJobConf(job string) (map[string]string, error) {
 	var config = make(map[string]map[string]string)
 
+	maandConf, err := utils.GetMaandConf()
+	if err != nil {
+		return nil, err
+	}
+
 	bucketJobConf := path.Join(bucket.WorkspaceLocation, "bucket.jobs.conf")
+
+	maandConf.JobConfigSelector = strings.TrimSpace(maandConf.JobConfigSelector)
+	if maandConf.JobConfigSelector != "" {
+		bucketJobConf = path.Join(bucket.WorkspaceLocation, fmt.Sprintf("bucket.jobs.%s.conf", maandConf.JobConfigSelector))
+	}
+
 	if _, err := os.Stat(bucketJobConf); err == nil {
 		bucketData, err := os.ReadFile(bucketJobConf)
 		if err != nil {
@@ -303,33 +315,14 @@ func processJobData(tx *sql.Tx) error {
 			return err
 		}
 
-		if _, ok := jobConfig["memory"]; ok {
-			memory, err := utils.ExtractSizeInMB(jobConfig["memory"])
-			if err != nil {
-				return err
-			}
-
-			jobKV["memory"] = fmt.Sprintf("%v", memory)
-		} else {
-			_, maxMemoryLimit, err := data.GetJobMemoryLimits(tx, job)
-			if err != nil {
-				return err
-			}
-			jobKV["memory"] = maxMemoryLimit
+		jobKV["memory"], err = data.GetJobMemory(tx, job)
+		if err != nil {
+			return err
 		}
-		if _, ok := jobConfig["cpu"]; ok {
-			cpu, err := utils.ExtractCPUFrequencyInMHz(jobConfig["cpu"])
-			if err != nil {
-				return err
-			}
 
-			jobKV["cpu"] = fmt.Sprintf("%v", cpu)
-		} else {
-			_, maxCPULimit, err := data.GetJobCPULimits(tx, job)
-			if err != nil {
-				return err
-			}
-			jobKV["cpu"] = maxCPULimit
+		jobKV["cpu"], err = data.GetJobCPU(tx, job)
+		if err != nil {
+			return err
 		}
 
 		namespace := fmt.Sprintf("maand/job/%s", job)

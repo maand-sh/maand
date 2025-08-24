@@ -40,6 +40,16 @@ func GetJobMemoryLimits(tx *sql.Tx, job string) (string, string, error) {
 	return minMemory, maxMemory, nil
 }
 
+func GetJobMemory(tx *sql.Tx, job string) (string, error) {
+	var memory string
+	row := tx.QueryRow("SELECT current_memory_mb FROM job WHERE name = ?", job)
+	err := row.Scan(&memory)
+	if err != nil {
+		return "", NewDatabaseError(err)
+	}
+	return memory, nil
+}
+
 func GetJobCPULimits(tx *sql.Tx, job string) (string, string, error) {
 	var minCPU, maxCPU string
 	row := tx.QueryRow("SELECT min_cpu_mhz, max_cpu_mhz FROM job WHERE name = ?", job)
@@ -48,6 +58,16 @@ func GetJobCPULimits(tx *sql.Tx, job string) (string, string, error) {
 		return "", "", NewDatabaseError(err)
 	}
 	return minCPU, maxCPU, nil
+}
+
+func GetJobCPU(tx *sql.Tx, job string) (string, error) {
+	var cpu string
+	row := tx.QueryRow("SELECT current_cpu_mhz FROM job WHERE name = ?", job)
+	err := row.Scan(&cpu)
+	if err != nil {
+		return "", NewDatabaseError(err)
+	}
+	return cpu, nil
 }
 
 func GetJobVersion(tx *sql.Tx, job string) (string, error) {

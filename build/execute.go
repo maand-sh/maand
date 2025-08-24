@@ -117,8 +117,6 @@ func Execute() error {
 		return err
 	}
 
-	// TODO: resource validation
-
 	err = kv.GetKVStore().GC(tx, 7)
 	if err != nil {
 		return err
@@ -141,6 +139,11 @@ func Execute() error {
 	defer func() {
 		_ = tx.Rollback()
 	}()
+
+	err = data.Event(tx, "build", "")
+	if err != nil {
+		return err
+	}
 
 	err = runPostBuild(tx)
 	if err != nil {
