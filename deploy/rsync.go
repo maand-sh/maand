@@ -8,18 +8,12 @@ import (
 	"fmt"
 	"maand/bucket"
 	"maand/utils"
-	"maand/worker"
 	"path"
 	"strings"
 )
 
 func rsync(dockerClient *bucket.DockerClient, bucketID, workerIP string) error {
 	conf, err := utils.GetMaandConf()
-	if err != nil {
-		return err
-	}
-
-	err = worker.KeyScan(dockerClient, workerIP)
 	if err != nil {
 		return err
 	}
@@ -58,7 +52,7 @@ func rsync(dockerClient *bucket.DockerClient, bucketID, workerIP string) error {
 		"--exclude=jobs/*/_modules",
 		fmt.Sprintf("--rsync-path='%s'", remoteRS),
 		fmt.Sprintf("--filter='merge %s'", ruleFilePath),
-		fmt.Sprintf("--rsh='ssh -o BatchMode=true -o ConnectTimeout=10 -i %s'", keyFilePath),
+		fmt.Sprintf("--rsh='ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=10 -i %s'", keyFilePath),
 		fmt.Sprintf("%s/", workerDir),
 		fmt.Sprintf("%s@%s:/opt/worker/%s", user, workerIP, bucketID),
 	}

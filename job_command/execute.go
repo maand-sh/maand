@@ -12,7 +12,6 @@ import (
 	"maand/data"
 	"maand/kv"
 	"maand/utils"
-	"maand/worker"
 	"os"
 	"os/exec"
 	"path"
@@ -184,21 +183,9 @@ func Execute(job, command, event string, concurrency int, verbose bool, envs []s
 		_ = dockerClient.Stop()
 	}()
 
-	workers, err := data.GetWorkers(tx, nil)
-	if err != nil {
-		return err
-	}
-
 	err = os.MkdirAll(bucket.TempLocation, os.ModePerm)
 	if err != nil {
 		return err
-	}
-
-	for _, workerIP := range workers {
-		err = worker.KeyScan(dockerClient, workerIP)
-		if err != nil {
-			return err
-		}
 	}
 
 	err = JobCommand(tx, dockerClient, job, command, event, concurrency, verbose, envs)

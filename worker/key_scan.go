@@ -9,6 +9,6 @@ import (
 	"maand/bucket"
 )
 
-func KeyScan(dockerClient *bucket.DockerClient, workerIP string) error {
+func KeyScan1(dockerClient *bucket.DockerClient, workerIP string) error {
 	return dockerClient.Exec("", []string{"mkdir -p ~/.ssh", fmt.Sprintf("ssh-keyscan -H %s >> ~/.ssh/known_hosts", workerIP)}, nil, false)
 }
