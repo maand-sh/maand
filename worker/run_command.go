@@ -31,11 +31,6 @@ func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, comm
 		return err
 	}
 
-	err = KeyScan(dockerClient, workerIP)
-	if err != nil {
-		return err
-	}
-
 	user := conf.SSHUser
 	keyFilePath := path.Join("/bucket", "secrets", conf.SSHKeyFile)
 	useSudo := conf.UseSUDO
@@ -48,7 +43,7 @@ func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, comm
 	commandScriptBucketFilePath := path.Join("/bucket", "tmp", commandScriptFileName)
 
 	sshCmd := fmt.Sprintf(
-		`ssh -o BatchMode=true -o ConnectTimeout=10 -i %s %s@%s 'timeout 300 %s' < %s`,
+		`ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=10 -i %s %s@%s 'timeout 300 %s' < %s`,
 		keyFilePath, user, workerIP, sh, commandScriptBucketFilePath)
 
 	err = dockerClient.Exec(workerIP, []string{sshCmd}, nil, true)
