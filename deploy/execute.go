@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"log"
 	"maand/bucket"
 	"maand/data"
 	"maand/health_check"
@@ -588,6 +587,16 @@ func handleNewAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketI
 
 		for i := 0; i < workerCount; i += parallelBatchCount {
 			batchSize := min(parallelBatchCount, workerCount-i) // Process up to 2 workers at a time
+
+			var mu sync.Mutex
+			var errs []error
+
+			appendErr := func(err error) {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+
 			for j := i; j < batchSize; j++ {
 				workerIP := newAllocations[i+j]
 
@@ -609,12 +618,16 @@ func handleNewAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketI
 
 					err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s start --jobs %s", bucketID, bucketID, job)}, nil)
 					if err != nil {
-						log.Printf("unable to start allocation. job %s, worker %s, reason %v", job, tWorkerIP, err)
+						err = fmt.Errorf("unable to start allocation. job %s, worker %s, reason %v", job, tWorkerIP, err)
+						appendErr(err)
 					}
 				}(workerIP)
 			}
 
 			workerWait.Wait()
+			if len(errs) > 0 {
+				return fmt.Errorf("unable to start allocations")
+			}
 		}
 
 		// When a new allocations get added, maand shouldn't wait for health check to pass before all allocations are online
@@ -643,7 +656,18 @@ func handleUpdatedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 		semaphore := make(chan struct{}, parallelBatchCount) // Limit to parallelBatchCount workers at a time
 
 		for i := 0; i < workerCount; i += parallelBatchCount {
+
 			batchSize := min(parallelBatchCount, workerCount-i)
+
+			var mu sync.Mutex
+			var errs []error
+
+			appendErr := func(err error) {
+				mu.Lock()
+				errs = append(errs, err)
+				mu.Unlock()
+			}
+
 			for j := 0; j < batchSize; j++ {
 				workerIP := updatedAllocations[i+j]
 				disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
@@ -664,12 +688,17 @@ func handleUpdatedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 
 					err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s restart --jobs %s", bucketID, bucketID, job)}, nil)
 					if err != nil {
-						log.Printf("unable to restart allocation. job %s, worker %s, reason %v", job, tWorkerIP, err)
+						err = fmt.Errorf("unable to restart allocation. job %s, worker %s, reason %v", job, tWorkerIP, err)
+						appendErr(err)
 					}
 				}(workerIP)
 			}
 
 			waitWorker.Wait()
+			if len(errs) > 0 {
+				return fmt.Errorf("unable to restart allocations")
+			}
+
 			err := health_check.HealthCheck(tx, dockerClient, true, job, true)
 			if err != nil {
 				return fmt.Errorf("error during health check for job %s: %v", job, err)
@@ -928,6 +957,10 @@ func Execute(jobsFilter []string) error {
 					}
 				}
 
+				if len(errs) > 0 {
+					return
+				}
+
 				err = executePostJobCommands(tx, dockerClient, tJob)
 				if err != nil {
 					appendErr(fmt.Errorf("failed to execute post deploy command for job %s: %w", tJob, err))
@@ -961,6 +994,19 @@ func Execute(jobsFilter []string) error {
 				return err
 			}
 		}
+	} else {
+		var longMsg = "failed deployments"
+		if len(jobsFilter) != 0 {
+			longMsg = fmt.Sprintf("failed deployments jobs %v", jobsFilter)
+		}
+		err = data.Event(tx, "deploy", longMsg)
+		if err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return data.NewDatabaseError(err)
+		}
+		return fmt.Errorf("deployment failed")
 	}
 
 	var longMsg = "deployed jobs"
