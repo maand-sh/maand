@@ -10,4 +10,5 @@ docs : https://maand.sh/latest
 ``` 
 export CGO_ENABLED=1 # maand uses sqlite3 for storage which needs cgo enabled.
 go build
+# add maand path to $PATH env variable access it. see you there in https://maand.sh/latest
 ```
