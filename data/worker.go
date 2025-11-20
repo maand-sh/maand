@@ -19,7 +19,7 @@ func GetWorkers(tx *sql.Tx, labels []string) ([]string, error) {
 			var ip string
 			err := rows.Scan(&ip)
 			if err != nil {
-				return NewDatabaseError(err)
+				return err
 			}
 			workers = append(workers, ip)
 		}

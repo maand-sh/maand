@@ -2,15 +2,17 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
+// Package utils provides common utility functions
 package utils
 
 import (
 	"errors"
-	"github.com/jedib0t/go-pretty/v6/table"
 	"os"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func ExtractSizeInMB(sizeString string) (float64, error) {
@@ -28,7 +30,7 @@ func ExtractSizeInMB(sizeString string) (float64, error) {
 	re := regexp.MustCompile(`([\d.]+)\s*([a-zA-Z]*)`)
 	matches := re.FindStringSubmatch(sizeString)
 	if matches == nil {
-		return 0, errors.New("invalid size input: " + sizeString)
+		return 0, errors.New("invalid format " + sizeString)
 	}
 
 	size, err := strconv.ParseFloat(matches[1], 64)
@@ -44,7 +46,7 @@ func ExtractSizeInMB(sizeString string) (float64, error) {
 	if multiplier, found := unitToMB[unit]; found {
 		return size * multiplier, nil
 	}
-	return 0, errors.New("unit smaller than MB or invalid: " + unit)
+	return 0, errors.New("unsupported or invalid unit " + unit)
 }
 
 func ExtractCPUFrequencyInMHz(freqString string) (float64, error) {
@@ -64,7 +66,7 @@ func ExtractCPUFrequencyInMHz(freqString string) (float64, error) {
 	re := regexp.MustCompile(`([\d.]+)\s*([a-zA-Z]+)`)
 	matches := re.FindStringSubmatch(freqString)
 	if matches == nil {
-		return 0, errors.New("invalid frequency string format: " + freqString)
+		return 0, errors.New("invalid format " + freqString)
 	}
 
 	frequency, err := strconv.ParseFloat(matches[1], 64)
@@ -76,7 +78,7 @@ func ExtractCPUFrequencyInMHz(freqString string) (float64, error) {
 	if multiplier, found := unitToMHz[unit]; found {
 		return frequency * multiplier, nil
 	}
-	return 0, errors.New("unsupported or invalid unit: " + unit + " (unit must be MHz or larger)")
+	return 0, errors.New("unsupported or invalid unit " + unit)
 }
 
 func GetTable(header table.Row) table.Writer {

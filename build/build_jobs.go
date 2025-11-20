@@ -10,19 +10,19 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
+	"path"
+	"strings"
+
 	"maand/bucket"
 	"maand/data"
 	"maand/utils"
 	"maand/workspace"
-	"os"
-	"path"
-	"strings"
 )
 
-var removedJobs []string
+var removedJobs []string // global variable captures removed jobs from workspace
 
 func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
-
 	wsJobs, err := ws.GetJobs()
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		for _, stmt := range deletes {
 			_, err := tx.Exec(stmt, jobID)
 			if err != nil {
-				return err
+				return data.NewDatabaseError(err)
 			}
 		}
 
@@ -53,33 +53,33 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		minCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMinCPU(manifest))
 		if err != nil {
-			return fmt.Errorf("error extracting minimum cpu frequency in MHz, job %s: %v", job, err)
+			return fmt.Errorf("%w: job %s %w", workspace.ErrInvalidManifest, job, err)
 		}
 		maxCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMaxCPU(manifest))
 		if err != nil {
-			return fmt.Errorf("error extracting maximum cpu frequency in MHz, job %s: %v", job, err)
+			return fmt.Errorf("%w: job %s %w", workspace.ErrInvalidManifest, job, err)
 		}
 
 		if minCPUMhz != 0 && maxCPUMhz == 0 {
 			maxCPUMhz = minCPUMhz
 		}
 		if minCPUMhz > maxCPUMhz {
-			return fmt.Errorf("job %s, minCPUMhz > maxCPUMhz: %f", job, minCPUMhz)
+			return fmt.Errorf("%w: job %s minCPUMhz > maxCPUMhz", workspace.ErrInvalidManifest, job)
 		}
 
 		minMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMinMemory(manifest))
 		if err != nil {
-			return fmt.Errorf("error extracting minimum memory in MB, job %s: %v", job, err)
+			return fmt.Errorf("%w: job %s %w", workspace.ErrInvalidManifest, job, err)
 		}
 		maxMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMaxMemory(manifest))
 		if err != nil {
-			return fmt.Errorf("error extracting maximum memory in MB, job %s: %v", job, err)
+			return fmt.Errorf("%w: job %s %w", workspace.ErrInvalidManifest, job, err)
 		}
 		if minMemoryMb != 0 && maxMemoryMb == 0.0 {
 			maxMemoryMb = minMemoryMb
 		}
 		if minMemoryMb > maxMemoryMb {
-			return fmt.Errorf("job %s, minMemoryMb > maxMemoryMb: %f", job, minMemoryMb)
+			return fmt.Errorf("%w: job %s minMemoryMb > maxMemoryMb", workspace.ErrInvalidManifest, job)
 		}
 
 		jobConfig, err := getJobConf(job)
@@ -87,7 +87,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			return err
 		}
 
-		var memory = maxMemoryMb
+		memory := maxMemoryMb
 		if _, ok := jobConfig["memory"]; ok {
 			memory, err = utils.ExtractSizeInMB(jobConfig["memory"])
 			if err != nil {
@@ -95,7 +95,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			}
 		}
 
-		var cpu = maxCPUMhz
+		cpu := maxCPUMhz
 		if _, ok := jobConfig["cpu"]; ok {
 			cpu, err = utils.ExtractCPUFrequencyInMHz(jobConfig["cpu"])
 			if err != nil {
@@ -199,7 +199,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 				return err
 			}
 
-			var content = []byte("")
+			content := []byte("")
 			if !d.IsDir() {
 				content, err = os.ReadFile(workspace.GetJobFilePath(path))
 				if err != nil {
@@ -269,20 +269,20 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 	}
 	resourceValidationFailed := false
 	for rows.Next() {
-		var worker_ip string
-		var avaiable_memory_mb, available_cpu_mhz, needed_memory_mb, needed_cpu_mhz float64
-		err = rows.Scan(&worker_ip, &avaiable_memory_mb, &available_cpu_mhz, &needed_memory_mb, &needed_cpu_mhz)
+		var workerIP string
+		var avaiableMemoryMB, availableCPUMHZ, neededMemoryMB, neededCPUMhz float64
+		err = rows.Scan(&workerIP, &avaiableMemoryMB, &availableCPUMHZ, &neededMemoryMB, &neededCPUMhz)
 		if err != nil {
 			return err
 		}
 
-		if avaiable_memory_mb < needed_memory_mb {
+		if avaiableMemoryMB < neededMemoryMB {
 			resourceValidationFailed = true
-			fmt.Printf("worker_ip %s, available memory is %.2f MB, allocated memory is %.2f MB\n", worker_ip, avaiable_memory_mb, needed_memory_mb)
+			fmt.Printf("worker_ip %s, available memory is %.2f MB, allocated memory is %.2f MB\n", workerIP, avaiableMemoryMB, neededMemoryMB)
 		}
-		if available_cpu_mhz < available_cpu_mhz {
+		if availableCPUMHZ < availableCPUMHZ {
 			resourceValidationFailed = true
-			fmt.Printf("worker_ip %s, available cpu is %.2f MHZ, allocated cpu is %.2f MHZ\n", worker_ip, available_cpu_mhz, needed_cpu_mhz)
+			fmt.Printf("worker_ip %s, available cpu is %.2f MHZ, allocated cpu is %.2f MHZ\n", workerIP, availableCPUMHZ, neededCPUMhz)
 		}
 	}
 

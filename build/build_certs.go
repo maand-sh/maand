@@ -14,16 +14,17 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"maand/bucket"
-	"maand/data"
-	"maand/kv"
-	"maand/utils"
-	"maand/workspace"
 	"math/big"
 	"net"
 	"os"
 	"path"
 	"time"
+
+	"maand/bucket"
+	"maand/data"
+	"maand/kv"
+	"maand/utils"
+	"maand/workspace"
 )
 
 func Certs(tx *sql.Tx) error {
@@ -61,7 +62,7 @@ func Certs(tx *sql.Tx) error {
 
 		rows, err := tx.Query("SELECT name, pkcs8, one, subject FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
 		if err != nil {
-			return err
+			return data.NewDatabaseError(err)
 		}
 
 		certsMap := map[string]map[string]string{}
@@ -73,13 +74,13 @@ func Certs(tx *sql.Tx) error {
 
 			err = rows.Scan(&certName, &pkcs8, &one, &subject)
 			if err != nil {
-				return err
+				return data.NewDatabaseError(err)
 			}
 
 			var jobSubject workspace.CertSubject
 			err = json.Unmarshal([]byte(subject), &jobSubject)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: job %s cert %s %w", workspace.ErrInvalidManifest, job, certName, err)
 			}
 
 			workers, err := data.GetActiveAllocations(tx, job)
@@ -101,30 +102,28 @@ func Certs(tx *sql.Tx) error {
 				certPath := path.Join(bucket.TempLocation, "workers", workerIP, jobDir, "certs")
 				err := os.MkdirAll(certPath, os.ModePerm)
 				if err != nil {
-					return err
+					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 
 				vKey, err := kv.GetKVStore().Get(tx, ns, certKVName+".key")
-				var errNotFound = kv.NewNotFoundError(ns, certKVName+".key")
-				if err != nil && !errors.As(err, &errNotFound) {
-					return err
+				if err != nil && !errors.Is(err, kv.ErrNotFound) {
+					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 				if len(vKey) > 0 {
 					err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)), []byte(vKey), os.ModePerm)
 					if err != nil {
-						return err
+						return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 					}
 				}
 
 				vCrt, err := kv.GetKVStore().Get(tx, ns, certKVName+".crt")
-				errNotFound = kv.NewNotFoundError(ns, certKVName+".crt")
-				if err != nil && !errors.As(err, &errNotFound) {
-					return err
+				if err != nil && !errors.Is(err, kv.ErrNotFound) {
+					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 				if len(vCrt) > 0 {
 					err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)), []byte(vCrt), os.ModePerm)
 					if err != nil {
-						return err
+						return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 					}
 
 					maandConf, err := utils.GetMaandConf()
@@ -156,39 +155,39 @@ func Certs(tx *sql.Tx) error {
 							}
 							oneCertFile, err = os.ReadFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)))
 							if err != nil {
-								return err
+								return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 							}
 							oneKeyFile, err = os.ReadFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)))
 							if err != nil {
-								return err
+								return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 							}
 						}
 
 						err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)), oneCertFile, os.ModePerm)
 						if err != nil {
-							return err
+							return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 						}
 
 						err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)), oneKeyFile, os.ModePerm)
 						if err != nil {
-							return err
+							return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 						}
 
 					} else {
 						err = GenerateCert(certPath, certName, pkix.Name{CommonName: jobSubject.CommonName}, []string{workerIP}, maandConf.CertsTTL)
 						if err != nil {
-							return err
+							return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 						}
 					}
 				}
 
 				certPub, err := os.ReadFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)))
 				if err != nil {
-					return err
+					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 				certPri, err := os.ReadFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)))
 				if err != nil {
-					return err
+					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 
 				if certsMap[ns] == nil {
@@ -217,6 +216,7 @@ func Certs(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -224,32 +224,32 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddresses []string, tt
 	// Load CA certificate
 	caCertPEM, err := os.ReadFile(fmt.Sprintf("%s/ca.crt", bucket.SecretLocation))
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 	}
 
 	caKeyPEM, err := os.ReadFile(fmt.Sprintf("%s/ca.key", bucket.SecretLocation))
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 	}
 
 	// Decode CA certificate
 	caCertBlock, _ := pem.Decode(caCertPEM)
 	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: decoding ca.crt %w", bucket.ErrUnexpectedError, err)
 	}
 
 	// Decode CA private key
 	caKeyBlock, _ := pem.Decode(caKeyPEM)
 	caKey, err := x509.ParsePKCS1PrivateKey(caKeyBlock.Bytes)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: decoding ca.key %w", bucket.ErrUnexpectedError, err)
 	}
 
 	// Generate new certificate
 	serialNumber, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: serial number %w", bucket.ErrUnexpectedError, err)
 	}
 
 	ipList := []net.IP{net.ParseIP("127.0.0.1")}
@@ -271,19 +271,19 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddresses []string, tt
 
 	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: private key %w", bucket.ErrUnexpectedError, err)
 	}
 
 	// Sign certificate with CA
 	certBytes, err := x509.CreateCertificate(rand.Reader, &template, caCert, &privateKey.PublicKey, caKey)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: sign cert with ca %w", bucket.ErrUnexpectedError, err)
 	}
 
 	// Save certificate
 	certFile, err := os.Create(fmt.Sprintf("%s/%s.crt", path, name))
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 	}
 
 	defer func() {
@@ -292,13 +292,13 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddresses []string, tt
 
 	err = pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: encoding public key %w", bucket.ErrUnexpectedError, err)
 	}
 
 	// Save private key
 	keyFile, err := os.Create(fmt.Sprintf("%s/%s.key", path, name))
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 	}
 
 	defer func() {
@@ -307,7 +307,7 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddresses []string, tt
 
 	err = pem.Encode(keyFile, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: encoding private key %w", bucket.ErrUnexpectedError, err)
 	}
 
 	return nil
@@ -316,13 +316,13 @@ func GenerateCert(path, name string, subject pkix.Name, ipAddresses []string, tt
 func IsCertExpiringSoon(certPath string, days int) (bool, error) {
 	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 	}
 
 	block, _ := pem.Decode(certPEM)
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: file %s %w", bucket.ErrUnexpectedError, certPath, err)
 	}
 
 	expiryDate := cert.NotAfter.UTC().Add(time.Duration(days) * 24 * time.Hour)

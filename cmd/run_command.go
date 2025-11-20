@@ -6,7 +6,8 @@ package cmd
 
 import (
 	"fmt"
-	"maand/run_command"
+
+	"maand/runcommand"
 
 	"github.com/spf13/cobra"
 )
@@ -25,7 +26,7 @@ var runCommandCmd = &cobra.Command{
 		}
 		healthCheck, _ := flags.GetBool("health_check")
 
-		err := run_command.Execute(workerStr, labelStr, concurrency, shCommand, healthCheck)
+		err := runcommand.Execute(workerStr, labelStr, concurrency, shCommand, healthCheck)
 		if err != nil {
 			fmt.Println(err)
 		}

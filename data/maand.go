@@ -2,28 +2,29 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
+// Package data provides interfaces to work with database
 package data
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
-	"maand/bucket"
 	"os"
 	"path"
+
+	"maand/bucket"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func GetDatabase(failIfNotFound bool) (*sql.DB, error) {
-	var DbFile = path.Join(bucket.Location, "data/maand.db")
+	DBFile := path.Join(bucket.Location, "data/maand.db")
 	if failIfNotFound {
-		if _, err := os.Stat(DbFile); os.IsNotExist(err) {
-			return nil, errors.New("maand is not initialized in this dictionary")
+		if _, err := os.Stat(DBFile); os.IsNotExist(err) {
+			return nil, ErrNotInitialized
 		}
 	}
 
-	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_busy_timeout=5000", DbFile))
+	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_busy_timeout=5000", DBFile))
 	if err != nil {
 		return nil, NewDatabaseError(err)
 	}
@@ -45,8 +46,6 @@ func SetupMaand(tx *sql.Tx) error {
 		"CREATE TABLE IF NOT EXISTS job_certs (job_id TEXT, name TEXT, pkcs8 INT, one INT, subject TEXT)",
 		"CREATE TABLE IF NOT EXISTS job_files (job_id TEXT, path TEXT, content BLOB, isdir BOOL)",
 		"CREATE TABLE IF NOT EXISTS job_commands (job_id TEXT, job TEXT, name TEXT, executed_on TEXT, demand_job TEXT, demand_command TEXT, demand_config TEXT)",
-
-		"CREATE TABLE IF NOT EXISTS events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, short TEXT, long TEXT, created_date TEXT)",
 
 		"CREATE TABLE IF NOT EXISTS key_value (key TEXT, value TEXT, namespace TEXT, version INT, ttl TEXT, created_date TEXT, deleted INT)",
 		"CREATE TABLE IF NOT EXISTS hash (namespace TEXT, key TEXT, current_hash TEXT, previous_hash TEXT, PRIMARY KEY(namespace, key))",

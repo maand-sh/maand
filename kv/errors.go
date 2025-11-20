@@ -4,20 +4,13 @@
 
 package kv
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
-type NotFoundError struct {
-	Namespace string
-	Key       string
-}
+var ErrNotFound = errors.New("key not found")
 
-func (e *NotFoundError) Error() string {
-	return fmt.Sprintf("key %s not found in namespace %s", e.Key, e.Namespace)
-}
-
-func NewNotFoundError(namespace, key string) *NotFoundError {
-	return &NotFoundError{
-		Namespace: namespace,
-		Key:       key,
-	}
+func NewNotFoundError(namespace, key string) error {
+	return fmt.Errorf("%w: namespace %s, key %s", ErrNotFound, namespace, key)
 }

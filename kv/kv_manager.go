@@ -2,14 +2,16 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
+// Package kv provides interfaces to work with kv store
 package kv
 
 import (
 	"database/sql"
 	"errors"
-	"maand/data"
 	"sync"
 	"time"
+
+	"maand/data"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -37,8 +39,10 @@ func (store *KeyValueStore) Put(tx *sql.Tx, namespace, key, value string, ttl in
 	var currentTTL, deleted int
 
 	err := row.Scan(&version, &currentValue, &deleted, &currentTTL)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return data.NewDatabaseError(err)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			return data.NewDatabaseError(err)
+		}
 	}
 
 	if deleted == 0 && currentValue == value && currentTTL == ttl {
@@ -49,7 +53,10 @@ func (store *KeyValueStore) Put(tx *sql.Tx, namespace, key, value string, ttl in
 		`INSERT INTO key_value (key, value, namespace, version, ttl, created_date, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		key, value, namespace, version+1, ttl, store.GlobalUnix, 0,
 	)
-	return err
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+	return nil
 }
 
 func (store *KeyValueStore) Get(tx *sql.Tx, namespace, key string) (string, error) {
@@ -59,11 +66,11 @@ func (store *KeyValueStore) Get(tx *sql.Tx, namespace, key string) (string, erro
 	var value string
 	row := tx.QueryRow(query, namespace, key, namespace, key)
 	err := row.Scan(&value)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", NewNotFoundError(namespace, key)
-	}
 	if err != nil {
-		return "", err
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", NewNotFoundError(namespace, key)
+		}
+		return "", data.NewDatabaseError(err)
 	}
 
 	return value, nil
@@ -81,7 +88,6 @@ func (store *KeyValueStore) GetMetadata(tx *sql.Tx, namespace, key string) (stri
 
 	if err := row.Scan(&value, &version); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-
 			return "", 0, nil
 		}
 		return "", 0, data.NewDatabaseError(err)
@@ -97,7 +103,11 @@ func (store *KeyValueStore) Delete(tx *sql.Tx, namespace, key string) error {
 		`INSERT INTO key_value (key, value, namespace, version, ttl, created_date, deleted) SELECT key, value, namespace, max(version) + 1, ttl, created_date, 1 FROM key_value WHERE namespace = ? AND key = ? GROUP BY key, namespace`,
 		namespace, key,
 	)
-	return err
+	if err != nil {
+		return data.NewDatabaseError(err)
+	}
+
+	return nil
 }
 
 func (store *KeyValueStore) GetKeys(tx *sql.Tx, namespace string) ([]string, error) {
