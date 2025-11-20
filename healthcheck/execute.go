@@ -1,19 +1,21 @@
 // Copyright 2025 Kiruba Sankar Swaminathan. All rights reserved.
 // Use of this source code is governed by a MIT style
-// license that can be found in the LICENSE file.
+// license that can be found in the LICENSE file
 
-package health_check
+// Package healthcheck provides interfaces for health check
+package healthcheck
 
 import (
 	"database/sql"
 	"fmt"
-	"maand/bucket"
-	"maand/data"
-	"maand/job_command"
-	"maand/utils"
 	"strings"
 	"sync"
 	"time"
+
+	"maand/bucket"
+	"maand/data"
+	"maand/jobcommand"
+	"maand/utils"
 )
 
 func HealthCheck(tx *sql.Tx, dockerClient *bucket.DockerClient, wait bool, job string, verbose bool) error {
@@ -29,7 +31,7 @@ func HealthCheck(tx *sql.Tx, dockerClient *bucket.DockerClient, wait bool, job s
 
 	healthCheckFunc := func() error {
 		for _, cmd := range commands {
-			err := job_command.JobCommand(tx, dockerClient, job, cmd, "health_check", 1, verbose, []string{})
+			err := jobcommand.JobCommand(tx, dockerClient, job, cmd, "health_check", 1, verbose, []string{})
 			if err != nil {
 				return err
 			}
@@ -38,7 +40,7 @@ func HealthCheck(tx *sql.Tx, dockerClient *bucket.DockerClient, wait bool, job s
 	}
 
 	if wait {
-		for i := 0; i < 30; i++ {
+		for range 30 {
 			time.Sleep(1 * time.Second)
 			err := healthCheckFunc()
 			if err == nil {
@@ -91,7 +93,7 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 		_ = dockerClient.Stop()
 	}()
 
-	cancel := job_command.SetupServer(tx)
+	cancel := jobcommand.SetupServer(tx)
 	defer cancel()
 
 	jobs, err := data.GetJobs(tx)
@@ -101,7 +103,7 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var errJobs = make(map[string]error)
+	errJobs := make(map[string]error)
 	for _, job := range jobs {
 		if len(jobsFilter) > 0 {
 			if len(utils.Intersection(jobsFilter, []string{job})) == 0 {
@@ -126,7 +128,7 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 		return data.NewDatabaseError(err)
 	}
 
-	//TODO: deal with errors
+	// TODO: deal with errors
 	if len(errJobs) > 0 {
 		return fmt.Errorf("%v", errJobs)
 	}

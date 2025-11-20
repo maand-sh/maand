@@ -7,15 +7,16 @@ package build
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+
 	"maand/bucket"
 	"maand/data"
 	"maand/kv"
 	"maand/utils"
 	"maand/workspace"
-	"os"
-	"path"
-	"strconv"
-	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -181,25 +182,28 @@ func processLabelData(tx *sql.Tx) error {
 	}
 
 	content, err := os.ReadFile(path.Join(bucket.SecretLocation, "ca.crt"))
+	if err != nil {
+		return fmt.Errorf("%w: unable to read ca.crt", bucket.ErrUnexpectedError)
+	}
 	workerKV["certs/ca.crt"] = string(content)
 
 	return storeKeyValues(tx, "maand/worker", workerKV)
 }
 
 func processBucketConf(tx *sql.Tx) error {
-	var bucketConfig = make(map[string]string)
+	bucketConfig := make(map[string]string)
 
 	bucketConfPath := path.Join(bucket.WorkspaceLocation, "bucket.conf")
 
 	if _, err := os.Stat(bucketConfPath); err == nil {
 		bucketData, err := os.ReadFile(bucketConfPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 		}
 
 		err = toml.Unmarshal(bucketData, &bucketConfig)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", bucket.ErrInvalidBucketConf, err)
 		}
 	}
 
@@ -221,7 +225,6 @@ func processBucketConf(tx *sql.Tx) error {
 			if err != nil {
 				return data.NewDatabaseError(err)
 			}
-
 			jobPorts[name] = value
 		}
 	}
@@ -234,11 +237,12 @@ func processBucketConf(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func getJobConf(job string) (map[string]string, error) {
-	var config = make(map[string]map[string]string)
+	config := make(map[string]map[string]string)
 
 	maandConf, err := utils.GetMaandConf()
 	if err != nil {
@@ -246,7 +250,6 @@ func getJobConf(job string) (map[string]string, error) {
 	}
 
 	bucketJobConf := path.Join(bucket.WorkspaceLocation, "bucket.jobs.conf")
-
 	maandConf.JobConfigSelector = strings.TrimSpace(maandConf.JobConfigSelector)
 	if maandConf.JobConfigSelector != "" {
 		bucketJobConf = path.Join(bucket.WorkspaceLocation, fmt.Sprintf("bucket.jobs.%s.conf", maandConf.JobConfigSelector))
@@ -255,12 +258,12 @@ func getJobConf(job string) (map[string]string, error) {
 	if _, err := os.Stat(bucketJobConf); err == nil {
 		bucketData, err := os.ReadFile(bucketJobConf)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 		}
 
 		err = toml.Unmarshal(bucketData, &config)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: bucket conf %s %w", bucket.ErrInvalidBucketConf, bucketJobConf, err)
 		}
 	}
 
@@ -344,9 +347,11 @@ func processJobData(tx *sql.Tx) error {
 		if err != nil {
 			return err
 		}
+
 		for _, workerIP := range jobWorkers {
 			nss = append(nss, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
 		}
+
 		for _, ns := range nss {
 			err := storeKeyValues(tx, ns, make(map[string]string))
 			if err != nil {
@@ -362,7 +367,7 @@ func storeKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) e
 	var availableKeys []string
 	for key, value := range keyValues {
 		if err := kv.GetKVStore().Put(tx, namespace, key, value, 0); err != nil {
-			return fmt.Errorf("failed to store key-value pair (%s: %s): %w", key, value, err)
+			return err
 		}
 		availableKeys = append(availableKeys, key)
 	}

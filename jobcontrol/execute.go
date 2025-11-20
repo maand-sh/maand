@@ -2,19 +2,21 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-package job_control
+// Package jobcontrol provides interfaces to work with jobcontrol
+package jobcontrol
 
 import (
 	"fmt"
 	"log"
-	"maand/bucket"
-	"maand/data"
-	"maand/health_check"
-	"maand/job_command"
-	"maand/utils"
-	"maand/worker"
 	"strings"
 	"sync"
+
+	"maand/bucket"
+	"maand/data"
+	"maand/healthcheck"
+	"maand/jobcommand"
+	"maand/utils"
+	"maand/worker"
 )
 
 func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
@@ -95,7 +97,7 @@ func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
 
 		var selectedJobs []string
-		var jobs, err = data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+		jobs, err := data.GetJobsByDeploymentSeq(tx, deploymentSeq)
 		if err != nil {
 			return err
 		}
@@ -130,16 +132,16 @@ func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 
 				if len(commands) > 0 {
 					for _, command := range commands {
-						err = job_command.JobCommand(tx, dockerClient, tJob, command, "job_control", len(allocatedWorkers), true, []string{})
+						err = jobcommand.JobCommand(tx, dockerClient, tJob, command, "job_control", len(allocatedWorkers), true, []string{})
 						if err != nil {
-							fmt.Printf("job %s, job_control command is failed, %s, %w\n", tJob, command, err)
+							fmt.Printf("job %s, job_control command is failed, %s, %v\n", tJob, command, err)
 						}
 					}
 
 					if healthCheck {
-						err = health_check.HealthCheck(tx, dockerClient, true, tJob, true)
+						err = healthcheck.HealthCheck(tx, dockerClient, true, tJob, true)
 						if err != nil {
-							fmt.Printf("job %s, health_check failded %w\n", tJob, err)
+							fmt.Printf("job %s, health_check failded, %v", tJob, err)
 						}
 					}
 					return
@@ -179,31 +181,16 @@ func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 
 					waitWorker.Wait()
 					if healthCheck {
-						err = health_check.HealthCheck(tx, dockerClient, true, tJob, true)
+						err = healthcheck.HealthCheck(tx, dockerClient, true, tJob, true)
 						if err != nil {
 							fmt.Println(err)
 						}
 					}
 				}
-
 			}(job)
 		}
 
 		wait.Wait()
-	}
-
-	var shortMsg = fmt.Sprintf("job %s", target)
-	var longMsg = fmt.Sprintf("all jobs", target)
-	if len(jobsFilter) != 0 {
-		longMsg = fmt.Sprintf("jobs %v", jobsFilter)
-	}
-	if len(workersFilter) != 0 {
-		longMsg += fmt.Sprintf(" workers %v", workersFilter)
-	}
-
-	err = data.Event(tx, shortMsg, longMsg)
-	if err != nil {
-		return err
 	}
 
 	if err := tx.Commit(); err != nil {

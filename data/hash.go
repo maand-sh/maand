@@ -13,16 +13,14 @@ func UpdateHash(tx *sql.Tx, namespace, key, hash string) error {
 	var dbCurrentHash string
 	row := tx.QueryRow("SELECT current_hash FROM hash WHERE namespace = ? AND key = ?", namespace, key)
 	err := row.Scan(&dbCurrentHash)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		_, err = tx.Exec("INSERT INTO hash (namespace, key, current_hash) VALUES (?, ?, ?)", namespace, key, hash)
-		if err != nil {
-			return NewDatabaseError(err)
-		}
-		return nil
-	}
-
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			_, err = tx.Exec("INSERT INTO hash (namespace, key, current_hash) VALUES (?, ?, ?)", namespace, key, hash)
+			if err != nil {
+				return NewDatabaseError(err)
+			}
+			return nil
+		}
 		return NewDatabaseError(err)
 	}
 
@@ -37,13 +35,13 @@ func HashChanged(tx *sql.Tx, namespace, key string) (bool, error) {
 	var dbCurrentHash, dbPreviousHash string
 	row := tx.QueryRow("SELECT ifnull(current_hash, '') as current_hash, ifnull(previous_hash, '') as previous_hash FROM hash WHERE namespace = ? AND key = ?", namespace, key)
 	err := row.Scan(&dbCurrentHash, &dbPreviousHash)
-	if errors.Is(err, sql.ErrNoRows) || dbCurrentHash != dbPreviousHash {
-		return true, nil
-	}
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return true, nil
+		}
 		return false, NewDatabaseError(err)
 	}
-	return false, nil
+	return dbCurrentHash != dbPreviousHash, nil
 }
 
 func PromoteHash(tx *sql.Tx, namespace, key string) (err error) {
@@ -65,10 +63,10 @@ func RemoveHash(tx *sql.Tx, namespace, key string) (err error) {
 func GetPreviousHash(tx *sql.Tx, namespace, key string) (previousHash string, err error) {
 	row := tx.QueryRow("SELECT ifnull(previous_hash, '') FROM hash WHERE namespace = ? AND key = ?", namespace, key)
 	err = row.Scan(&previousHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", nil
-	}
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", nil
+		}
 		return "", NewDatabaseError(err)
 	}
 	return previousHash, nil

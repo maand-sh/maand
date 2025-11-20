@@ -8,9 +8,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"os"
@@ -18,6 +15,10 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/google/uuid"
 )
 
 type DockerClient struct {
@@ -33,7 +34,7 @@ func (dc *DockerClient) Start() (err error) {
 		return err
 	}
 
-	var binds = []string{fmt.Sprintf("%s:/bucket:z", bucketAbsPath)}
+	binds := []string{fmt.Sprintf("%s:/bucket:z", bucketAbsPath)}
 
 	resp, err := dc.cli.ContainerCreate(
 		dc.ctx,
@@ -168,17 +169,17 @@ func BuildBucketContainer(bucketID string) error {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	err = cmd.Start()
 	if err != nil {
-		return fmt.Errorf("unable to Start bucket container: %v", err)
+		return fmt.Errorf("%w: docker run %w", ErrUnexpectedError, err)
 	}
 
 	handleOutput := func(pipe io.ReadCloser) {
@@ -196,7 +197,7 @@ func BuildBucketContainer(bucketID string) error {
 
 	err = cmd.Wait()
 	if err != nil {
-		return fmt.Errorf("failed 'docker build' : %w", err)
+		return fmt.Errorf("%w: build failed %w", ErrUnexpectedError, err)
 	}
 
 	return nil
@@ -207,12 +208,12 @@ func IsBucketImageAvailable(bucketID string) (bool, error) {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	err = cmd.Start()
 	if err != nil {
-		return false, fmt.Errorf("unable to build bucket container: %v", err)
+		return false, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	found := false
@@ -227,19 +228,19 @@ func IsBucketImageAvailable(bucketID string) (bool, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	err = cmd.Wait()
 	if err != nil {
-		return false, fmt.Errorf("failed on 'docker image ls' : %w", err)
+		return false, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	return found, nil
 }
 
 func newDockerContainer(baseImage string) (*DockerClient, error) {
-	var ctx = context.Background()
+	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, fmt.Errorf("error creating docker client: %w", err)

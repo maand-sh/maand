@@ -9,18 +9,21 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 	"sync"
+
+	"maand/bucket"
 )
 
 func CalculateFileMD5(filePath string) (string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
-		return "", fmt.Errorf("error opening file %s: %v", filePath, err)
+		return "", fmt.Errorf("%w: file %s %w", bucket.ErrUnexpectedError, filePath, err)
 	}
 	defer func() {
 		_ = f.Close()
@@ -28,7 +31,7 @@ func CalculateFileMD5(filePath string) (string, error) {
 
 	hash := md5.New()
 	if _, err := io.Copy(hash, f); err != nil {
-		return "", fmt.Errorf("error reading file %s: %v", filePath, err)
+		return "", fmt.Errorf("%w: file %s %w", bucket.ErrUnexpectedError, filePath, err)
 	}
 
 	return hex.EncodeToString(hash.Sum(nil)), nil
@@ -39,7 +42,7 @@ func CalculateDirMD5(folderPath string) (string, error) {
 	// Walk through the folder and collect file paths.
 	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 		}
 		if strings.Contains(path, "__pycache__") {
 			return nil
@@ -57,9 +60,9 @@ func CalculateDirMD5(folderPath string) (string, error) {
 	// Sort file paths to ensure a consistent order.
 	sort.Strings(files)
 
-	// Map to store file MD5s using the file path as the key.
 	fileMD5Map := make(map[string]string)
 	var wg sync.WaitGroup
+
 	// Limit concurrency to the number of CPUs.
 	sem := make(chan struct{}, runtime.NumCPU())
 	var mu sync.Mutex
@@ -68,20 +71,25 @@ func CalculateDirMD5(folderPath string) (string, error) {
 	for _, file := range files {
 		wg.Add(1)
 		sem <- struct{}{}
+
 		go func(f string) {
-			defer wg.Done()
-			defer func() { <-sem }()
+			defer func() {
+				wg.Done()
+				<-sem
+			}()
+
 			md5Str, err := CalculateFileMD5(f)
 			if err != nil {
-				// Print the error and skip the file.
-				fmt.Printf("Error reading file %s: %v\n", f, err)
+				log.Fatalln(err)
 				return
 			}
+
 			mu.Lock()
 			fileMD5Map[f] = md5Str
 			mu.Unlock()
 		}(file)
 	}
+
 	wg.Wait()
 
 	// Update the global MD5 hash in sorted order.

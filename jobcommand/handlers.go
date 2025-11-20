@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-package job_command
+package jobcommand
 
 import (
 	"database/sql"
@@ -11,8 +11,9 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"maand/kv"
 	"net/http"
+
+	"maand/kv"
 )
 
 func newMux(tx *sql.Tx) *http.ServeMux {
@@ -154,7 +155,6 @@ func handleDemandsGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 		FROM job_commands 
 		WHERE demand_job = ? AND demand_command = ?`,
 		job, command)
-
 	if err != nil {
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return

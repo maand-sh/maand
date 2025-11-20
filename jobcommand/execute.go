@@ -2,22 +2,24 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-package job_command
+// Package jobcommand provides interface to work with job commands
+package jobcommand
 
 import (
 	"database/sql"
 	_ "embed"
 	"fmt"
-	"maand/bucket"
-	"maand/data"
-	"maand/kv"
-	"maand/utils"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
 	"strings"
 	"sync"
+
+	"maand/bucket"
+	"maand/data"
+	"maand/kv"
+	"maand/utils"
 )
 
 //go:embed maand.py
@@ -66,7 +68,7 @@ func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, eve
 
 		caPath := path.Join(workerDir, "jobs", job, "_modules", "certs/ca.crt")
 		if _, err := os.Stat(caPath); os.IsNotExist(err) {
-			content, err := kvStore.Get(tx, fmt.Sprintf("maand/worker"), "certs/ca.crt")
+			content, err := kvStore.Get(tx, "maand/worker", "certs/ca.crt")
 			if err != nil {
 				return err
 			}
@@ -111,7 +113,7 @@ func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, eve
 	}
 
 	allocErrors := map[string]error{}
-	var semaphore = make(chan struct{}, concurrency)
+	semaphore := make(chan struct{}, concurrency)
 	var wait sync.WaitGroup
 	var mu sync.Mutex
 

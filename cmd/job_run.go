@@ -6,7 +6,8 @@ package cmd
 
 import (
 	"log"
-	"maand/job_control"
+
+	"maand/jobcontrol"
 
 	"github.com/spf13/cobra"
 )
@@ -20,7 +21,7 @@ var jobRunCmd = &cobra.Command{
 		workersComma, _ := flags.GetString("allocations")
 		target, _ := flags.GetString("target")
 		healthCheck, _ := flags.GetBool("health_check")
-		err := job_control.Execute(args[0], workersComma, target, healthCheck)
+		err := jobcontrol.Execute(args[0], workersComma, target, healthCheck)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -35,7 +36,7 @@ var jobStartCmd = &cobra.Command{
 		flags := cmd.Flags()
 		workersComma, _ := flags.GetString("allocations")
 		healthCheck, _ := flags.GetBool("health_check")
-		err := job_control.Execute(args[0], workersComma, "start", healthCheck)
+		err := jobcontrol.Execute(args[0], workersComma, "start", healthCheck)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -50,7 +51,7 @@ var jobStopCmd = &cobra.Command{
 		flags := cmd.Flags()
 		workersComma, _ := flags.GetString("allocations")
 		healthCheck, _ := flags.GetBool("health_check")
-		err := job_control.Execute(args[0], workersComma, "stop", healthCheck)
+		err := jobcontrol.Execute(args[0], workersComma, "stop", healthCheck)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -65,7 +66,7 @@ var jobRestartCmd = &cobra.Command{
 		flags := cmd.Flags()
 		workersComma, _ := flags.GetString("allocations")
 		healthCheck, _ := flags.GetBool("health_check")
-		err := job_control.Execute(args[0], workersComma, "restart", healthCheck)
+		err := jobcontrol.Execute(args[0], workersComma, "restart", healthCheck)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -79,7 +80,7 @@ var jobStatusCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		flags := cmd.Flags()
 		workersComma, _ := flags.GetString("allocations")
-		err := job_control.Execute(args[0], workersComma, "status", false)
+		err := jobcontrol.Execute(args[0], workersComma, "status", false)
 		if err != nil {
 			log.Fatal(err)
 		}

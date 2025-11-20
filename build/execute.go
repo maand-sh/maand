@@ -2,20 +2,23 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
+// Package build provides interfaces to build workspace
 package build
 
 import (
 	"database/sql"
 	"fmt"
+	"os"
+
 	"maand/bucket"
 	"maand/data"
-	"maand/job_command"
+	"maand/jobcommand"
 	"maand/kv"
 	"maand/workspace"
 )
 
 func runPostBuild(tx *sql.Tx) error {
-	cancel := job_command.SetupServer(tx)
+	cancel := jobcommand.SetupServer(tx)
 	defer cancel()
 
 	bucketID, err := data.GetBucketID(tx)
@@ -52,7 +55,7 @@ func runPostBuild(tx *sql.Tx) error {
 				continue
 			}
 			for _, command := range postBuildCommands {
-				err := job_command.JobCommand(tx, dockerClient, job, command, "post_build", 1, true, []string{})
+				err := jobcommand.JobCommand(tx, dockerClient, job, command, "post_build", 1, true, []string{})
 				if err != nil {
 					return fmt.Errorf("post_build failed: %v", err)
 				}
@@ -65,11 +68,12 @@ func runPostBuild(tx *sql.Tx) error {
 func Execute() error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return err
 	}
+
 	defer func() {
 		_ = db.Close()
-		//_ = os.RemoveAll(bucket.TempLocation)
+		_ = os.RemoveAll(bucket.TempLocation)
 	}()
 
 	tx, err := db.Begin()
@@ -139,11 +143,6 @@ func Execute() error {
 	defer func() {
 		_ = tx.Rollback()
 	}()
-
-	err = data.Event(tx, "build", "")
-	if err != nil {
-		return err
-	}
 
 	err = runPostBuild(tx)
 	if err != nil {

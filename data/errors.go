@@ -5,28 +5,15 @@
 package data
 
 import (
+	"errors"
 	"fmt"
-	"runtime"
 )
 
-type DatabaseError struct {
-	Err   error
-	Stack string
-}
-
-func (e *DatabaseError) Error() string {
-	return fmt.Sprintf("database error: %v\nStack trace:\n%s", e.Err, e.Stack)
-}
-
-func (e *DatabaseError) Unwrap() error {
-	return e.Err
-}
+var (
+	ErrNotInitialized = errors.New("maand is not initialized")
+	ErrDatabase       = errors.New("database error")
+)
 
 func NewDatabaseError(err error) error {
-	stackBuf := make([]byte, 4096) // Allocate buffer for stack trace
-	n := runtime.Stack(stackBuf, false)
-	return &DatabaseError{
-		Err:   err,
-		Stack: string(stackBuf[:n]),
-	}
+	return fmt.Errorf("%w: %w", ErrDatabase, err)
 }

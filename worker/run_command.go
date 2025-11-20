@@ -2,14 +2,16 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
+// Package worker
 package worker
 
 import (
 	"fmt"
-	"maand/bucket"
-	"maand/utils"
 	"os"
 	"path"
+
+	"maand/bucket"
+	"maand/utils"
 )
 
 func ExecuteCommand(dockerClient *bucket.DockerClient, workerIP string, commands []string, env []string) error {

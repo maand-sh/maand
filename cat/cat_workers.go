@@ -7,15 +7,15 @@ package cat
 import (
 	"database/sql"
 	"errors"
-	"github.com/jedib0t/go-pretty/v6/table"
+
 	"maand/data"
 	"maand/utils"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func Workers() error {
-
 	// TODO: labels filter
-
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)
@@ -30,12 +30,12 @@ func Workers() error {
 		_ = tx.Rollback()
 	}()
 
-	count := 0
-	query := "SELECT count(*) FROM worker"
-	row := tx.QueryRow(query)
-	err = row.Scan(&count)
-	if errors.Is(err, sql.ErrNoRows) || count == 0 {
-		return &NotFoundError{Domain: "workers"}
+	workers, err := data.GetAllWorkers(tx)
+	if errors.Is(err, data.ErrDatabase) {
+		return err
+	}
+	if errors.Is(err, sql.ErrNoRows) || len(workers) == 0 {
+		return errors.New("no workers found")
 	}
 
 	rows, err := tx.Query(`SELECT worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position, labels FROM cat_workers`)

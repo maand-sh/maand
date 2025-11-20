@@ -8,13 +8,15 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
+
 	"maand/data"
 	"maand/utils"
 	"maand/workspace"
+
+	"github.com/google/uuid"
 )
 
-var removedWorkers []string
+var removedWorkers []string // global variable captures removed workers from workspace
 
 func Workers(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 	var workspaceWorkers []string
@@ -30,7 +32,8 @@ func Workers(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 	}
 
 	if len(workersIP) != len(utils.Unique(workersIP)) {
-		return fmt.Errorf("workers.json can't have duplicate worker ip")
+		// TODO: report duplicate ip address
+		return fmt.Errorf("%w: duplicate worker ip found", ErrInvaildWorkerJSON)
 	}
 
 	for _, worker := range wsWorkers {
@@ -39,7 +42,7 @@ func Workers(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		var workerID string
 		err := row.Scan(&workerID)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return err
+			return data.NewDatabaseError(err)
 		}
 		if workerID == "" {
 			workerID = uuid.NewString()
@@ -49,18 +52,18 @@ func Workers(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		availableMemory, err := utils.ExtractSizeInMB(worker.Memory)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: worker %s %w", ErrInvaildWorkerJSON, worker.Host, err)
 		}
 		if availableMemory < 0 {
-			return fmt.Errorf("worker memory can't be less than 0, worker %s", worker.Host)
+			return fmt.Errorf("%w: worker %s memory can't be less than 0", ErrInvaildWorkerJSON, worker.Host)
 		}
 
 		availableCPU, err := utils.ExtractCPUFrequencyInMHz(worker.CPU)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: worker %s %w", ErrInvaildWorkerJSON, worker.Host, err)
 		}
 		if availableCPU < 0 {
-			return fmt.Errorf("worker cpu can't be less than 0, worker %s", worker.Host)
+			return fmt.Errorf("%w: worker %s, cpu can't be less than 0", ErrInvaildWorkerJSON, worker.Host)
 		}
 
 		query := "INSERT OR REPLACE INTO worker (worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position) VALUES (?, ?, ?, ?, ?)"
@@ -116,7 +119,7 @@ func workerLabels(tx *sql.Tx, workerID string, worker workspace.Worker) error {
 
 	labels := worker.Labels
 	if len(labels) != len(utils.Unique(labels)) {
-		return fmt.Errorf("workers can't have duplicate labels, worker: %s", worker.Host)
+		return fmt.Errorf("%w: worker %s have duplicate labels", ErrInvaildWorkerJSON, worker.Host)
 	}
 
 	for _, label := range labels {
@@ -135,6 +138,7 @@ func workerTags(tx *sql.Tx, workerID string, worker workspace.Worker) error {
 	}
 
 	tags := worker.Tags
+	// TODO: P1, check for duplicate
 	for key, value := range tags {
 		_, err = tx.Exec("INSERT INTO worker_tags (worker_id, key, value) VALUES (?, ?, ?)", workerID, key, value)
 		if err != nil {

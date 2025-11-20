@@ -2,23 +2,26 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-package run_command
+// Package runcommand provides interfaces to work with run command
+package runcommand
 
 import (
+	"errors"
 	"fmt"
-	"maand/bucket"
-	"maand/data"
-	"maand/health_check"
-	"maand/utils"
-	"maand/worker"
 	"os"
 	"path"
 	"strings"
 	"sync"
 	"time"
+
+	"maand/bucket"
+	"maand/data"
+	"maand/healthcheck"
+	"maand/utils"
+	"maand/worker"
 )
 
-func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, healthcheck bool) error {
+func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runHealthcheck bool) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
 		return data.NewDatabaseError(err)
@@ -69,7 +72,7 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, heal
 	}
 
 	if concurrency < 1 {
-		return fmt.Errorf("concurrency must be at least 1")
+		return errors.New("concurrency must be at least 1")
 	}
 
 	workers = utils.Unique(workers)
@@ -77,12 +80,16 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, heal
 	var content []byte
 	commandFile := path.Join(bucket.WorkspaceLocation, "command.sh")
 	if len(shCommand) == 0 {
-		if _, err := os.Stat(commandFile); os.IsNotExist(err) {
-			return fmt.Errorf("run commands required argument input or command file")
+		_, err := os.Stat(commandFile)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return errors.New("command/command file is required")
+			}
+			return err
 		}
 		content, err = os.ReadFile(commandFile)
 		if err != nil {
-			return fmt.Errorf("unable to read command file, %v", err)
+			return bucket.NewUnexpectedError(err)
 		}
 	} else {
 		content = []byte(shCommand)
@@ -93,9 +100,9 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, heal
 		return err
 	}
 
-	err = os.WriteFile(path.Join(bucket.TempLocation, "command.sh"), content, 0644)
+	err = os.WriteFile(path.Join(bucket.TempLocation, "command.sh"), content, 0o644)
 	if err != nil {
-		return fmt.Errorf("unable to copy command file, %v", err)
+		return bucket.NewUnexpectedError(err)
 	}
 	commandFile = "command.sh"
 
@@ -121,7 +128,7 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, heal
 
 		var wait sync.WaitGroup
 		var mu sync.Mutex
-		var errs = make(map[string]error)
+		errs := make(map[string]error)
 
 		for _, workerIP := range batch {
 			wait.Add(1)
@@ -140,14 +147,14 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, heal
 		wait.Wait()
 
 		if len(errs) > 0 {
-			var failedWorkers = []string{}
-			for wp, _ := range errs {
+			failedWorkers := []string{}
+			for wp := range errs {
 				failedWorkers = append(failedWorkers, wp)
 			}
 			return fmt.Errorf("%s worker(s) failed", strings.Join(failedWorkers, ","))
 		}
 
-		if healthcheck {
+		if runHealthcheck {
 			time.Sleep(10 * time.Second)
 			jobs, err := data.GetJobs(tx)
 			if err != nil {
@@ -155,7 +162,7 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, heal
 			}
 
 			for _, job := range jobs {
-				err := health_check.HealthCheck(tx, dockerClient, true, job, true)
+				err := healthcheck.HealthCheck(tx, dockerClient, true, job, true)
 				if err != nil {
 					return err
 				}
