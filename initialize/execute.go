@@ -11,29 +11,31 @@ import (
 	"crypto/x509/pkix"
 	_ "embed"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"github.com/google/uuid"
-	"maand/bucket"
-	"maand/data"
-	"maand/utils"
 	"math/big"
 	"os"
 	"path"
 	"time"
+
+	"maand/bucket"
+	"maand/data"
+
+	"github.com/google/uuid"
 )
 
 //go:embed Dockerfile
-var dockerFile []byte
+var containerFile []byte
 
 //go:embed requirements.txt
 var requirementsFile []byte
 
-var BucketAlreadyInitializedErr = fmt.Errorf("maand is already initialized in this directory")
+var ErrBucketAlreadyInitialized = errors.New("maand is already initialized in this directory")
 
 func Execute() error {
-	var dbFile = path.Join(bucket.Location, "data/maand.db")
+	dbFile := path.Join(bucket.Location, "data/maand.db")
 	if f, err := os.Stat(dbFile); f != nil || os.IsExist(err) {
-		return BucketAlreadyInitializedErr
+		return ErrBucketAlreadyInitialized
 	}
 
 	err := os.MkdirAll(path.Join(bucket.Location, "data"), os.ModePerm)
@@ -63,7 +65,7 @@ func Execute() error {
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -74,28 +76,28 @@ func Execute() error {
 		return err
 	}
 
-	bucketId := uuid.NewString()
-	_, err = tx.Exec("INSERT INTO bucket (bucket_id, update_seq) VALUES (?, ?)", bucketId, 0)
+	bucketID := uuid.NewString()
+	_, err = tx.Exec("INSERT INTO bucket (bucket_id, update_seq) VALUES (?, ?)", bucketID, 0)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
-	workersJson := path.Join(bucket.WorkspaceLocation, "workers.json")
-	if _, err := os.Stat(workersJson); os.IsNotExist(err) {
-		err = os.WriteFile(workersJson, []byte("[]"), os.ModePerm)
+	workersJSON := path.Join(bucket.WorkspaceLocation, "workers.json")
+	if _, err := os.Stat(workersJSON); os.IsNotExist(err) {
+		err = os.WriteFile(workersJSON, []byte("[]"), os.ModePerm)
 		if err != nil {
 			return fmt.Errorf("unable to create workers.json, %w", err)
 		}
 	}
 
-	conf := utils.MaandConf{
+	conf := bucket.MaandConf{
 		UseSUDO:    true,
 		SSHUser:    "agent",
 		SSHKeyFile: "worker.key",
 		CertsTTL:   60,
 	}
 
-	err = utils.WriteMaandConf(&conf)
+	err = bucket.WriteMaandConf(&conf)
 	if err != nil {
 		return fmt.Errorf("unable to write maand.conf, %w", err)
 	}
@@ -113,27 +115,27 @@ func Execute() error {
 	_, caCrtErr := os.Stat(caCrtFile)
 	_, caKeyErr := os.Stat(caKeyFile)
 	if os.IsNotExist(caCrtErr) && os.IsNotExist(caKeyErr) {
-		err = generateCA(bucket.SecretLocation, pkix.Name{CommonName: bucketId}, 10*365)
+		err = generateCA(bucket.SecretLocation, pkix.Name{CommonName: bucketID}, 10*365)
 		if err != nil {
 			return err
 		}
 	}
 
-	dockerFolder := path.Join(bucket.WorkspaceLocation, "docker")
-	err = os.MkdirAll(dockerFolder, os.ModePerm)
+	containerFolder := path.Join(bucket.WorkspaceLocation, "docker")
+	err = os.MkdirAll(containerFolder, os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("unable to create docker directory: %w", err)
+		return fmt.Errorf("unable to create container directory: %w", err)
 	}
 
-	dockerFilePath := path.Join(dockerFolder, "Dockerfile")
-	if _, err := os.Stat(dockerFilePath); os.IsNotExist(err) {
-		err = os.WriteFile(dockerFilePath, dockerFile, os.ModePerm)
+	containerFilePath := path.Join(containerFolder, "Dockerfile")
+	if _, err := os.Stat(containerFilePath); os.IsNotExist(err) {
+		err = os.WriteFile(containerFilePath, containerFile, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("unable to create docker file, %w", err)
+			return fmt.Errorf("unable to create container file, %w", err)
 		}
 	}
 
-	requirementFilePath := path.Join(dockerFolder, "requirements.txt")
+	requirementFilePath := path.Join(containerFolder, "requirements.txt")
 	if _, err := os.Stat(requirementFilePath); os.IsNotExist(err) {
 		err = os.WriteFile(requirementFilePath, requirementsFile, os.ModePerm)
 		if err != nil {
@@ -143,7 +145,7 @@ func Execute() error {
 
 	err = tx.Commit()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

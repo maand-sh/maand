@@ -14,7 +14,7 @@ import (
 
 // test workers position
 // added
-func TestBuildWorkerPostionAdded(t *testing.T) {
+func TestWorkerPostionAdded(t *testing.T) {
 	_ = os.RemoveAll(bucket.Location)
 
 	err := initialize.Execute()
@@ -44,7 +44,7 @@ func TestBuildWorkerPostionAdded(t *testing.T) {
 }
 
 // moved
-func TestBuildWorkerPostionMoved(t *testing.T) {
+func TestWorkerPostionMoved(t *testing.T) {
 	_ = os.RemoveAll(bucket.Location)
 
 	err := initialize.Execute()
@@ -74,7 +74,7 @@ func TestBuildWorkerPostionMoved(t *testing.T) {
 }
 
 // removed
-func TestBuildWorkerPostionRemoved(t *testing.T) {
+func TestWorkerPostionRemoved(t *testing.T) {
 	_ = os.RemoveAll(bucket.Location)
 
 	err := initialize.Execute()

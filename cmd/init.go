@@ -8,8 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"maand/initialize"
 	"os"
+
+	"maand/initialize"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,7 @@ var initCmd = &cobra.Command{
 	Short: "Initializes the bucket",
 	Run: func(cmd *cobra.Command, args []string) {
 		err := initialize.Execute()
-		if errors.Is(err, initialize.BucketAlreadyInitializedErr) {
+		if errors.Is(err, initialize.ErrBucketAlreadyInitialized) {
 			log.Fatalln(err)
 		}
 		if err != nil {

@@ -62,7 +62,7 @@ func Certs(tx *sql.Tx) error {
 
 		rows, err := tx.Query("SELECT name, pkcs8, one, subject FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		certsMap := map[string]map[string]string{}
@@ -74,13 +74,13 @@ func Certs(tx *sql.Tx) error {
 
 			err = rows.Scan(&certName, &pkcs8, &one, &subject)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 
 			var jobSubject workspace.CertSubject
 			err = json.Unmarshal([]byte(subject), &jobSubject)
 			if err != nil {
-				return fmt.Errorf("%w: job %s cert %s %w", workspace.ErrInvalidManifest, job, certName, err)
+				return fmt.Errorf("%w: job %s cert %s %w", bucket.ErrInvalidManifest, job, certName, err)
 			}
 
 			workers, err := data.GetActiveAllocations(tx, job)
@@ -106,7 +106,7 @@ func Certs(tx *sql.Tx) error {
 				}
 
 				vKey, err := kv.GetKVStore().Get(tx, ns, certKVName+".key")
-				if err != nil && !errors.Is(err, kv.ErrNotFound) {
+				if err != nil && !errors.Is(err, bucket.ErrKeyNotFound) {
 					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 				if len(vKey) > 0 {
@@ -117,7 +117,7 @@ func Certs(tx *sql.Tx) error {
 				}
 
 				vCrt, err := kv.GetKVStore().Get(tx, ns, certKVName+".crt")
-				if err != nil && !errors.Is(err, kv.ErrNotFound) {
+				if err != nil && !errors.Is(err, bucket.ErrKeyNotFound) {
 					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 				if len(vCrt) > 0 {
@@ -126,7 +126,7 @@ func Certs(tx *sql.Tx) error {
 						return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 					}
 
-					maandConf, err := utils.GetMaandConf()
+					maandConf, err := bucket.GetMaandConf()
 					if err != nil {
 						return err
 					}
@@ -142,7 +142,7 @@ func Certs(tx *sql.Tx) error {
 				}
 
 				if updateCerts {
-					maandConf, err := utils.GetMaandConf()
+					maandConf, err := bucket.GetMaandConf()
 					if err != nil {
 						return err
 					}

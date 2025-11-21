@@ -61,7 +61,7 @@ func updateCerts(tx *sql.Tx, job, workerIP string) error {
 
 	rows, err := tx.Query("SELECT name FROM job_certs WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	certsDir := path.Join(jobDir, "certs")
@@ -74,7 +74,7 @@ func updateCerts(tx *sql.Tx, job, workerIP string) error {
 		var name string
 		err = rows.Scan(&name)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		pubCert, err := kv.GetKVStore().Get(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), fmt.Sprintf("certs/%s.crt", name))
@@ -466,7 +466,7 @@ func updateAllocationHash(tx *sql.Tx, jobs []string) error {
 
 				_, err = tx.Exec("DELETE FROM allocations WHERE removed = 1 AND job = ? AND worker_ip = ?", job, workerIP)
 				if err != nil {
-					return data.NewDatabaseError(err)
+					return bucket.DatabaseError(err)
 				}
 
 				continue
@@ -777,7 +777,7 @@ func handleStoppedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 func UpdateSeq(db *sql.DB) error {
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	updateSeq, err := data.GetUpdateSeq(tx)
@@ -793,7 +793,7 @@ func UpdateSeq(db *sql.DB) error {
 
 	err = tx.Commit()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	return nil
 }
@@ -821,7 +821,7 @@ func Execute(jobsFilter []string) error {
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	bucketID, err := data.GetBucketID(tx)
@@ -1000,7 +1000,7 @@ func Execute(jobsFilter []string) error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

@@ -42,7 +42,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		for _, stmt := range deletes {
 			_, err := tx.Exec(stmt, jobID)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 
@@ -53,33 +53,33 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		minCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMinCPU(manifest))
 		if err != nil {
-			return fmt.Errorf("%w: job %s %w", workspace.ErrInvalidManifest, job, err)
+			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
 		maxCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMaxCPU(manifest))
 		if err != nil {
-			return fmt.Errorf("%w: job %s %w", workspace.ErrInvalidManifest, job, err)
+			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
 
 		if minCPUMhz != 0 && maxCPUMhz == 0 {
 			maxCPUMhz = minCPUMhz
 		}
 		if minCPUMhz > maxCPUMhz {
-			return fmt.Errorf("%w: job %s minCPUMhz > maxCPUMhz", workspace.ErrInvalidManifest, job)
+			return fmt.Errorf("%w: job %s minCPUMhz > maxCPUMhz", bucket.ErrInvalidManifest, job)
 		}
 
 		minMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMinMemory(manifest))
 		if err != nil {
-			return fmt.Errorf("%w: job %s %w", workspace.ErrInvalidManifest, job, err)
+			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
 		maxMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMaxMemory(manifest))
 		if err != nil {
-			return fmt.Errorf("%w: job %s %w", workspace.ErrInvalidManifest, job, err)
+			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
 		if minMemoryMb != 0 && maxMemoryMb == 0.0 {
 			maxMemoryMb = minMemoryMb
 		}
 		if minMemoryMb > maxMemoryMb {
-			return fmt.Errorf("%w: job %s minMemoryMb > maxMemoryMb", workspace.ErrInvalidManifest, job)
+			return fmt.Errorf("%w: job %s minMemoryMb > maxMemoryMb", bucket.ErrInvalidManifest, job)
 		}
 
 		jobConfig, err := getJobConf(job)
@@ -119,13 +119,13 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			workspace.GetUpdateParallelCount(manifest),
 		)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		for _, selector := range manifest.Selectors {
 			_, err := tx.Exec("INSERT INTO job_selectors (job_id, selector) VALUES (?, ?)", jobID, selector)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 
@@ -147,7 +147,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 			_, err = tx.Exec("INSERT INTO job_ports (job_id, name, port) VALUES (?, ?, ?)", jobID, name, port)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 
@@ -183,7 +183,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 				_, err = tx.Exec(query, jobID, job, command.Name, executedOn, command.Demands.Job, command.Demands.Command, string(jsonData))
 				if err != nil {
-					return data.NewDatabaseError(err)
+					return bucket.DatabaseError(err)
 				}
 			}
 		}
@@ -208,7 +208,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			}
 			_, err = tx.Exec(query, jobID, path, content, d.IsDir())
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 			return err
 		})
@@ -240,7 +240,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			}
 			_, err = tx.Exec(query, jobID, name, config.PKCS8, config.One, subject)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 	}
@@ -265,7 +265,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		GROUP BY a.worker_ip
 	`)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	resourceValidationFailed := false
 	for rows.Next() {
@@ -297,11 +297,11 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		removedJobs = append(removedJobs, job)
 		_, err := tx.Exec("DELETE FROM job WHERE name = ?", job)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 		_, err = tx.Exec("DELETE FROM hash WHERE namespace = 'build_certs' AND key = ?", job)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 	}
 	return nil

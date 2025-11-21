@@ -6,14 +6,14 @@ package deploy
 
 import (
 	"fmt"
-	"maand/bucket"
-	"maand/utils"
 	"path"
 	"strings"
+
+	"maand/bucket"
 )
 
 func rsync(dockerClient *bucket.DockerClient, bucketID, workerIP string) error {
-	conf, err := utils.GetMaandConf()
+	conf, err := bucket.GetMaandConf()
 	if err != nil {
 		return err
 	}

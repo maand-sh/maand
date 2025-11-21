@@ -78,7 +78,7 @@ func Execute() error {
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -128,17 +128,17 @@ func Execute() error {
 
 	err = tx.Commit()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	_, err = db.Exec("VACUUM")
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err = db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -150,7 +150,7 @@ func Execute() error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

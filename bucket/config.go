@@ -2,14 +2,12 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-package utils
+package bucket
 
 import (
 	"fmt"
 	"os"
 	"path"
-
-	"maand/bucket"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -24,17 +22,17 @@ type MaandConf struct {
 }
 
 func GetMaandConf() (MaandConf, error) {
-	maandConf := path.Join(bucket.Location, "maand.conf")
+	maandConf := path.Join(Location, "maand.conf")
 	if _, err := os.Stat(maandConf); err == nil {
 		maandData, err := os.ReadFile(maandConf)
 		if err != nil {
-			return MaandConf{}, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
+			return MaandConf{}, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 		}
 
 		var maandConf MaandConf
 		err = toml.Unmarshal(maandData, &maandConf)
 		if err != nil {
-			return MaandConf{}, fmt.Errorf("%w: %w", bucket.ErrInvalidMaandConf, err)
+			return MaandConf{}, fmt.Errorf("%w: %w", ErrInvalidMaandConf, err)
 		}
 
 		if maandConf.CertsTTL == 0 {
@@ -49,14 +47,14 @@ func GetMaandConf() (MaandConf, error) {
 func WriteMaandConf(conf *MaandConf) error {
 	data, err := toml.Marshal(conf)
 	if err != nil {
-		return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
+		return fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
-	confPath := path.Join(bucket.Location, "maand.conf")
+	confPath := path.Join(Location, "maand.conf")
 	if _, err := os.Stat(confPath); os.IsNotExist(err) {
 		err = os.WriteFile(confPath, data, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
+			return fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 		}
 	}
 	return nil

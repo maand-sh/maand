@@ -125,5 +125,5 @@ func TestWorkerLabelsDuplicated(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{ "host": "10.0.0.1", "labels": ["a", "a"] }]`), os.ModePerm)
 
-	assert.ErrorIs(t, build.Execute(), build.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, build.Execute(), bucket.ErrInvaildWorkerJSON)
 }
