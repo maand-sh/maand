@@ -233,3 +233,41 @@ test="1"
 	value, _ := GetKey("vars/bucket/job/a", "test")
 	assert.Equal(t, "1", value)
 }
+
+func TestJobKV(t *testing.T) {
+	_ = os.RemoveAll(bucket.Location)
+
+	err := initialize.Execute()
+	assert.NoError(t, err)
+
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
+	_ = os.MkdirAll(jobPath, os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"version":"1.1"}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
+
+	err = build.Execute()
+	assert.NoError(t, err)
+
+	value, _ := GetKey("maand/job/a", "job_id")
+	assert.NotEmpty(t, value)
+
+	value, _ = GetKey("maand/job/a", "max_cpu_mhz")
+	assert.Equal(t, "0", value)
+	value, _ = GetKey("maand/job/a", "max_memory_mb")
+	assert.Equal(t, "0", value)
+
+	value, _ = GetKey("maand/job/a", "min_cpu_mhz")
+	assert.Equal(t, "0", value)
+	value, _ = GetKey("maand/job/a", "min_memory_mb")
+	assert.Equal(t, "0", value)
+
+	value, _ = GetKey("maand/job/a", "name")
+	assert.Equal(t, "a", value)
+	value, _ = GetKey("maand/job/a", "version")
+	assert.Equal(t, "1.1", value)
+
+	value, _ = GetKey("maand/job/a", "memory")
+	assert.Equal(t, "0", value)
+	value, _ = GetKey("maand/job/a", "cpu")
+	assert.Equal(t, "0", value)
+}
