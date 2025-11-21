@@ -7,6 +7,8 @@ package build
 import (
 	"database/sql"
 	"errors"
+
+	"maand/bucket"
 	"maand/data"
 	"maand/utils"
 	"maand/workspace"
@@ -43,7 +45,7 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		rows, err := tx.Query(query, workerIP)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		var assignedJobs []string
@@ -51,7 +53,7 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			var job string
 			err = rows.Scan(&job)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 
 			assignedJobs = append(assignedJobs, job)
@@ -68,7 +70,7 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			query = "INSERT OR REPLACE INTO allocations (alloc_id, job, worker_ip, disabled, removed, deployment_seq) VALUES (?, ?, ?, ?, ?, ?)"
 			_, err = tx.Exec(query, allocID, job, workerIP, 0, 0, 0)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 
@@ -82,14 +84,14 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		for _, deletedJob := range diffs {
 			_, err := tx.Exec("UPDATE allocations SET removed = 1 WHERE job = ? AND worker_ip = ?", deletedJob, workerIP)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 	}
 
 	_, err = tx.Exec("UPDATE allocations SET removed = 1 WHERE worker_ip NOT IN (SELECT worker_ip FROM worker)")
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	disabledAllocations, err := ws.GetDisabled()
@@ -100,7 +102,7 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 	for _, workerIP := range disabledAllocations.Workers {
 		_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE worker_ip = ?", workerIP)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 	}
 
@@ -108,13 +110,13 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		if len(obj.Allocations) == 0 {
 			_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ?", job)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		} else {
 			for _, allocationIP := range obj.Allocations {
 				_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ? AND worker_ip = ?", job, allocationIP)
 				if err != nil {
-					return data.NewDatabaseError(err)
+					return bucket.DatabaseError(err)
 				}
 			}
 		}

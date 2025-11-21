@@ -20,13 +20,13 @@ func GetDatabase(failIfNotFound bool) (*sql.DB, error) {
 	DBFile := path.Join(bucket.Location, "data/maand.db")
 	if failIfNotFound {
 		if _, err := os.Stat(DBFile); os.IsNotExist(err) {
-			return nil, ErrNotInitialized
+			return nil, bucket.ErrNotInitialized
 		}
 	}
 
 	db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?_busy_timeout=5000", DBFile))
 	if err != nil {
-		return nil, NewDatabaseError(err)
+		return nil, bucket.DatabaseError(err)
 	}
 
 	return db, nil
@@ -74,7 +74,7 @@ func SetupMaand(tx *sql.Tx) error {
 
 	for _, query := range tables {
 		if _, err := tx.Exec(query); err != nil {
-			return NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 	}
 
@@ -94,7 +94,7 @@ func GetUpdateSeq(tx *sql.Tx) (int, error) {
 	var updateSeq int
 	err := tx.QueryRow("SELECT update_seq FROM bucket").Scan(&updateSeq)
 	if err != nil {
-		return -1, NewDatabaseError(err)
+		return -1, bucket.DatabaseError(err)
 	}
 	return updateSeq, nil
 }
@@ -102,7 +102,7 @@ func GetUpdateSeq(tx *sql.Tx) (int, error) {
 func UpdateSeq(tx *sql.Tx, updateSeq int) error {
 	_, err := tx.Exec("UPDATE bucket SET update_seq = ?", updateSeq)
 	if err != nil {
-		return NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	return nil
 }
@@ -111,7 +111,7 @@ func GetMaxDeploymentSeq(tx *sql.Tx) (int, error) {
 	var updateSeq int
 	err := tx.QueryRow("SELECT ifnull(max(deployment_seq), 0) AS max_deployment_seq FROM allocations").Scan(&updateSeq)
 	if err != nil {
-		return -1, NewDatabaseError(err)
+		return -1, bucket.DatabaseError(err)
 	}
 	return updateSeq, nil
 }

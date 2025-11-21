@@ -61,7 +61,7 @@ func TestWorkerJSONDuplicateWorker(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{ "host": "10.0.0.1" },{ "host": "10.0.0.1" }]`), os.ModePerm)
 	err = build.Execute()
 
-	assert.ErrorIs(t, err, build.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
 }
 
 func TestWorkerJSONInvalid(t *testing.T) {
@@ -73,7 +73,7 @@ func TestWorkerJSONInvalid(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`{}`), os.ModePerm)
 	err = build.Execute()
 
-	assert.ErrorIs(t, err, build.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
 }
 
 func TestWorkerJSONRemains(t *testing.T) {

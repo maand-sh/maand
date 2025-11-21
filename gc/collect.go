@@ -6,6 +6,8 @@ package gc
 
 import (
 	"fmt"
+
+	"maand/bucket"
 	"maand/data"
 	"maand/kv"
 )
@@ -13,12 +15,12 @@ import (
 func Collect() error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -30,14 +32,14 @@ func Collect() error {
 
 	rows, err := tx.Query("SELECT job, alloc_id FROM allocations WHERE removed = 1")
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	for rows.Next() {
 		var job string
 		var allocID string
 		if err := rows.Scan(&job, &allocID); err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 		deletes = append(deletes, fmt.Sprintf("DELETE FROM hash WHERE namespace = '%s' AND key = '%s'", fmt.Sprintf("%s_allocation", job), allocID))
 	}
@@ -45,7 +47,7 @@ func Collect() error {
 	for _, query := range deletes {
 		_, err := tx.Exec(query)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 	}
 
@@ -55,7 +57,7 @@ func Collect() error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

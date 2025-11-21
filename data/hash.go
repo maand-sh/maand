@@ -7,6 +7,8 @@ package data
 import (
 	"database/sql"
 	"errors"
+
+	"maand/bucket"
 )
 
 func UpdateHash(tx *sql.Tx, namespace, key, hash string) error {
@@ -17,16 +19,16 @@ func UpdateHash(tx *sql.Tx, namespace, key, hash string) error {
 		if errors.Is(err, sql.ErrNoRows) {
 			_, err = tx.Exec("INSERT INTO hash (namespace, key, current_hash) VALUES (?, ?, ?)", namespace, key, hash)
 			if err != nil {
-				return NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 			return nil
 		}
-		return NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	_, err = tx.Exec("UPDATE hash SET current_hash = ? WHERE namespace = ? AND key = ?", hash, namespace, key)
 	if err != nil {
-		return NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	return nil
 }
@@ -39,7 +41,7 @@ func HashChanged(tx *sql.Tx, namespace, key string) (bool, error) {
 		if errors.Is(err, sql.ErrNoRows) {
 			return true, nil
 		}
-		return false, NewDatabaseError(err)
+		return false, bucket.DatabaseError(err)
 	}
 	return dbCurrentHash != dbPreviousHash, nil
 }
@@ -47,7 +49,7 @@ func HashChanged(tx *sql.Tx, namespace, key string) (bool, error) {
 func PromoteHash(tx *sql.Tx, namespace, key string) (err error) {
 	_, err = tx.Exec("UPDATE hash SET previous_hash = current_hash WHERE namespace = ? AND key = ?", namespace, key)
 	if err != nil {
-		return NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	return nil
 }
@@ -55,7 +57,7 @@ func PromoteHash(tx *sql.Tx, namespace, key string) (err error) {
 func RemoveHash(tx *sql.Tx, namespace, key string) (err error) {
 	_, err = tx.Exec("DELETE FROM hash WHERE namespace = ? AND key = ?", namespace, key)
 	if err != nil {
-		return NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	return nil
 }
@@ -67,7 +69,7 @@ func GetPreviousHash(tx *sql.Tx, namespace, key string) (previousHash string, er
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", nil
 		}
-		return "", NewDatabaseError(err)
+		return "", bucket.DatabaseError(err)
 	}
 	return previousHash, nil
 }

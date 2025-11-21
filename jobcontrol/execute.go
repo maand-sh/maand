@@ -22,12 +22,12 @@ import (
 func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	defer func() {
@@ -160,7 +160,7 @@ func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 				for i := 0; i < workerCount; i += parallelBatchCount {
 
 					batchSize := min(parallelBatchCount, workerCount-i) // Process up to 2 workers at a time
-					for j := 0; j < batchSize; j++ {
+					for j := range batchSize {
 						workerIP := allocatedWorkers[i+j]
 						if len(workersFilter) > 0 && len(utils.Intersection(workersFilter, []string{workerIP})) == 0 {
 							continue
@@ -194,7 +194,7 @@ func Execute(jobsCSV, workersCSV, target string, healthCheck bool) error {
 	}
 
 	if err := tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"maand/data"
+	"maand/bucket"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -41,7 +41,7 @@ func (store *KeyValueStore) Put(tx *sql.Tx, namespace, key, value string, ttl in
 	err := row.Scan(&version, &currentValue, &deleted, &currentTTL)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 	}
 
@@ -54,7 +54,7 @@ func (store *KeyValueStore) Put(tx *sql.Tx, namespace, key, value string, ttl in
 		key, value, namespace, version+1, ttl, store.GlobalUnix, 0,
 	)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	return nil
 }
@@ -68,9 +68,9 @@ func (store *KeyValueStore) Get(tx *sql.Tx, namespace, key string) (string, erro
 	err := row.Scan(&value)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", NewNotFoundError(namespace, key)
+			return "", bucket.KeyNotFoundError(namespace, key)
 		}
-		return "", data.NewDatabaseError(err)
+		return "", bucket.DatabaseError(err)
 	}
 
 	return value, nil
@@ -90,7 +90,7 @@ func (store *KeyValueStore) GetMetadata(tx *sql.Tx, namespace, key string) (stri
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", 0, nil
 		}
-		return "", 0, data.NewDatabaseError(err)
+		return "", 0, bucket.DatabaseError(err)
 	}
 	return value, version, nil
 }
@@ -104,7 +104,7 @@ func (store *KeyValueStore) Delete(tx *sql.Tx, namespace, key string) error {
 		namespace, key,
 	)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil
@@ -118,7 +118,7 @@ func (store *KeyValueStore) GetKeys(tx *sql.Tx, namespace string) ([]string, err
 		namespace,
 	)
 	if err != nil {
-		return nil, data.NewDatabaseError(err)
+		return nil, bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -128,7 +128,7 @@ func (store *KeyValueStore) GetKeys(tx *sql.Tx, namespace string) ([]string, err
 	for rows.Next() {
 		var key string
 		if err := rows.Scan(&key); err != nil {
-			return nil, data.NewDatabaseError(err)
+			return nil, bucket.DatabaseError(err)
 		}
 		keys = append(keys, key)
 	}
@@ -140,7 +140,7 @@ func (store *KeyValueStore) GC(tx *sql.Tx, maxDays int) error {
 		`SELECT namespace, key, max(CAST(version AS INTEGER)), deleted, created_date FROM key_value GROUP BY key, namespace`,
 	)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = rows.Close()
@@ -155,21 +155,21 @@ func (store *KeyValueStore) GC(tx *sql.Tx, maxDays int) error {
 
 		err := rows.Scan(&namespace, &key, &version, &deleted, &createdDate)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		createdTime := time.Unix(createdDate, 0)
 		if deleted == 1 && currentTime.Sub(createdTime).Hours() >= float64(maxDays*24) {
 			_, err := tx.Exec(`DELETE FROM key_value WHERE namespace = ? AND key = ?`, namespace, key)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 
 		if version > MaxVersionsToKeep {
 			_, err := tx.Exec(`DELETE FROM key_value WHERE namespace = ? AND key = ? AND version <= ?`, namespace, key, version-MaxVersionsToKeep)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 	}

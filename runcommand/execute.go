@@ -24,7 +24,7 @@ import (
 func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runHealthcheck bool) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = db.Close()
@@ -32,7 +32,7 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	defer func() {
@@ -89,7 +89,7 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 		}
 		content, err = os.ReadFile(commandFile)
 		if err != nil {
-			return bucket.NewUnexpectedError(err)
+			return bucket.UnexpectedError(err)
 		}
 	} else {
 		content = []byte(shCommand)
@@ -102,7 +102,7 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 
 	err = os.WriteFile(path.Join(bucket.TempLocation, "command.sh"), content, 0o644)
 	if err != nil {
-		return bucket.NewUnexpectedError(err)
+		return bucket.UnexpectedError(err)
 	}
 	commandFile = "command.sh"
 

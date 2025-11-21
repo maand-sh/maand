@@ -11,11 +11,10 @@ import (
 	"path"
 
 	"maand/bucket"
-	"maand/utils"
 )
 
 func ExecuteCommand(dockerClient *bucket.DockerClient, workerIP string, commands []string, env []string) error {
-	commandScriptFileName, err := utils.GenerateCommandScript(commands, env)
+	commandScriptFileName, err := bucket.GenerateCommandScript(commands, env)
 	if err != nil {
 		return err
 	}
@@ -28,7 +27,7 @@ func ExecuteCommand(dockerClient *bucket.DockerClient, workerIP string, commands
 }
 
 func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, commandScriptFileName string, env []string) error {
-	conf, err := utils.GetMaandConf()
+	conf, err := bucket.GetMaandConf()
 	if err != nil {
 		return err
 	}

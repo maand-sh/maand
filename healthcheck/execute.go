@@ -64,12 +64,12 @@ func HealthCheck(tx *sql.Tx, dockerClient *bucket.DockerClient, wait bool, job s
 func Execute(wait bool, verbose bool, jobsComma string) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -125,7 +125,7 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 	wg.Wait()
 
 	if err = tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	// TODO: deal with errors

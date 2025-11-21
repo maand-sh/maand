@@ -28,7 +28,7 @@ func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 
 	var dataWorkers []Worker
 	if err = json.Unmarshal(data, &dataWorkers); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", bucket.ErrInvaildWorkerJSON, err)
 	}
 
 	var workers []Worker
@@ -63,7 +63,7 @@ func (ws *DefaultWorkspace) GetJobManifest(jobName string) (Manifest, error) {
 
 	var manifest Manifest
 	if err = json.Unmarshal(f, &manifest); err != nil {
-		return Manifest{}, fmt.Errorf("%w: job %s\n%w", ErrInvalidManifest, jobName, err)
+		return Manifest{}, fmt.Errorf("%w: job %s\n%w", bucket.ErrInvalidManifest, jobName, err)
 	}
 	return manifest, nil
 }

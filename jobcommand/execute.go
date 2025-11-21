@@ -157,12 +157,12 @@ func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, eve
 func Execute(job, command, event string, concurrency int, verbose bool, envs []string) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -196,7 +196,7 @@ func Execute(job, command, event string, concurrency int, verbose bool, envs []s
 	}
 
 	if err = tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

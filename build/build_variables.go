@@ -216,14 +216,14 @@ func processBucketConf(tx *sql.Tx) error {
 	for _, job := range availableJobs {
 		rows, err := tx.Query("SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		for rows.Next() {
 			var name, value string
 			err := rows.Scan(&name, &value)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 			jobPorts[name] = value
 		}
@@ -244,7 +244,7 @@ func processBucketConf(tx *sql.Tx) error {
 func getJobConf(job string) (map[string]string, error) {
 	config := make(map[string]map[string]string)
 
-	maandConf, err := utils.GetMaandConf()
+	maandConf, err := bucket.GetMaandConf()
 	if err != nil {
 		return nil, err
 	}
