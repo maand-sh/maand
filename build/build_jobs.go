@@ -132,14 +132,14 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		for name, port := range manifest.Resources.Ports {
 			prefix := fmt.Sprintf("%s_port_", job)
 			if !strings.HasPrefix(name, prefix) {
-				return fmt.Errorf("invalid port name, name: %s, should have prefix : %s", name, prefix)
+				return fmt.Errorf("%w: key %s, excepted %s", bucket.ErrPortKeyFormat, name, prefix)
 			}
 
 			var portUsedJob string
 			row := tx.QueryRow("SELECT (SELECT name FROM job WHERE job_id = jp.job_id) as job FROM job_ports jp WHERE port = ?", port)
 			err = row.Scan(&portUsedJob)
 			if !errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("port can't be reused, port: %d, jobs (%s, %s)", port, job, portUsedJob)
+				return fmt.Errorf("%w: port %d, jobs (%s, %s)", bucket.ErrPortCollision, port, job, portUsedJob)
 			}
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
@@ -153,22 +153,22 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		for _, command := range workspace.GetCommands(manifest) {
 			if !strings.HasPrefix(command.Name, "command_") {
-				return fmt.Errorf("invalid command name, name: %s, should have prefix : %s", command.Name, "command_")
+				return fmt.Errorf("%w: invalid command name, name: %s, excepted prefix : %s", bucket.ErrInvalidJobCommandConfiguration, command.Name, "command_")
 			}
 			if len(command.ExecutedOn) == 0 {
-				return fmt.Errorf("job %s, job_command %s required have a executed_on", job, command.Name)
+				return fmt.Errorf("%w: job %s, job_command %s missing executed_on", bucket.ErrInvalidJobCommandConfiguration, job, command.Name)
 			}
 			diffs := utils.Difference(command.ExecutedOn, []string{"post_build", "health_check", "cli", "pre_deploy", "post_deploy", "job_control"})
 			if len(diffs) > 0 {
-				return fmt.Errorf("job %s, job_command %s not valid executed_on %v", job, command.Name, diffs)
+				return fmt.Errorf("%w: job %s, job_command %s invalid executed_on %v", bucket.ErrInvalidJobCommandConfiguration, job, command.Name, diffs)
 			}
 			if command.Demands.Job == job {
-				return fmt.Errorf("job %s, job_command %s invalid configuration, self referencing", job, command.Name)
+				return fmt.Errorf("%w: job %s, job_command %s invalid configuration, self referencing", bucket.ErrInvalidJobCommandConfiguration, job, command.Name)
 			}
 			commandPath := path.Join(bucket.WorkspaceLocation, "jobs", job, "_modules", fmt.Sprintf("%s.py", command.Name))
 			_, err := os.Stat(commandPath)
 			if os.IsNotExist(err) {
-				return fmt.Errorf("%s does not exist, registered for job %s", commandPath, job)
+				return fmt.Errorf("%w: %s does not exist, registered for job %s", bucket.ErrJobCommandFileNotFound, commandPath, job)
 			}
 
 			query := `
@@ -190,7 +190,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "Makefile"))
 		if os.IsNotExist(err) {
-			return fmt.Errorf("'Makefile' is required, job %s", job)
+			return fmt.Errorf("%w: job %s, Makefile not found", bucket.ErrInvalidJob, job)
 		}
 
 		query = `INSERT INTO job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)`
@@ -253,41 +253,6 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 	availableJobs, err := data.GetJobs(tx)
 	if err != nil {
 		return err
-	}
-
-	rows, err := tx.Query(`
-		SELECT
-			a.worker_ip, w.available_memory_mb, w.available_cpu_mhz, sum(j.current_memory_mb) as needed_memory, sum(j.current_cpu_mhz) AS needed_cpu
-		FROM
-			allocations a JOIN job j ON j.name = a.job
-				JOIN
-			worker w ON w.worker_ip = a.worker_ip
-		GROUP BY a.worker_ip
-	`)
-	if err != nil {
-		return bucket.DatabaseError(err)
-	}
-	resourceValidationFailed := false
-	for rows.Next() {
-		var workerIP string
-		var avaiableMemoryMB, availableCPUMHZ, neededMemoryMB, neededCPUMhz float64
-		err = rows.Scan(&workerIP, &avaiableMemoryMB, &availableCPUMHZ, &neededMemoryMB, &neededCPUMhz)
-		if err != nil {
-			return err
-		}
-
-		if avaiableMemoryMB < neededMemoryMB {
-			resourceValidationFailed = true
-			fmt.Printf("worker_ip %s, available memory is %.2f MB, allocated memory is %.2f MB\n", workerIP, avaiableMemoryMB, neededMemoryMB)
-		}
-		if availableCPUMHZ < availableCPUMHZ {
-			resourceValidationFailed = true
-			fmt.Printf("worker_ip %s, available cpu is %.2f MHZ, allocated cpu is %.2f MHZ\n", workerIP, availableCPUMHZ, neededCPUMhz)
-		}
-	}
-
-	if resourceValidationFailed {
-		return errors.New("validation failed: resource allocation")
 	}
 
 	// remove missing jobs

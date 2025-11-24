@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"io"
 	"os"
+	"path"
 
+	"maand/bucket"
 	"maand/data"
 	"maand/kv"
 
@@ -122,4 +124,32 @@ func CopyFile(src, dst string) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func Makefile() string {
+	return `
+.PHONY: start stop restart
+
+dir:
+	mkdir -p ./data
+	mkdir -p ./logs
+	mkdir -p ./bin
+
+start: dir
+	@echo $$(($(shell cat ./data/start 2>/dev/null || echo 0) + 1)) > ./data/start
+
+stop:
+	mkdir -p ./data
+	@echo $$(($(shell cat ./data/stop 2>/dev/null || echo 0) + 1)) > ./data/stop
+
+restart:
+	mkdir -p ./data
+	@echo $$(($(shell cat ./data/restart 2>/dev/null || echo 0) + 1)) > ./data/restart
+`
+}
+
+func createJob(name string) {
+	_ = os.MkdirAll(path.Join(bucket.WorkspaceLocation, "jobs", name), os.ModePerm)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", name, "manifest.json"), []byte(`{"selectors":["worker"]}`), 0o644)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", name, "Makefile"), []byte(Makefile()), 0o644)
 }
