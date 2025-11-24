@@ -1,8 +1,9 @@
 package tests
 
 import (
-	"maand/bucket"
 	"testing"
+
+	"maand/bucket"
 )
 
 func TestMain(m *testing.M) {

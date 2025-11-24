@@ -103,7 +103,7 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	errJobs := make(map[string]error)
+	failedJobs := make([]string, 0)
 	for _, job := range jobs {
 		if len(jobsFilter) > 0 {
 			if len(utils.Intersection(jobsFilter, []string{job})) == 0 {
@@ -117,7 +117,7 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 			hcErr := HealthCheck(tx, dockerClient, wait, tJob, verbose)
 			if hcErr != nil {
 				mu.Lock()
-				errJobs[tJob] = hcErr
+				failedJobs = append(failedJobs, job)
 				mu.Unlock()
 			}
 		}(job)
@@ -129,8 +129,8 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 	}
 
 	// TODO: deal with errors
-	if len(errJobs) > 0 {
-		return fmt.Errorf("%v", errJobs)
+	if len(failedJobs) > 0 {
+		return fmt.Errorf("%w: %s", bucket.ErrHealthCheckFailed, strings.Join(failedJobs, ","))
 	}
 
 	return nil

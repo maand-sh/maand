@@ -322,10 +322,18 @@ func processJobData(tx *sql.Tx) error {
 		if err != nil {
 			return err
 		}
+		if minMemory == "0" && maxMemory == "0" {
+			jobKV["min_memory_mb"] = jobKV["memory"]
+			jobKV["max_memory_mb"] = jobKV["memory"]
+		}
 
 		jobKV["cpu"], err = data.GetJobCPU(tx, job)
 		if err != nil {
 			return err
+		}
+		if minCPU == "0" && maxMemory == "0" {
+			jobKV["min_cpu_mhz"] = jobKV["cpu"]
+			jobKV["max_cpu_mhz"] = jobKV["cpu"]
 		}
 
 		namespace := fmt.Sprintf("maand/job/%s", job)
