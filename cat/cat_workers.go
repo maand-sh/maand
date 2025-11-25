@@ -36,7 +36,7 @@ func Workers() error {
 		return err
 	}
 	if errors.Is(err, sql.ErrNoRows) || len(workers) == 0 {
-		return errors.New("no workers found")
+		return bucket.NotFoundError("workers")
 	}
 
 	rows, err := tx.Query(`SELECT worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position, labels FROM cat_workers`)

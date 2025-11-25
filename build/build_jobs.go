@@ -51,55 +51,79 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			return err
 		}
 
-		minCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMinCPU(manifest))
+		minCPUMHZ, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMinCPU(manifest))
 		if err != nil {
 			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
-		maxCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMaxCPU(manifest))
+		maxCPUMHZ, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMaxCPU(manifest))
 		if err != nil {
 			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
 
-		if minCPUMhz != 0 && maxCPUMhz == 0 {
-			maxCPUMhz = minCPUMhz
+		if minCPUMHZ != 0 && maxCPUMHZ == 0 {
+			maxCPUMHZ = minCPUMHZ
 		}
-		if minCPUMhz > maxCPUMhz {
+		if minCPUMHZ > maxCPUMHZ {
 			return fmt.Errorf("%w: job %s minCPUMhz > maxCPUMhz", bucket.ErrInvalidManifest, job)
 		}
 
-		minMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMinMemory(manifest))
+		minMemoryMB, err := utils.ExtractSizeInMB(workspace.GetMinMemory(manifest))
 		if err != nil {
 			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
-		maxMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMaxMemory(manifest))
+		maxMemoryMB, err := utils.ExtractSizeInMB(workspace.GetMaxMemory(manifest))
 		if err != nil {
 			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
-		if minMemoryMb != 0 && maxMemoryMb == 0.0 {
-			maxMemoryMb = minMemoryMb
+		if minMemoryMB != 0 && maxMemoryMB == 0 {
+			maxMemoryMB = minMemoryMB
 		}
-		if minMemoryMb > maxMemoryMb {
+		if minMemoryMB > maxMemoryMB {
 			return fmt.Errorf("%w: job %s minMemoryMb > maxMemoryMb", bucket.ErrInvalidManifest, job)
 		}
 
-		jobConfig, err := getJobConf(job)
+		jobConfigFile, jobConfig, err := getJobConf(job)
 		if err != nil {
 			return err
 		}
 
-		memory := maxMemoryMb
+		memory := maxMemoryMB
 		if _, ok := jobConfig["memory"]; ok {
 			memory, err = utils.ExtractSizeInMB(jobConfig["memory"])
 			if err != nil {
 				return err
 			}
+
+			if minMemoryMB == 0 && maxMemoryMB == 0 {
+				minMemoryMB = memory
+				maxMemoryMB = memory
+			}
+
+			if memory > maxMemoryMB {
+				return fmt.Errorf("%w: %s, job %s max_memory_mb %.2f mb, requested %.2f mb", bucket.ErrUnsupportedResourceConfigration, jobConfigFile, job, maxMemoryMB, memory)
+			}
+			if memory < minMemoryMB {
+				return fmt.Errorf("%w: %s, job %s min_memory_mb %.2f mb, requested %.2f mb", bucket.ErrUnsupportedResourceConfigration, jobConfigFile, job, maxMemoryMB, memory)
+			}
 		}
 
-		cpu := maxCPUMhz
+		cpu := maxCPUMHZ
 		if _, ok := jobConfig["cpu"]; ok {
 			cpu, err = utils.ExtractCPUFrequencyInMHz(jobConfig["cpu"])
 			if err != nil {
 				return err
+			}
+
+			if minCPUMHZ == 0 && maxCPUMHZ == 0 {
+				minCPUMHZ = cpu
+				maxCPUMHZ = cpu
+			}
+
+			if cpu > maxCPUMHZ {
+				return fmt.Errorf("%w: %s, job %s max_cpu_mhz %.2f mhz, requested %.2f mhz", bucket.ErrUnsupportedResourceConfigration, jobConfigFile, job, maxMemoryMB, memory)
+			}
+			if cpu < minCPUMHZ {
+				return fmt.Errorf("%w: %s, job %s min_cpu_mhz %.2f mhz, requested %.2f mhz", bucket.ErrUnsupportedResourceConfigration, jobConfigFile, job, maxMemoryMB, memory)
 			}
 		}
 
@@ -110,11 +134,11 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		`
 		_, err = tx.Exec(
 			query, jobID, job, version,
-			fmt.Sprintf("%v", minMemoryMb),
-			fmt.Sprintf("%v", maxMemoryMb),
+			fmt.Sprintf("%v", minMemoryMB),
+			fmt.Sprintf("%v", maxMemoryMB),
 			fmt.Sprintf("%v", memory),
-			fmt.Sprintf("%v", minCPUMhz),
-			fmt.Sprintf("%v", maxCPUMhz),
+			fmt.Sprintf("%v", minCPUMHZ),
+			fmt.Sprintf("%v", maxCPUMHZ),
 			fmt.Sprintf("%v", cpu),
 			workspace.GetUpdateParallelCount(manifest),
 		)
