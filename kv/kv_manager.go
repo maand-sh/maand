@@ -45,6 +45,10 @@ func (store *KeyValueStore) Put(tx *sql.Tx, namespace, key, value string, ttl in
 		}
 	}
 
+	if version == 1 && currentValue == "" && currentValue == value {
+		currentValue = " "
+	}
+
 	if deleted == 0 && currentValue == value && currentTTL == ttl {
 		return nil
 	}

@@ -706,7 +706,6 @@ func TestJobMakeFile(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, bucket.ErrInvalidJob)
-	fmt.Println(err)
 }
 
 func TestJobInsufficientMemoryJobConf(t *testing.T) {
@@ -744,6 +743,22 @@ func TestJobInsufficientMemoryManifest(t *testing.T) {
 	_ = os.MkdirAll(jobPath, os.ModePerm)
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "memory": "12 mb"}]`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "resources": { "memory":{ "min":"1GB" }}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
+
+	err = build.Execute()
+	assert.ErrorIs(t, err, bucket.ErrInSufficientResource)
+}
+
+func TestJobInsufficientMemoryManifest1(t *testing.T) {
+	_ = os.RemoveAll(bucket.Location)
+
+	err := initialize.Execute()
+	assert.NoError(t, err)
+
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
+	_ = os.MkdirAll(jobPath, os.ModePerm)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "memory": "12gb"}]`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "resources": { "memory":{ "min":"1GB", "max": "22gb" }}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
@@ -807,7 +822,8 @@ func TestJobDepsLevel3(t *testing.T) {
 
 	d := `[{"host":"%s"},{"host":"%s"},{"host":"%s"}]`
 	workers := fmt.Sprintf(d, host1, host2, host3)
-	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(workers), 0o644)
+	_ = os.MkdirAll(bucket.WorkspaceLocation, 0o755)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(workers), 0o755)
 
 	err := initialize.Execute()
 	assert.NoError(t, err)
@@ -895,19 +911,17 @@ func TestJobDepsLevel3(t *testing.T) {
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	/*
-	   var seq int
+	var seq int
 
-	   	GetRowValues("SELECT deployment_seq FROM cat_jobs where name = 'a'", &seq)
-	   	assert.Equal(t, 0, seq)
+	GetRowValues("SELECT deployment_seq FROM cat_jobs where name = 'a'", &seq)
+	assert.Equal(t, 0, seq)
 
-	   	GetRowValues("SELECT deployment_seq FROM cat_jobs where name = 'b'", &seq)
-	   	assert.Equal(t, 1, seq)
+	GetRowValues("SELECT deployment_seq FROM cat_jobs where name = 'b'", &seq)
+	assert.Equal(t, 1, seq)
 
-	   	GetRowValues("SELECT deployment_seq FROM cat_jobs where name = 'c'", &seq)
-	   	assert.Equal(t, 2, seq)
+	GetRowValues("SELECT deployment_seq FROM cat_jobs where name = 'c'", &seq)
+	assert.Equal(t, 2, seq)
 
-	   	GetRowValues("SELECT deployment_seq FROM cat_jobs where name = 'd'", &seq)
-	   	assert.Equal(t, 2, seq)
-	*/
+	GetRowValues("SELECT deployment_seq FROM cat_jobs where name = 'd'", &seq)
+	assert.Equal(t, 2, seq)
 }

@@ -3,6 +3,7 @@ package build
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"maand/bucket"
 )
@@ -39,7 +40,7 @@ func Validate(tx *sql.Tx) error {
 	}
 
 	if len(errs) != 0 {
-		return fmt.Errorf("%w\n%v", bucket.ErrInSufficientResource, errs)
+		return fmt.Errorf("%w\n%s", bucket.ErrInSufficientResource, strings.Join(errs, "\n"))
 	}
 
 	return nil

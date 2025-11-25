@@ -241,29 +241,30 @@ func processBucketConf(tx *sql.Tx) error {
 	return nil
 }
 
-func getJobConf(job string) (map[string]string, error) {
+func getJobConf(job string) (string, map[string]string, error) {
 	config := make(map[string]map[string]string)
 
 	maandConf, err := bucket.GetMaandConf()
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
-	bucketJobConf := path.Join(bucket.WorkspaceLocation, "bucket.jobs.conf")
+	file := "bucket.jobs.conf"
 	maandConf.JobConfigSelector = strings.TrimSpace(maandConf.JobConfigSelector)
 	if maandConf.JobConfigSelector != "" {
-		bucketJobConf = path.Join(bucket.WorkspaceLocation, fmt.Sprintf("bucket.jobs.%s.conf", maandConf.JobConfigSelector))
+		file = fmt.Sprintf("bucket.jobs.%s.conf", maandConf.JobConfigSelector)
 	}
+	bucketJobConf := path.Join(bucket.WorkspaceLocation, file)
 
 	if _, err := os.Stat(bucketJobConf); err == nil {
 		bucketData, err := os.ReadFile(bucketJobConf)
 		if err != nil {
-			return nil, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
+			return "", nil, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 		}
 
 		err = toml.Unmarshal(bucketData, &config)
 		if err != nil {
-			return nil, fmt.Errorf("%w: bucket conf %s %w", bucket.ErrInvalidBucketConf, bucketJobConf, err)
+			return "", nil, fmt.Errorf("%w: bucket conf %s %w", bucket.ErrInvalidBucketConf, bucketJobConf, err)
 		}
 	}
 
@@ -271,7 +272,7 @@ func getJobConf(job string) (map[string]string, error) {
 		config[job] = make(map[string]string)
 	}
 
-	return config[job], nil
+	return file, config[job], nil
 }
 
 func processJobData(tx *sql.Tx) error {
@@ -313,7 +314,7 @@ func processJobData(tx *sql.Tx) error {
 		jobKV["min_cpu_mhz"] = minCPU
 		jobKV["max_cpu_mhz"] = maxCPU
 
-		jobConfig, err := getJobConf(job)
+		_, jobConfig, err := getJobConf(job)
 		if err != nil {
 			return err
 		}
