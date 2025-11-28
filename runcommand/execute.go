@@ -39,6 +39,11 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 		_ = tx.Rollback()
 	}()
 
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+
 	var workers []string
 
 	if len(workerCSV) > 0 {
@@ -101,18 +106,18 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 	}
 
 	commandFilePath := path.Join(bucket.TempLocation, "command.sh")
-	err = os.WriteFile(commandFilePath, content, 0o644)
+	envs := []string{
+		fmt.Sprintf("export BUCKET_ID=%s", bucketID),
+	}
+	fileContent := fmt.Sprintf("%s\n%s", strings.Join(envs, "\n"), content)
+
+	err = os.WriteFile(commandFilePath, []byte(fileContent), 0o644)
 	if err != nil {
 		return bucket.UnexpectedError(err)
 	}
 	defer func() {
 		_ = os.Remove(commandFilePath)
 	}()
-
-	bucketID, err := data.GetBucketID(tx)
-	if err != nil {
-		return err
-	}
 
 	dockerClient, err := bucket.SetupBucketContainer(bucketID)
 	if err != nil {
@@ -129,7 +134,7 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 			break
 		}
 
-		err = executeCommand(dockerClient, commandFilePath, batch)
+		err = executeCommand(dockerClient, bucketID, commandFilePath, batch)
 		if err != nil {
 			return err
 		}
@@ -153,16 +158,17 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 	return nil
 }
 
-func executeCommand(dockerClient *bucket.DockerClient, commandFile string, workers []string) error {
+func executeCommand(dockerClient *bucket.DockerClient, bucketID string, commandFile string, workers []string) error {
 	var wait sync.WaitGroup
 	errs := make(chan error, len(workers))
+	envs := []string{fmt.Sprintf("BUCKET_ID=%s", bucketID)}
 
 	for _, workerIP := range workers {
 		wait.Add(1)
 
 		go func(wp string) {
 			defer wait.Done()
-			err := worker.ExecuteFileCommand(dockerClient, wp, commandFile, nil)
+			err := worker.ExecuteFileCommand(dockerClient, wp, commandFile, envs)
 			if err != nil {
 				errs <- fmt.Errorf("%w: %s", err, wp)
 			}

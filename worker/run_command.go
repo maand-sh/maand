@@ -48,7 +48,7 @@ func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, comm
 		`ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=10 -i %s %s@%s 'timeout 300 %s' < %s`,
 		keyFilePath, user, workerIP, sh, commandScriptBucketFilePath)
 
-	err = dockerClient.Exec(workerIP, []string{sshCmd}, nil, true)
+	err = dockerClient.Exec(workerIP, []string{sshCmd}, env, true)
 	if err != nil {
 		return err
 	}
