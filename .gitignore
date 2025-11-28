@@ -1,6 +1,2 @@
-.idea
-go.sum
 maand
-.DS_Store
 tests/test_project
-venv

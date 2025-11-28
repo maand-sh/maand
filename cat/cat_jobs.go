@@ -7,20 +7,23 @@ package cat
 import (
 	"database/sql"
 	"errors"
-	"github.com/jedib0t/go-pretty/v6/table"
+
+	"maand/bucket"
 	"maand/data"
 	"maand/utils"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func Jobs() error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -31,15 +34,15 @@ func Jobs() error {
 	row := tx.QueryRow(query)
 	err = row.Scan(&count)
 	if errors.Is(err, sql.ErrNoRows) || count == 0 {
-		return &NotFoundError{Domain: "jobs"}
+		return bucket.NotFoundError("jobs")
 	}
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	rows, err := tx.Query(`SELECT job_id, name, version, disabled, deployment_seq, selectors FROM cat_jobs`)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	t := utils.GetTable(table.Row{"job", "version", "disabled", "deployment_seq", "selectors"})
@@ -54,7 +57,7 @@ func Jobs() error {
 
 		err = rows.Scan(&jobID, &name, &version, &disabled, &deploymentSeq, &selectors)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		t.AppendRows([]table.Row{{name, version, disabled, deploymentSeq, selectors}})
@@ -63,7 +66,7 @@ func Jobs() error {
 	t.Render()
 
 	if err := tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

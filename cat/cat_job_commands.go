@@ -7,23 +7,25 @@ package cat
 import (
 	"database/sql"
 	"errors"
-	"github.com/jedib0t/go-pretty/v6/table"
+
+	"maand/bucket"
 	"maand/data"
 	"maand/utils"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func JobCommands() error {
-
-	//TODO: demand job filter
+	// TODO: demand job filter
 
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	defer func() {
@@ -35,15 +37,15 @@ func JobCommands() error {
 	row := tx.QueryRow(query)
 	err = row.Scan(&jobCommandsCount)
 	if errors.Is(err, sql.ErrNoRows) || jobCommandsCount == 0 {
-		return &NotFoundError{Domain: "job commands"}
+		return bucket.NotFoundError("job commands")
 	}
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	rows, err := tx.Query(`SELECT job, command_name, executed_on, demand_job, demand_command, demand_config FROM cat_job_commands`)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	t := utils.GetTable(table.Row{"job", "command_name", "executed_on", "demand_job", "demand_command", "demand_config"})
@@ -58,7 +60,7 @@ func JobCommands() error {
 
 		err = rows.Scan(&jobName, &commandName, &executedOn, &demandJob, &demandCommand, &demandConfig)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		t.AppendRows([]table.Row{{jobName, commandName, executedOn, demandJob, demandCommand, demandConfig}})
@@ -68,7 +70,7 @@ func JobCommands() error {
 
 	err = tx.Commit()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

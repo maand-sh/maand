@@ -2,15 +2,14 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
+// Package bucket contains bucket container funcs and errors
 package bucket
 
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"os"
@@ -18,6 +17,10 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/client"
+	"github.com/google/uuid"
 )
 
 type DockerClient struct {
@@ -30,10 +33,10 @@ type DockerClient struct {
 func (dc *DockerClient) Start() (err error) {
 	bucketAbsPath, err := filepath.Abs(path.Join(Location))
 	if err != nil {
-		return err
+		return UnexpectedError(err)
 	}
 
-	var binds = []string{fmt.Sprintf("%s:/bucket:z", bucketAbsPath)}
+	binds := []string{fmt.Sprintf("%s:/bucket:z", bucketAbsPath)}
 
 	resp, err := dc.cli.ContainerCreate(
 		dc.ctx,
@@ -51,11 +54,11 @@ func (dc *DockerClient) Start() (err error) {
 		"",
 	)
 	if err != nil {
-		return fmt.Errorf("unable to create bucket container: %v", err)
+		return UnexpectedError(err)
 	}
 
 	if err := dc.cli.ContainerStart(dc.ctx, resp.ID, container.StartOptions{}); err != nil {
-		return fmt.Errorf("unable to Start bucket container: %v", err)
+		return UnexpectedError(err)
 	}
 
 	dc.containerID = resp.ID
@@ -66,16 +69,18 @@ func (dc *DockerClient) Start() (err error) {
 func (dc *DockerClient) Stop() error {
 	if dc.containerID != "" {
 		if err := dc.cli.ContainerKill(dc.ctx, dc.containerID, "SIGKILL"); err != nil {
-			return fmt.Errorf("unable to stop bucket container: %v", err)
+			return UnexpectedError(err)
 		}
 
-		if err := dc.cli.ContainerRemove(dc.ctx, dc.containerID, container.RemoveOptions{}); err != nil {
-			return fmt.Errorf("unable to remove bucket container: %v", err)
+		if err := dc.cli.ContainerRemove(dc.ctx, dc.containerID, container.RemoveOptions{
+			Force: true,
+		}); err != nil {
+			return UnexpectedError(err)
 		}
 	}
 
 	if err := dc.cli.Close(); err != nil {
-		return err
+		return UnexpectedError(err)
 	}
 	return dc.ctx.Err()
 }
@@ -92,7 +97,7 @@ sync > /dev/null`, strings.Join(command, "\n"), path.Join("/bucket/tmp", session
 
 	err := os.WriteFile(path.Join(Location, sessionFilePath), []byte(script), os.ModePerm)
 	if err != nil {
-		return fmt.Errorf("unable to create session file: %v", err)
+		return UnexpectedError(err)
 	}
 
 	defer func() {
@@ -101,7 +106,7 @@ sync > /dev/null`, strings.Join(command, "\n"), path.Join("/bucket/tmp", session
 	}()
 
 	if dc.containerID == "" {
-		return fmt.Errorf("container not started")
+		return UnexpectedError(errors.New("bucket container not found"))
 	}
 
 	execConfig := container.ExecOptions{
@@ -113,7 +118,7 @@ sync > /dev/null`, strings.Join(command, "\n"), path.Join("/bucket/tmp", session
 	}
 	execResp, err := dc.cli.ContainerExecCreate(dc.ctx, dc.containerID, execConfig)
 	if err != nil {
-		return fmt.Errorf("unable to run exec into bucket container: %v", err)
+		return UnexpectedError(err)
 	}
 
 	attachResp, err := dc.cli.ContainerExecAttach(dc.ctx, execResp.ID, container.ExecAttachOptions{
@@ -122,7 +127,7 @@ sync > /dev/null`, strings.Join(command, "\n"), path.Join("/bucket/tmp", session
 		ConsoleSize: nil,
 	})
 	if err != nil {
-		return fmt.Errorf("unable to attach bucket container: %v", err)
+		return UnexpectedError(err)
 	}
 
 	defer attachResp.Close()
@@ -133,31 +138,33 @@ sync > /dev/null`, strings.Join(command, "\n"), path.Join("/bucket/tmp", session
 	}
 	f, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, os.ModePerm) // 0666 for read/write for owner, group, others
 	if err != nil {
-		return fmt.Errorf("unable to open log file %s: %w", logFilePath, err)
+		return UnexpectedError(err)
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 
 	scanner := bufio.NewScanner(attachResp.Reader)
 	for scanner.Scan() {
 		lineBytes := scanner.Bytes()
-		line := string(lineBytes) // Convert the filtered bytes to a string
+		line := string(lineBytes)
 		log.Printf("[%-12s] %s", workerIP, line)
 
 		if _, err := f.WriteString(line + "\n"); err != nil {
-			return fmt.Errorf("unable to write to log file %s: %w", logFilePath, err)
+			return UnexpectedError(err)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("reading from container stdout: %v", err)
+		return UnexpectedError(err)
 	}
 
 	errorCode, err := os.ReadFile(path.Join(Location, sessionOutFilePath))
 	if err != nil {
-		return fmt.Errorf("unable to read session file status code: %v", err)
+		return fmt.Errorf("%w: session out file %w", ErrUnexpectedError, err)
 	}
 
 	if strings.TrimSpace(string(errorCode)) != "0" {
-		return fmt.Errorf("exit status %s", string(errorCode))
+		return errors.New("command execution failed")
 	}
 
 	return nil
@@ -168,17 +175,17 @@ func BuildBucketContainer(bucketID string) error {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return UnexpectedError(err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return UnexpectedError(err)
 	}
 
 	err = cmd.Start()
 	if err != nil {
-		return fmt.Errorf("unable to Start bucket container: %v", err)
+		return fmt.Errorf("%w: docker run %w", ErrUnexpectedError, err)
 	}
 
 	handleOutput := func(pipe io.ReadCloser) {
@@ -196,7 +203,7 @@ func BuildBucketContainer(bucketID string) error {
 
 	err = cmd.Wait()
 	if err != nil {
-		return fmt.Errorf("failed 'docker build' : %w", err)
+		return fmt.Errorf("%w: build failed %w", ErrUnexpectedError, err)
 	}
 
 	return nil
@@ -207,12 +214,12 @@ func IsBucketImageAvailable(bucketID string) (bool, error) {
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	err = cmd.Start()
 	if err != nil {
-		return false, fmt.Errorf("unable to build bucket container: %v", err)
+		return false, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	found := false
@@ -227,22 +234,22 @@ func IsBucketImageAvailable(bucketID string) (bool, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return false, err
+		return false, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	err = cmd.Wait()
 	if err != nil {
-		return false, fmt.Errorf("failed on 'docker image ls' : %w", err)
+		return false, fmt.Errorf("%w: %w", ErrUnexpectedError, err)
 	}
 
 	return found, nil
 }
 
 func newDockerContainer(baseImage string) (*DockerClient, error) {
-	var ctx = context.Background()
+	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		return nil, fmt.Errorf("error creating docker client: %w", err)
+		return nil, UnexpectedError(err)
 	}
 
 	dc := &DockerClient{
@@ -257,23 +264,46 @@ func newDockerContainer(baseImage string) (*DockerClient, error) {
 func SetupBucketContainer(bucketID string) (*DockerClient, error) {
 	docker, err := newDockerContainer(fmt.Sprintf("maand/%s", bucketID))
 	if err != nil {
-		return nil, err
+		return nil, UnexpectedError(err)
 	}
 
 	err = docker.Start()
 	if err != nil {
-		return nil, err
+		return nil, UnexpectedError(err)
 	}
 
-	//sigChan := make(chan os.Signal, 1)
-	//signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-	//done := make(chan bool)
-	//go func() {
-	//	sig := <-sigChan
-	//	fmt.Println("\nReceived signal:", sig)
-	//	_ = docker.Stop()
-	//	done <- true
-	//}()
-
 	return docker, err
+}
+
+func RemoveBuckerContainer(bucketID string) error {
+	cmd := exec.Command("docker", "rmi", fmt.Sprintf("maand/%s", bucketID))
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrUnexpectedError, err)
+	}
+
+	err = cmd.Start()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrUnexpectedError, err)
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, fmt.Sprintf("maand/%s", bucketID)) {
+			break // Image found, no need to continue scanning
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("%w: %w", ErrUnexpectedError, err)
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrUnexpectedError, err)
+	}
+
+	return nil
 }

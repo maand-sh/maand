@@ -7,9 +7,12 @@ package cat
 import (
 	"database/sql"
 	"errors"
-	"github.com/jedib0t/go-pretty/v6/table"
+
+	"maand/bucket"
 	"maand/data"
 	"maand/utils"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func JobPorts() error {
@@ -17,12 +20,12 @@ func JobPorts() error {
 
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	defer func() {
@@ -34,12 +37,12 @@ func JobPorts() error {
 	row := tx.QueryRow(query)
 	err = row.Scan(&count)
 	if errors.Is(err, sql.ErrNoRows) || count == 0 {
-		return &NotFoundError{Domain: "job ports"}
+		return bucket.NotFoundError("job ports")
 	}
 
 	rows, err := tx.Query(`SELECT (SELECT name FROM job WHERE job_id = jp.job_id) as job, name, port FROM job_ports jp`)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	t := utils.GetTable(table.Row{"job", "name", "port"})
@@ -51,7 +54,7 @@ func JobPorts() error {
 
 		err = rows.Scan(&job, &name, &port)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		t.AppendRows([]table.Row{{job, name, port}})
@@ -60,7 +63,7 @@ func JobPorts() error {
 	t.Render()
 
 	if err := tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

@@ -2,33 +2,33 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
+// Package workspace provides interfaces for workspace
 package workspace
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"maand/bucket"
 	"os"
 	"path"
+
+	"maand/bucket"
 )
 
-type DefaultWorkspace struct {
-}
+type DefaultWorkspace struct{}
 
 func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 	data, err := os.ReadFile(path.Join(bucket.WorkspaceLocation, "workers.json"))
-	if os.IsNotExist(err) {
-		return []Worker{}, nil
-	}
 	if err != nil {
+		if os.IsNotExist(err) {
+			return []Worker{}, nil
+		}
 		return nil, err
 	}
 
 	var dataWorkers []Worker
-	err = json.Unmarshal(data, &dataWorkers)
-	if err != nil {
-		return nil, err
+	if err = json.Unmarshal(data, &dataWorkers); err != nil {
+		return nil, fmt.Errorf("%w: %w", bucket.ErrInvaildWorkerJSON, err)
 	}
 
 	var workers []Worker
@@ -42,7 +42,7 @@ func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 func (ws *DefaultWorkspace) GetJobs() ([]string, error) {
 	paths, err := fs.Glob(os.DirFS(path.Join(bucket.WorkspaceLocation, "jobs")), "*/manifest.json")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 	}
 
 	var jobs []string
@@ -58,13 +58,12 @@ func (ws *DefaultWorkspace) GetJobManifest(jobName string) (Manifest, error) {
 	manifestFile := path.Join(bucket.WorkspaceLocation, "jobs", jobName, "manifest.json")
 	f, err := os.ReadFile(manifestFile)
 	if err != nil {
-		return Manifest{}, err
+		return Manifest{}, fmt.Errorf("%w:%w", bucket.ErrUnexpectedError, err)
 	}
 
 	var manifest Manifest
-	err = json.Unmarshal(f, &manifest)
-	if err != nil {
-		return Manifest{}, fmt.Errorf("invalid manifest file format %s : %w", jobName, err)
+	if err = json.Unmarshal(f, &manifest); err != nil {
+		return Manifest{}, fmt.Errorf("%w: job %s\n%w", bucket.ErrInvalidManifest, jobName, err)
 	}
 	return manifest, nil
 }
@@ -72,16 +71,15 @@ func (ws *DefaultWorkspace) GetJobManifest(jobName string) (Manifest, error) {
 func (ws *DefaultWorkspace) GetDisabled() (DisabledAllocations, error) {
 	disabledFile := path.Join(bucket.WorkspaceLocation, "disabled.json")
 	f, err := os.ReadFile(disabledFile)
-	if os.IsNotExist(err) {
-		return DisabledAllocations{}, nil
-	}
 	if err != nil {
+		if os.IsNotExist(err) {
+			return DisabledAllocations{}, nil
+		}
 		return DisabledAllocations{}, err
 	}
 
 	var disabledAllocations DisabledAllocations
-	err = json.Unmarshal(f, &disabledAllocations)
-	if err != nil {
+	if err = json.Unmarshal(f, &disabledAllocations); err != nil {
 		return DisabledAllocations{}, err
 	}
 

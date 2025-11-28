@@ -7,19 +7,21 @@ package cat
 import (
 	"database/sql"
 	"errors"
-	"github.com/jedib0t/go-pretty/v6/table"
+	"strings"
+
+	"maand/bucket"
 	"maand/data"
 	"maand/utils"
-	"strings"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func KV() error {
-
 	// TODO: namespace filter
 
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = db.Close()
@@ -27,7 +29,7 @@ func KV() error {
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	defer func() {
@@ -39,15 +41,15 @@ func KV() error {
 	row := tx.QueryRow(query)
 	err = row.Scan(&count)
 	if errors.Is(err, sql.ErrNoRows) || count == 0 {
-		return &NotFoundError{Domain: "key values"}
+		return bucket.NotFoundError("key values")
 	}
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	rows, err := tx.Query(`SELECT namespace, key, value, version, ttl, created_date, deleted FROM cat_kv`)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	t := utils.GetTable(table.Row{"Namespace", "Key", "Value", "Version", "ttl", "createdDate", "deleted"})
@@ -63,7 +65,7 @@ func KV() error {
 
 		err = rows.Scan(&namespace, &key, &value, &version, &ttl, &createdDate, &deleted)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		if strings.HasPrefix(key, "certs/") {
@@ -76,7 +78,7 @@ func KV() error {
 	t.Render()
 
 	if err := tx.Commit(); err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil
