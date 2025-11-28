@@ -21,8 +21,9 @@ var (
 	ErrJobCommandFileNotFound          = errors.New("job command file not found")
 	ErrInvalidJob                      = errors.New("invaild job")
 	ErrInSufficientResource            = errors.New("insufficient resource")
-	ErrHealthCheckFailed               = errors.New("health failed")
+	ErrHealthCheckFailed               = errors.New("health check failed")
 	ErrUnsupportedResourceConfigration = errors.New("unsupport resource configuration")
+	ErrRunCommand                      = errors.New("run command failed")
 )
 
 func KeyNotFoundError(namespace, key string) error {

@@ -56,8 +56,18 @@ func Collect() error {
 		return err
 	}
 
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return bucket.DatabaseError(err)
+	}
+
+	err = bucket.RemoveBuckerContainer(bucketID)
+	if err != nil {
+		return err
 	}
 
 	return nil

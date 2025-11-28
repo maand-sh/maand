@@ -5,7 +5,6 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 
 	"maand/jobcommand"
@@ -23,7 +22,7 @@ var jobCommandCmd = &cobra.Command{
 
 		concurrency, _ := flags.GetInt("concurrency")
 		if concurrency < 1 {
-			fmt.Println("concurrency must be at least 1")
+			log.Fatal("concurrency must be at least 1")
 		}
 
 		job := args[0]

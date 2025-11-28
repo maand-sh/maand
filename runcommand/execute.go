@@ -100,11 +100,14 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 		return err
 	}
 
-	err = os.WriteFile(path.Join(bucket.TempLocation, "command.sh"), content, 0o644)
+	commandFilePath := path.Join(bucket.TempLocation, "command.sh")
+	err = os.WriteFile(commandFilePath, content, 0o644)
 	if err != nil {
 		return bucket.UnexpectedError(err)
 	}
-	commandFile = "command.sh"
+	defer func() {
+		_ = os.Remove(commandFilePath)
+	}()
 
 	bucketID, err := data.GetBucketID(tx)
 	if err != nil {
@@ -126,32 +129,9 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 			break
 		}
 
-		var wait sync.WaitGroup
-		var mu sync.Mutex
-		errs := make(map[string]error)
-
-		for _, workerIP := range batch {
-			wait.Add(1)
-
-			go func(wp string) {
-				defer wait.Done()
-				err := worker.ExecuteFileCommand(dockerClient, wp, commandFile, nil)
-				mu.Lock()
-				if err != nil {
-					errs[wp] = err
-				}
-				mu.Unlock()
-			}(workerIP)
-		}
-
-		wait.Wait()
-
-		if len(errs) > 0 {
-			failedWorkers := []string{}
-			for wp := range errs {
-				failedWorkers = append(failedWorkers, wp)
-			}
-			return fmt.Errorf("%s worker(s) failed", strings.Join(failedWorkers, ","))
+		err = executeCommand(dockerClient, commandFilePath, batch)
+		if err != nil {
+			return err
 		}
 
 		if runHealthcheck {
@@ -168,6 +148,37 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 				}
 			}
 		}
+	}
+
+	return nil
+}
+
+func executeCommand(dockerClient *bucket.DockerClient, commandFile string, workers []string) error {
+	var wait sync.WaitGroup
+	errs := make(chan error, len(workers))
+
+	for _, workerIP := range workers {
+		wait.Add(1)
+
+		go func(wp string) {
+			defer wait.Done()
+			err := worker.ExecuteFileCommand(dockerClient, wp, commandFile, nil)
+			if err != nil {
+				errs <- fmt.Errorf("%w: %s", err, wp)
+			}
+		}(workerIP)
+	}
+
+	wait.Wait()
+	close(errs)
+
+	failed := []string{}
+	for err := range errs {
+		failed = append(failed, err.Error())
+	}
+
+	if len(failed) > 0 {
+		return bucket.ErrRunCommand
 	}
 
 	return nil

@@ -5,6 +5,7 @@
 package deploy
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -59,7 +60,7 @@ func rsync(dockerClient *bucket.DockerClient, bucketID, workerIP string) error {
 
 	cmd := append([]string{rs}, rsOptions...)
 	if err = dockerClient.Exec(workerIP, []string{strings.Join(cmd, " ")}, nil, true); err != nil {
-		return err
+		return fmt.Errorf("rsync failed: worker %s %w", workerIP, errors.Unwrap(err))
 	}
 
 	return nil

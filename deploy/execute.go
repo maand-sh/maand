@@ -170,7 +170,7 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		"div": func(a, b int) int {
 			return a / b
 		},
-		"int": func(s interface{}) int {
+		"int": func(s any) int {
 			switch v := s.(type) {
 			case int:
 				return v
@@ -290,7 +290,7 @@ func prepareWorkersFiles(tx *sql.Tx, workers []string) error {
 		workerDirPath := bucket.GetTempWorkerPath(workerIP)
 		err := os.MkdirAll(workerDirPath, os.ModePerm)
 		if err != nil {
-			return err
+			return bucket.UnexpectedError(err)
 		}
 
 		deployableWorker, err := getWorkerData(tx, workerIP)
@@ -300,12 +300,12 @@ func prepareWorkersFiles(tx *sql.Tx, workers []string) error {
 
 		workerData, err := json.MarshalIndent(deployableWorker, "", "   ")
 		if err != nil {
-			return err
+			return bucket.UnexpectedError(err)
 		}
 
 		err = os.WriteFile(path.Join(workerDirPath, "worker.json"), workerData, os.ModePerm)
 		if err != nil {
-			return err
+			return bucket.UnexpectedError(err)
 		}
 
 		allocatedJobs, err := data.GetAllocatedJobs(tx, workerIP)
@@ -328,17 +328,17 @@ func prepareWorkersFiles(tx *sql.Tx, workers []string) error {
 
 		workerJobsData, err := json.MarshalIndent(workerJobs, "", "   ")
 		if err != nil {
-			return err
+			return bucket.UnexpectedError(err)
 		}
 
 		err = os.WriteFile(path.Join(workerDirPath, "jobs.json"), workerJobsData, os.ModePerm)
 		if err != nil {
-			return err
+			return bucket.UnexpectedError(err)
 		}
 
 		err = os.MkdirAll(path.Join(workerDirPath, "bin"), os.ModePerm)
 		if err != nil {
-			return err
+			return bucket.UnexpectedError(err)
 		}
 
 		err = os.WriteFile(path.Join(workerDirPath, "bin", "runner.py"), runnerPy, os.ModePerm)
@@ -362,12 +362,12 @@ func prepareWorkersFiles(tx *sql.Tx, workers []string) error {
 
 func prepareJobsFiles(tx *sql.Tx, jobs []string) error {
 	for _, job := range jobs {
-		allocatedWorkers, err := data.GetActiveAllocations(tx, job)
+		allocatedActiveWorkers, err := data.GetActiveAllocations(tx, job)
 		if err != nil {
 			return err
 		}
 
-		for _, workerIP := range allocatedWorkers {
+		for _, workerIP := range allocatedActiveWorkers {
 			workerDirPath := bucket.GetTempWorkerPath(workerIP)
 
 			err = data.CopyJobFiles(tx, job, path.Join(workerDirPath, "jobs"))
@@ -528,8 +528,15 @@ func syncWorkerFiles(dockerClient *bucket.DockerClient, bucketID, workerIP strin
 
 func syncWorkers(dockerClient *bucket.DockerClient, bucketID string, workers []string, jobs []string, applyRules bool) error {
 	var wait sync.WaitGroup
-	errs := make(map[string]error)
+	errs := make(chan error, len(workers))
 	semaphore := make(chan struct{}, len(workers))
+
+	mergeFilePaths := []string{}
+	defer func() {
+		for _, file := range mergeFilePaths {
+			_ = os.Remove(file)
+		}
+	}()
 
 	for _, workerIP := range workers {
 		var rsyncMergeLines []string
@@ -546,31 +553,33 @@ func syncWorkers(dockerClient *bucket.DockerClient, bucketID string, workers []s
 		if err != nil {
 			return err
 		}
-
-		defer func() {
-			_ = os.Remove(rsyncMergeFilePath)
-		}()
+		mergeFilePaths = append(mergeFilePaths, rsyncMergeFilePath)
 
 		wait.Add(1)
 		semaphore <- struct{}{}
 
 		go func(tBucketID, tWorkerIP string) {
-			defer wait.Done()
-			defer func() { <-semaphore }()
+			defer func() {
+				wait.Done()
+				<-semaphore
+			}()
+
 			err = syncWorkerFiles(dockerClient, tBucketID, tWorkerIP)
 			if err != nil {
-				errs[tWorkerIP] = err
+				errs <- err
 			}
 		}(bucketID, workerIP)
 	}
 	wait.Wait()
+	close(errs)
 
-	if len(errs) > 0 {
-		failedWorkers := make([]string, 0)
-		for wp := range errs {
-			failedWorkers = append(failedWorkers, wp)
-		}
-		return fmt.Errorf("rsync failed on worker(s) : %s", strings.Join(failedWorkers, ","))
+	failedWorkers := make([]string, 0)
+	for wp := range errs {
+		failedWorkers = append(failedWorkers, wp.Error())
+	}
+
+	if len(failedWorkers) > 0 {
+		return fmt.Errorf("%s", strings.Join(failedWorkers, "\n"))
 	}
 
 	return nil
@@ -592,15 +601,7 @@ func handleNewAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketI
 
 		for i := 0; i < workerCount; i += parallelBatchCount {
 			batchSize := min(parallelBatchCount, workerCount-i) // Process up to 2 workers at a time
-
-			var mu sync.Mutex
-			var errs []error
-
-			appendErr := func(err error) {
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-			}
+			errs := make(chan error, batchSize)
 
 			for j := i; j < batchSize; j++ {
 				workerIP := newAllocations[i+j]
@@ -618,20 +619,28 @@ func handleNewAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketI
 				semaphore <- struct{}{} // Acquire slot
 
 				go func(tWorkerIP string) {
-					defer workerWait.Done()
-					defer func() { <-semaphore }() // Release slot after execution
+					defer func() {
+						workerWait.Done()
+						<-semaphore
+					}()
 
 					err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s start --jobs %s", bucketID, bucketID, job)}, nil)
 					if err != nil {
-						err = fmt.Errorf("unable to start allocation. job %s, worker %s, reason %v", job, tWorkerIP, err)
-						appendErr(err)
+						errs <- fmt.Errorf("worker %s, job %s %w", tWorkerIP, job, err)
 					}
 				}(workerIP)
 			}
 
 			workerWait.Wait()
-			if len(errs) > 0 {
-				return fmt.Errorf("unable to start allocations")
+			close(errs)
+
+			faileMessages := make([]string, 0)
+			for err := range errs {
+				faileMessages = append(faileMessages, err.Error())
+			}
+
+			if len(faileMessages) > 0 {
+				return fmt.Errorf("%s", strings.Join(faileMessages, "\n"))
 			}
 		}
 
@@ -661,19 +670,10 @@ func handleUpdatedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 		semaphore := make(chan struct{}, parallelBatchCount) // Limit to parallelBatchCount workers at a time
 
 		for i := 0; i < workerCount; i += parallelBatchCount {
-
 			batchSize := min(parallelBatchCount, workerCount-i)
+			errs := make(chan error, batchSize)
 
-			var mu sync.Mutex
-			var errs []error
-
-			appendErr := func(err error) {
-				mu.Lock()
-				errs = append(errs, err)
-				mu.Unlock()
-			}
-
-			for j := 0; j < batchSize; j++ {
+			for j := range batchSize {
 				workerIP := updatedAllocations[i+j]
 				disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
 				if err != nil {
@@ -688,25 +688,32 @@ func handleUpdatedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 				semaphore <- struct{}{} // Acquire slot
 
 				go func(tWorkerIP string) {
-					defer waitWorker.Done()
-					defer func() { <-semaphore }() // Release slot after execution
+					defer func() {
+						waitWorker.Done()
+						<-semaphore
+					}()
 
 					err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s restart --jobs %s", bucketID, bucketID, job)}, nil)
 					if err != nil {
-						err = fmt.Errorf("unable to restart allocation. job %s, worker %s, reason %v", job, tWorkerIP, err)
-						appendErr(err)
+						errs <- fmt.Errorf("worker %s, job %s %w", tWorkerIP, job, err)
 					}
 				}(workerIP)
 			}
 
 			waitWorker.Wait()
-			if len(errs) > 0 {
-				return fmt.Errorf("unable to restart allocations")
+			close(errs)
+
+			failedMessages := make([]string, 0)
+			for wp := range errs {
+				failedMessages = append(failedMessages, wp.Error())
+			}
+			if len(failedMessages) > 0 {
+				return fmt.Errorf("%s", strings.Join(failedMessages, "\n"))
 			}
 
 			err := healthcheck.HealthCheck(tx, dockerClient, true, job, true)
 			if err != nil {
-				return fmt.Errorf("error during health check for job %s: %v", job, err)
+				return err
 			}
 		}
 	}
@@ -716,7 +723,10 @@ func handleUpdatedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 func handleStoppedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketID string, jobs []string) error {
 	stopAllocation := func(tWorkerIP string, tJob string) error {
 		err := worker.ExecuteCommand(dockerClient, tWorkerIP, []string{fmt.Sprintf("python3 /opt/worker/%s/bin/runner.py %s stop --jobs %s", bucketID, bucketID, tJob)}, nil)
-		return err
+		if err != nil {
+			return fmt.Errorf("worker %s, job %s %w", tWorkerIP, tJob, err)
+		}
+		return nil
 	}
 
 	for _, job := range jobs {
@@ -752,17 +762,17 @@ func handleStoppedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 
 				err = stopAllocation(workerIP, job)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to stop allocations\n%w", err)
 				}
 			}
 		}
 
-		old, err := data.GetAllocatedWorkers(tx, job)
+		currentlyAllocatedWorkers, err := data.GetAllocatedWorkers(tx, job)
 		if err != nil {
 			return err
 		}
 
-		if len(allocatedWorkers) != len(old) {
+		if len(allocatedWorkers) != len(currentlyAllocatedWorkers) {
 			// run health check only if more than on one active allocation available
 			err := healthcheck.HealthCheck(tx, dockerClient, true, job, true)
 			if err != nil {
@@ -811,7 +821,7 @@ func Execute(jobsFilter []string) error {
 
 	err = os.RemoveAll(bucket.TempLocation)
 	if err != nil {
-		return err
+		return bucket.UnexpectedError(err)
 	}
 
 	err = UpdateSeq(db)
@@ -844,14 +854,15 @@ func Execute(jobsFilter []string) error {
 		return err
 	}
 
+	cancel := jobcommand.SetupServer(tx)
+
 	defer func() {
 		_ = dockerClient.Stop()
+		cancel()
 	}()
 
-	cancel := jobcommand.SetupServer(tx)
-	defer cancel()
+	failedMessages := make([]string, 0)
 
-	noErrs := true
 	// removing all jobs fails on deps seq
 	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
 
@@ -899,14 +910,7 @@ func Execute(jobsFilter []string) error {
 		}
 
 		var wait sync.WaitGroup
-		var mu sync.Mutex
-		var errs []error
-
-		appendErr := func(err error) {
-			mu.Lock()
-			errs = append(errs, err)
-			mu.Unlock()
-		}
+		errs := make(chan error, len(jobs))
 
 		for _, job := range jobs {
 			wait.Add(1)
@@ -916,23 +920,27 @@ func Execute(jobsFilter []string) error {
 
 				commands, err := data.GetJobCommands(tx, tJob, "job_control")
 				if err != nil {
-					appendErr(fmt.Errorf("failed to fetach job_control for job %s: %w", tJob, err))
+					errs <- err
+					return
 				}
 
 				if len(commands) != 0 {
 					allocations, err := data.GetAllocatedWorkers(tx, tJob)
 					if err != nil {
-						appendErr(fmt.Errorf("failed to fetach allocations for job %s: %w", tJob, err))
+						errs <- err
+						return
 					}
 
 					newAllocations, err := data.GetNewAllocations(tx, tJob)
 					if err != nil {
-						appendErr(fmt.Errorf("failed to fetach new allocations for job %s: %w", tJob, err))
+						errs <- err
+						return
 					}
 
 					updatedAllocations, err := data.GetUpdatedAllocations(tx, tJob)
 					if err != nil {
-						appendErr(fmt.Errorf("failed to fetach updated allocations for job %s: %w", tJob, err))
+						errs <- err
+						return
 					}
 
 					for _, command := range commands {
@@ -941,51 +949,53 @@ func Execute(jobsFilter []string) error {
 							fmt.Sprintf("NEW_ALLOCATIONS=%s", strings.Join(newAllocations, ",")),
 						})
 						if err != nil {
-							appendErr(fmt.Errorf("error executing job_control for job %s: %w", tJob, err))
+							errs <- err
+							return
 						}
 					}
 
 					err = healthcheck.HealthCheck(tx, dockerClient, true, tJob, true)
 					if err != nil {
-						appendErr(fmt.Errorf("failed to execute health check for job %s: %w", tJob, err))
+						errs <- err
+						return
 					}
 				} else {
 					err = handleNewAllocations(tx, dockerClient, bucketID, tJob) // health check part of handleNewAllocations
 					if err != nil {
-						appendErr(fmt.Errorf("failed to execute start new allocations %s: %w", tJob, err))
+						errs <- fmt.Errorf("failed to start new allocations\n%w", err)
+						return
 					}
 
 					err = handleUpdatedAllocations(tx, dockerClient, bucketID, tJob) // health check part of handleUpdatedAllocations
 					if err != nil {
-						appendErr(fmt.Errorf("failed to execute restart updated allocations %s: %w", tJob, err))
+						errs <- fmt.Errorf("failed to restart existing allocations\n%w", err)
+						return
 					}
-				}
-
-				if len(errs) > 0 {
-					return
 				}
 
 				err = executePostJobCommands(tx, dockerClient, tJob)
 				if err != nil {
-					appendErr(fmt.Errorf("failed to execute post deploy command for job %s: %w", tJob, err))
+					errs <- fmt.Errorf("failed to execute post deploy command: job %s %w", job, err)
+					return
 				}
 
 				err = promoteAllocationHash(tx, tJob)
 				if err != nil {
-					appendErr(fmt.Errorf("failed to update hash for job %s: %w", tJob, err))
+					errs <- err
+					return
 				}
 			}(job)
 		}
 
 		wait.Wait()
+		close(errs)
 
-		if len(errs) > 0 {
-			noErrs = false
-			break
+		for wp := range errs {
+			failedMessages = append(failedMessages, wp.Error())
 		}
 	}
 
-	if noErrs {
+	if len(failedMessages) == 0 {
 		for _, workerIP := range workers {
 			jobs, err := data.GetAllocatedJobs(tx, workerIP)
 			if err != nil {
@@ -1001,6 +1011,10 @@ func Execute(jobsFilter []string) error {
 
 	if err := tx.Commit(); err != nil {
 		return bucket.DatabaseError(err)
+	}
+
+	if len(failedMessages) > 0 {
+		return fmt.Errorf("%s", strings.Join(failedMessages, "\n"))
 	}
 
 	return nil
