@@ -8,21 +8,24 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/jedib0t/go-pretty/v6/table"
+	"strings"
+
+	"maand/bucket"
 	"maand/data"
 	"maand/utils"
-	"strings"
+
+	"github.com/jedib0t/go-pretty/v6/table"
 )
 
 func Allocations(jobsCSV, workersCSV string) error {
 	db, err := data.GetDatabase(true)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	tx, err := db.Begin()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 	defer func() {
 		_ = tx.Rollback()
@@ -66,10 +69,10 @@ func Allocations(jobsCSV, workersCSV string) error {
 
 	err = row.Scan(&workerCount)
 	if workerCount == 0 || errors.Is(err, sql.ErrNoRows) {
-		return &NotFoundError{Domain: "allocations"}
+		return bucket.NotFoundError("allocations")
 	}
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	t := utils.GetTable(table.Row{"allocation_id", "worker_ip", "job", "disabled", "removed"})
@@ -91,7 +94,7 @@ func Allocations(jobsCSV, workersCSV string) error {
 
 	rows, err := tx.Query(query)
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	for rows.Next() {
@@ -103,7 +106,7 @@ func Allocations(jobsCSV, workersCSV string) error {
 
 		err = rows.Scan(&allocID, &workerIP, &job, &disabled, &removed)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		t.AppendRows([]table.Row{{allocID, workerIP, job, disabled, removed}})
@@ -113,7 +116,7 @@ func Allocations(jobsCSV, workersCSV string) error {
 
 	err = tx.Commit()
 	if err != nil {
-		return data.NewDatabaseError(err)
+		return bucket.DatabaseError(err)
 	}
 
 	return nil

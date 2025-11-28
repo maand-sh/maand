@@ -6,7 +6,8 @@ package cmd
 
 import (
 	"log"
-	"maand/health_check"
+
+	"maand/healthcheck"
 
 	"github.com/spf13/cobra"
 )
@@ -19,7 +20,7 @@ var healthCheckCmd = &cobra.Command{
 		wait, _ := flags.GetBool("wait")
 		jobsComma, _ := flags.GetString("jobs")
 		verbose, _ := flags.GetBool("verbose")
-		err := health_check.Execute(wait, verbose, jobsComma)
+		err := healthcheck.Execute(wait, verbose, jobsComma)
 		if err != nil {
 			log.Fatalln(err)
 		}

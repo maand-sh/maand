@@ -5,9 +5,9 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
-	"maand/job_command"
+
+	"maand/jobcommand"
 
 	"github.com/spf13/cobra"
 )
@@ -22,13 +22,13 @@ var jobCommandCmd = &cobra.Command{
 
 		concurrency, _ := flags.GetInt("concurrency")
 		if concurrency < 1 {
-			fmt.Println("concurrency must be at least 1")
+			log.Fatal("concurrency must be at least 1")
 		}
 
 		job := args[0]
 		command := args[1]
 
-		err := job_command.Execute(job, command, "cli", concurrency, verbose, []string{})
+		err := jobcommand.Execute(job, command, "cli", concurrency, verbose, []string{})
 		if err != nil {
 			log.Fatalln(err)
 		}

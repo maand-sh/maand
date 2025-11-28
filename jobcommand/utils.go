@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-package job_command
+package jobcommand
 
 import (
 	"encoding/json"
@@ -22,7 +22,7 @@ func handleJSONError(w http.ResponseWriter, err error) {
 }
 
 // respondJSON encodes the payload into JSON and writes it to the response.
-func respondJSON(w http.ResponseWriter, status int, payload interface{}) {
+func respondJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(payload); err != nil {

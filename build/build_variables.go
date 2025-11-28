@@ -7,15 +7,16 @@ package build
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+
 	"maand/bucket"
 	"maand/data"
 	"maand/kv"
 	"maand/utils"
 	"maand/workspace"
-	"os"
-	"path"
-	"strconv"
-	"strings"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -181,25 +182,28 @@ func processLabelData(tx *sql.Tx) error {
 	}
 
 	content, err := os.ReadFile(path.Join(bucket.SecretLocation, "ca.crt"))
+	if err != nil {
+		return fmt.Errorf("%w: unable to read ca.crt", bucket.ErrUnexpectedError)
+	}
 	workerKV["certs/ca.crt"] = string(content)
 
 	return storeKeyValues(tx, "maand/worker", workerKV)
 }
 
 func processBucketConf(tx *sql.Tx) error {
-	var bucketConfig = make(map[string]string)
+	bucketConfig := make(map[string]string)
 
 	bucketConfPath := path.Join(bucket.WorkspaceLocation, "bucket.conf")
 
 	if _, err := os.Stat(bucketConfPath); err == nil {
 		bucketData, err := os.ReadFile(bucketConfPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 		}
 
 		err = toml.Unmarshal(bucketData, &bucketConfig)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", bucket.ErrInvalidBucketConf, err)
 		}
 	}
 
@@ -212,16 +216,15 @@ func processBucketConf(tx *sql.Tx) error {
 	for _, job := range availableJobs {
 		rows, err := tx.Query("SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		for rows.Next() {
 			var name, value string
 			err := rows.Scan(&name, &value)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
-
 			jobPorts[name] = value
 		}
 	}
@@ -234,33 +237,34 @@ func processBucketConf(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func getJobConf(job string) (map[string]string, error) {
-	var config = make(map[string]map[string]string)
+func getJobConf(job string) (string, map[string]string, error) {
+	config := make(map[string]map[string]string)
 
-	maandConf, err := utils.GetMaandConf()
+	maandConf, err := bucket.GetMaandConf()
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
 
-	bucketJobConf := path.Join(bucket.WorkspaceLocation, "bucket.jobs.conf")
-
+	file := "bucket.jobs.conf"
 	maandConf.JobConfigSelector = strings.TrimSpace(maandConf.JobConfigSelector)
 	if maandConf.JobConfigSelector != "" {
-		bucketJobConf = path.Join(bucket.WorkspaceLocation, fmt.Sprintf("bucket.jobs.%s.conf", maandConf.JobConfigSelector))
+		file = fmt.Sprintf("bucket.jobs.%s.conf", maandConf.JobConfigSelector)
 	}
+	bucketJobConf := path.Join(bucket.WorkspaceLocation, file)
 
 	if _, err := os.Stat(bucketJobConf); err == nil {
 		bucketData, err := os.ReadFile(bucketJobConf)
 		if err != nil {
-			return nil, err
+			return "", nil, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 		}
 
 		err = toml.Unmarshal(bucketData, &config)
 		if err != nil {
-			return nil, err
+			return "", nil, fmt.Errorf("%w: bucket conf %s %w", bucket.ErrInvalidBucketConf, bucketJobConf, err)
 		}
 	}
 
@@ -268,7 +272,7 @@ func getJobConf(job string) (map[string]string, error) {
 		config[job] = make(map[string]string)
 	}
 
-	return config[job], nil
+	return file, config[job], nil
 }
 
 func processJobData(tx *sql.Tx) error {
@@ -310,7 +314,7 @@ func processJobData(tx *sql.Tx) error {
 		jobKV["min_cpu_mhz"] = minCPU
 		jobKV["max_cpu_mhz"] = maxCPU
 
-		jobConfig, err := getJobConf(job)
+		_, jobConfig, err := getJobConf(job)
 		if err != nil {
 			return err
 		}
@@ -319,10 +323,18 @@ func processJobData(tx *sql.Tx) error {
 		if err != nil {
 			return err
 		}
+		if minMemory == "0" && maxMemory == "0" {
+			jobKV["min_memory_mb"] = jobKV["memory"]
+			jobKV["max_memory_mb"] = jobKV["memory"]
+		}
 
 		jobKV["cpu"], err = data.GetJobCPU(tx, job)
 		if err != nil {
 			return err
+		}
+		if minCPU == "0" && maxMemory == "0" {
+			jobKV["min_cpu_mhz"] = jobKV["cpu"]
+			jobKV["max_cpu_mhz"] = jobKV["cpu"]
 		}
 
 		namespace := fmt.Sprintf("maand/job/%s", job)
@@ -344,9 +356,11 @@ func processJobData(tx *sql.Tx) error {
 		if err != nil {
 			return err
 		}
+
 		for _, workerIP := range jobWorkers {
 			nss = append(nss, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
 		}
+
 		for _, ns := range nss {
 			err := storeKeyValues(tx, ns, make(map[string]string))
 			if err != nil {
@@ -362,7 +376,7 @@ func storeKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) e
 	var availableKeys []string
 	for key, value := range keyValues {
 		if err := kv.GetKVStore().Put(tx, namespace, key, value, 0); err != nil {
-			return fmt.Errorf("failed to store key-value pair (%s: %s): %w", key, value, err)
+			return err
 		}
 		availableKeys = append(availableKeys, key)
 	}

@@ -10,19 +10,19 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"os"
+	"path"
+	"strings"
+
 	"maand/bucket"
 	"maand/data"
 	"maand/utils"
 	"maand/workspace"
-	"os"
-	"path"
-	"strings"
 )
 
-var removedJobs []string
+var removedJobs []string // global variable captures removed jobs from workspace
 
 func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
-
 	wsJobs, err := ws.GetJobs()
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		for _, stmt := range deletes {
 			_, err := tx.Exec(stmt, jobID)
 			if err != nil {
-				return err
+				return bucket.DatabaseError(err)
 			}
 		}
 
@@ -51,55 +51,79 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			return err
 		}
 
-		minCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMinCPU(manifest))
+		minCPUMHZ, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMinCPU(manifest))
 		if err != nil {
-			return fmt.Errorf("error extracting minimum cpu frequency in MHz, job %s: %v", job, err)
+			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
-		maxCPUMhz, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMaxCPU(manifest))
+		maxCPUMHZ, err := utils.ExtractCPUFrequencyInMHz(workspace.GetMaxCPU(manifest))
 		if err != nil {
-			return fmt.Errorf("error extracting maximum cpu frequency in MHz, job %s: %v", job, err)
+			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
 		}
 
-		if minCPUMhz != 0 && maxCPUMhz == 0 {
-			maxCPUMhz = minCPUMhz
+		if minCPUMHZ != 0 && maxCPUMHZ == 0 {
+			maxCPUMHZ = minCPUMHZ
 		}
-		if minCPUMhz > maxCPUMhz {
-			return fmt.Errorf("job %s, minCPUMhz > maxCPUMhz: %f", job, minCPUMhz)
-		}
-
-		minMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMinMemory(manifest))
-		if err != nil {
-			return fmt.Errorf("error extracting minimum memory in MB, job %s: %v", job, err)
-		}
-		maxMemoryMb, err := utils.ExtractSizeInMB(workspace.GetMaxMemory(manifest))
-		if err != nil {
-			return fmt.Errorf("error extracting maximum memory in MB, job %s: %v", job, err)
-		}
-		if minMemoryMb != 0 && maxMemoryMb == 0.0 {
-			maxMemoryMb = minMemoryMb
-		}
-		if minMemoryMb > maxMemoryMb {
-			return fmt.Errorf("job %s, minMemoryMb > maxMemoryMb: %f", job, minMemoryMb)
+		if minCPUMHZ > maxCPUMHZ {
+			return fmt.Errorf("%w: job %s minCPUMhz > maxCPUMhz", bucket.ErrInvalidManifest, job)
 		}
 
-		jobConfig, err := getJobConf(job)
+		minMemoryMB, err := utils.ExtractSizeInMB(workspace.GetMinMemory(manifest))
+		if err != nil {
+			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
+		}
+		maxMemoryMB, err := utils.ExtractSizeInMB(workspace.GetMaxMemory(manifest))
+		if err != nil {
+			return fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, job, err)
+		}
+		if minMemoryMB != 0 && maxMemoryMB == 0 {
+			maxMemoryMB = minMemoryMB
+		}
+		if minMemoryMB > maxMemoryMB {
+			return fmt.Errorf("%w: job %s minMemoryMb > maxMemoryMb", bucket.ErrInvalidManifest, job)
+		}
+
+		jobConfigFile, jobConfig, err := getJobConf(job)
 		if err != nil {
 			return err
 		}
 
-		var memory = maxMemoryMb
+		memory := maxMemoryMB
 		if _, ok := jobConfig["memory"]; ok {
 			memory, err = utils.ExtractSizeInMB(jobConfig["memory"])
 			if err != nil {
 				return err
 			}
+
+			if minMemoryMB == 0 && maxMemoryMB == 0 {
+				minMemoryMB = memory
+				maxMemoryMB = memory
+			}
+
+			if memory > maxMemoryMB {
+				return fmt.Errorf("%w: %s, job %s max_memory_mb %.2f mb, requested %.2f mb", bucket.ErrUnsupportedResourceConfigration, jobConfigFile, job, maxMemoryMB, memory)
+			}
+			if memory < minMemoryMB {
+				return fmt.Errorf("%w: %s, job %s min_memory_mb %.2f mb, requested %.2f mb", bucket.ErrUnsupportedResourceConfigration, jobConfigFile, job, maxMemoryMB, memory)
+			}
 		}
 
-		var cpu = maxCPUMhz
+		cpu := maxCPUMHZ
 		if _, ok := jobConfig["cpu"]; ok {
 			cpu, err = utils.ExtractCPUFrequencyInMHz(jobConfig["cpu"])
 			if err != nil {
 				return err
+			}
+
+			if minCPUMHZ == 0 && maxCPUMHZ == 0 {
+				minCPUMHZ = cpu
+				maxCPUMHZ = cpu
+			}
+
+			if cpu > maxCPUMHZ {
+				return fmt.Errorf("%w: %s, job %s max_cpu_mhz %.2f mhz, requested %.2f mhz", bucket.ErrUnsupportedResourceConfigration, jobConfigFile, job, maxMemoryMB, memory)
+			}
+			if cpu < minCPUMHZ {
+				return fmt.Errorf("%w: %s, job %s min_cpu_mhz %.2f mhz, requested %.2f mhz", bucket.ErrUnsupportedResourceConfigration, jobConfigFile, job, maxMemoryMB, memory)
 			}
 		}
 
@@ -110,36 +134,36 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		`
 		_, err = tx.Exec(
 			query, jobID, job, version,
-			fmt.Sprintf("%v", minMemoryMb),
-			fmt.Sprintf("%v", maxMemoryMb),
+			fmt.Sprintf("%v", minMemoryMB),
+			fmt.Sprintf("%v", maxMemoryMB),
 			fmt.Sprintf("%v", memory),
-			fmt.Sprintf("%v", minCPUMhz),
-			fmt.Sprintf("%v", maxCPUMhz),
+			fmt.Sprintf("%v", minCPUMHZ),
+			fmt.Sprintf("%v", maxCPUMHZ),
 			fmt.Sprintf("%v", cpu),
 			workspace.GetUpdateParallelCount(manifest),
 		)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 
 		for _, selector := range manifest.Selectors {
 			_, err := tx.Exec("INSERT INTO job_selectors (job_id, selector) VALUES (?, ?)", jobID, selector)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 
 		for name, port := range manifest.Resources.Ports {
 			prefix := fmt.Sprintf("%s_port_", job)
 			if !strings.HasPrefix(name, prefix) {
-				return fmt.Errorf("invalid port name, name: %s, should have prefix : %s", name, prefix)
+				return fmt.Errorf("%w: key %s, excepted %s", bucket.ErrPortKeyFormat, name, prefix)
 			}
 
 			var portUsedJob string
 			row := tx.QueryRow("SELECT (SELECT name FROM job WHERE job_id = jp.job_id) as job FROM job_ports jp WHERE port = ?", port)
 			err = row.Scan(&portUsedJob)
 			if !errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("port can't be reused, port: %d, jobs (%s, %s)", port, job, portUsedJob)
+				return fmt.Errorf("%w: port %d, jobs (%s, %s)", bucket.ErrPortCollision, port, job, portUsedJob)
 			}
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
@@ -147,28 +171,28 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 			_, err = tx.Exec("INSERT INTO job_ports (job_id, name, port) VALUES (?, ?, ?)", jobID, name, port)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 
 		for _, command := range workspace.GetCommands(manifest) {
 			if !strings.HasPrefix(command.Name, "command_") {
-				return fmt.Errorf("invalid command name, name: %s, should have prefix : %s", command.Name, "command_")
+				return fmt.Errorf("%w: invalid command name, name: %s, excepted prefix : %s", bucket.ErrInvalidJobCommandConfiguration, command.Name, "command_")
 			}
 			if len(command.ExecutedOn) == 0 {
-				return fmt.Errorf("job %s, job_command %s required have a executed_on", job, command.Name)
+				return fmt.Errorf("%w: job %s, job_command %s missing executed_on", bucket.ErrInvalidJobCommandConfiguration, job, command.Name)
 			}
 			diffs := utils.Difference(command.ExecutedOn, []string{"post_build", "health_check", "cli", "pre_deploy", "post_deploy", "job_control"})
 			if len(diffs) > 0 {
-				return fmt.Errorf("job %s, job_command %s not valid executed_on %v", job, command.Name, diffs)
+				return fmt.Errorf("%w: job %s, job_command %s invalid executed_on %v", bucket.ErrInvalidJobCommandConfiguration, job, command.Name, diffs)
 			}
 			if command.Demands.Job == job {
-				return fmt.Errorf("job %s, job_command %s invalid configuration, self referencing", job, command.Name)
+				return fmt.Errorf("%w: job %s, job_command %s invalid configuration, self referencing", bucket.ErrInvalidJobCommandConfiguration, job, command.Name)
 			}
 			commandPath := path.Join(bucket.WorkspaceLocation, "jobs", job, "_modules", fmt.Sprintf("%s.py", command.Name))
 			_, err := os.Stat(commandPath)
 			if os.IsNotExist(err) {
-				return fmt.Errorf("%s does not exist, registered for job %s", commandPath, job)
+				return fmt.Errorf("%w: %s does not exist, registered for job %s", bucket.ErrJobCommandFileNotFound, commandPath, job)
 			}
 
 			query := `
@@ -183,14 +207,29 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 
 				_, err = tx.Exec(query, jobID, job, command.Name, executedOn, command.Demands.Job, command.Demands.Command, string(jsonData))
 				if err != nil {
-					return data.NewDatabaseError(err)
+					return bucket.DatabaseError(err)
 				}
 			}
 		}
 
 		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "Makefile"))
 		if os.IsNotExist(err) {
-			return fmt.Errorf("'Makefile' is required, job %s", job)
+			return fmt.Errorf("%w: job %s, Makefile not found", bucket.ErrInvalidJob, job)
+		}
+
+		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "data"))
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("%w: job %s, data directory is reserved", bucket.ErrInvalidJob, job)
+		}
+
+		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "logs"))
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("%w: job %s, logs directory is reserved", bucket.ErrInvalidJob, job)
+		}
+
+		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "bin"))
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("%w: job %s, bin directory is reserved", bucket.ErrInvalidJob, job)
 		}
 
 		query = `INSERT INTO job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)`
@@ -199,7 +238,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 				return err
 			}
 
-			var content = []byte("")
+			content := []byte("")
 			if !d.IsDir() {
 				content, err = os.ReadFile(workspace.GetJobFilePath(path))
 				if err != nil {
@@ -208,7 +247,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			}
 			_, err = tx.Exec(query, jobID, path, content, d.IsDir())
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 			return err
 		})
@@ -240,7 +279,7 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			}
 			_, err = tx.Exec(query, jobID, name, config.PKCS8, config.One, subject)
 			if err != nil {
-				return data.NewDatabaseError(err)
+				return bucket.DatabaseError(err)
 			}
 		}
 	}
@@ -255,41 +294,6 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		return err
 	}
 
-	rows, err := tx.Query(`
-		SELECT
-			a.worker_ip, w.available_memory_mb, w.available_cpu_mhz, sum(j.current_memory_mb) as needed_memory, sum(j.current_cpu_mhz) AS needed_cpu
-		FROM
-			allocations a JOIN job j ON j.name = a.job
-				JOIN
-			worker w ON w.worker_ip = a.worker_ip
-		GROUP BY a.worker_ip
-	`)
-	if err != nil {
-		return data.NewDatabaseError(err)
-	}
-	resourceValidationFailed := false
-	for rows.Next() {
-		var worker_ip string
-		var avaiable_memory_mb, available_cpu_mhz, needed_memory_mb, needed_cpu_mhz float64
-		err = rows.Scan(&worker_ip, &avaiable_memory_mb, &available_cpu_mhz, &needed_memory_mb, &needed_cpu_mhz)
-		if err != nil {
-			return err
-		}
-
-		if avaiable_memory_mb < needed_memory_mb {
-			resourceValidationFailed = true
-			fmt.Printf("worker_ip %s, available memory is %.2f MB, allocated memory is %.2f MB\n", worker_ip, avaiable_memory_mb, needed_memory_mb)
-		}
-		if available_cpu_mhz < available_cpu_mhz {
-			resourceValidationFailed = true
-			fmt.Printf("worker_ip %s, available cpu is %.2f MHZ, allocated cpu is %.2f MHZ\n", worker_ip, available_cpu_mhz, needed_cpu_mhz)
-		}
-	}
-
-	if resourceValidationFailed {
-		return errors.New("validation failed: resource allocation")
-	}
-
 	// remove missing jobs
 	diffs := utils.Difference(availableJobs, workspaceJobs)
 	removedJobs = []string{}
@@ -297,11 +301,11 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		removedJobs = append(removedJobs, job)
 		_, err := tx.Exec("DELETE FROM job WHERE name = ?", job)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 		_, err = tx.Exec("DELETE FROM hash WHERE namespace = 'build_certs' AND key = ?", job)
 		if err != nil {
-			return data.NewDatabaseError(err)
+			return bucket.DatabaseError(err)
 		}
 	}
 	return nil
