@@ -217,6 +217,21 @@ func Jobs(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			return fmt.Errorf("%w: job %s, Makefile not found", bucket.ErrInvalidJob, job)
 		}
 
+		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "data"))
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("%w: job %s, data directory is reserved", bucket.ErrInvalidJob, job)
+		}
+
+		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "logs"))
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("%w: job %s, logs directory is reserved", bucket.ErrInvalidJob, job)
+		}
+
+		_, err = os.Stat(path.Join(workspace.GetJobFilePath(job), "bin"))
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("%w: job %s, bin directory is reserved", bucket.ErrInvalidJob, job)
+		}
+
 		query = `INSERT INTO job_files (job_id, path, content, isdir) VALUES (?, ?, ?, ?)`
 		err = workspace.WalkJobFiles(job, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {

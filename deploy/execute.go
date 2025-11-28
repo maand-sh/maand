@@ -209,11 +209,17 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		JobPath:      fmt.Sprintf("/opt/worker/%s/jobs/%s", bucketID, job),
 	}
 
+	templateFiles := make([]string, 0)
+	defer func() {
+	}()
+
 	for _, jobTemplate := range jobTemplates {
 		templateAbsPath, err := filepath.Abs(path.Join(jobDir, jobTemplate))
 		if err != nil {
 			return err
 		}
+
+		templateFiles = append(templateFiles, templateAbsPath)
 
 		templateContent, err := os.ReadFile(templateAbsPath)
 		if err != nil {
@@ -239,11 +245,6 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		}
 
 		err = file.Close()
-		if err != nil {
-			return err
-		}
-
-		err = os.Remove(templateAbsPath)
 		if err != nil {
 			return err
 		}
@@ -544,9 +545,9 @@ func syncWorkers(dockerClient *bucket.DockerClient, bucketID string, workers []s
 			for _, job := range jobs {
 				rsyncMergeLines = append(rsyncMergeLines, fmt.Sprintf("+ jobs/%s\n", job))
 			}
-			rsyncMergeLines = append(rsyncMergeLines, "- jobs/**/*.tpl\n")
 			rsyncMergeLines = append(rsyncMergeLines, "- jobs/*\n")
 		}
+		rsyncMergeLines = append(rsyncMergeLines, "- jobs/**/*.tpl\n")
 
 		rsyncMergeFilePath := path.Join(bucket.TempLocation, "workers", fmt.Sprintf("%s.rsync", workerIP))
 		err := os.WriteFile(rsyncMergeFilePath, []byte(strings.Join(rsyncMergeLines, "")), os.ModePerm)
