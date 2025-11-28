@@ -85,7 +85,7 @@ func GetBucketID(tx *sql.Tx) (string, error) {
 	var bucketID string
 	err := tx.QueryRow("SELECT bucket_id FROM bucket LIMIT 1").Scan(&bucketID)
 	if err != nil {
-		return "", fmt.Errorf("unable to get bucket ID: %v", err)
+		return "", bucket.DatabaseError(err)
 	}
 	return bucketID, nil
 }

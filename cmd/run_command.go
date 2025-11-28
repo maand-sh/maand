@@ -5,8 +5,11 @@
 package cmd
 
 import (
-	"fmt"
+	"errors"
+	"log"
+	"os"
 
+	"maand/bucket"
 	"maand/runcommand"
 
 	"github.com/spf13/cobra"
@@ -27,8 +30,11 @@ var runCommandCmd = &cobra.Command{
 		healthCheck, _ := flags.GetBool("health_check")
 
 		err := runcommand.Execute(workerStr, labelStr, concurrency, shCommand, healthCheck)
+		if errors.Is(err, bucket.ErrRunCommand) {
+			os.Exit(1)
+		}
 		if err != nil {
-			fmt.Println(err)
+			log.Fatal(err)
 		}
 	},
 }

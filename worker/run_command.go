@@ -19,11 +19,12 @@ func ExecuteCommand(dockerClient *bucket.DockerClient, workerIP string, commands
 		return err
 	}
 
+	commandScriptFilePath := path.Join(bucket.TempLocation, commandScriptFileName)
 	defer func() {
-		_ = os.Remove(path.Join(bucket.TempLocation, commandScriptFileName))
+		_ = os.Remove(commandScriptFilePath)
 	}()
 
-	return ExecuteFileCommand(dockerClient, workerIP, commandScriptFileName, env)
+	return ExecuteFileCommand(dockerClient, workerIP, commandScriptFilePath, env)
 }
 
 func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, commandScriptFileName string, env []string) error {
@@ -33,7 +34,7 @@ func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, comm
 	}
 
 	user := conf.SSHUser
-	keyFilePath := path.Join("/bucket", "secrets", conf.SSHKeyFile)
+	keyFilePath := path.Join(bucket.SecretLocation, conf.SSHKeyFile)
 	useSudo := conf.UseSUDO
 
 	sh := "bash"
@@ -41,7 +42,7 @@ func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, comm
 		sh = "sudo bash"
 	}
 
-	commandScriptBucketFilePath := path.Join("/bucket", "tmp", commandScriptFileName)
+	commandScriptBucketFilePath := path.Join(commandScriptFileName)
 
 	sshCmd := fmt.Sprintf(
 		`ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=10 -i %s %s@%s 'timeout 300 %s' < %s`,
