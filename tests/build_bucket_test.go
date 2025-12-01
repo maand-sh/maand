@@ -762,3 +762,36 @@ func TestCertUpdateAfterExpire(t *testing.T) {
 	value1, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
 	assert.NotEqual(t, value1, value2)
 }
+
+func TestMakefileNotFound(t *testing.T) {
+	_ = os.RemoveAll(bucket.Location)
+
+	err := initialize.Execute()
+	assert.NoError(t, err)
+
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
+	_ = os.MkdirAll(jobPath, os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "certs":{"a":{"subject":{"common":"fsadfsad"}}}}`), os.ModePerm)
+
+	err = build.Execute()
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "invaild job: job a, Makefile not found")
+}
+
+func TestInvalidmanifestJSON(t *testing.T) {
+	_ = os.RemoveAll(bucket.Location)
+
+	err := initialize.Execute()
+	assert.NoError(t, err)
+
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
+	_ = os.MkdirAll(jobPath, os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"],`), os.ModePerm)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", "a", "Makefile"), nil, os.ModePerm)
+
+	err = build.Execute()
+
+	assert.Error(t, err)
+	assert.ErrorContains(t, err, "invalid manifest.json: job a\nunexpected end of JSON input")
+}
