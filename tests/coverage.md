@@ -30,6 +30,7 @@
 28. build worker with cpu updated - pass
 29. build worker with cpu removed - pass
 30. build worker cpu and memory conversion - pass
+31. later remove worker.json file 
 
 ## bucket
  1. build without initialize - fail
@@ -103,6 +104,7 @@
 44. build job with major version upgrade
 45. build job with health_check
 46. build job with health_check failures
+47. later remove all jobs
 
 ## deployment
  1. deploy without job

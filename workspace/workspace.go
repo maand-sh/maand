@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"strings"
 
 	"maand/bucket"
 )
@@ -33,6 +34,10 @@ func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 
 	var workers []Worker
 	for idx, dataWorker := range dataWorkers {
+		dataWorker.Host = strings.Trim(dataWorker.Host, " ")
+		if dataWorker.Host == "" {
+			return nil, fmt.Errorf("%w: host attribute can't be empty", bucket.ErrInvaildWorkerJSON)
+		}
 		worker := NewWorker(dataWorker.Host, dataWorker.Labels, dataWorker.Memory, dataWorker.CPU, dataWorker.Tags, idx)
 		workers = append(workers, worker)
 	}
