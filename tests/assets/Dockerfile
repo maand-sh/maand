@@ -15,5 +15,4 @@ ENV PYTHONIOENCODING=utf-8
 
 WORKDIR /bucket
 
-COPY requirements.txt /requirements.txt
-RUN pip install --no-cache-dir --upgrade pip && pip install requests && pip install --no-cache-dir -r /requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && pip install requests

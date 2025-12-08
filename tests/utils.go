@@ -153,3 +153,7 @@ func createJob(name string) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", name, "manifest.json"), []byte(`{"selectors":["worker"]}`), 0o644)
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", name, "Makefile"), []byte(Makefile()), 0o644)
 }
+
+func clearBucket() {
+	_ = os.RemoveAll(bucket.Location)
+}
