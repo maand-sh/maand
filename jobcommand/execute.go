@@ -42,10 +42,10 @@ func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, eve
 
 	kvStore := kv.GetKVStore()
 
-	getCerts := func(workerIP string) error {
+	copyCerts := func(workerIP string) error {
 		workerDir := bucket.GetTempWorkerPath(workerIP)
 
-		keys, err := kvStore.GetKeys(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
+		keys, err := kvStore.GetKeys(fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
 		if err != nil {
 			return err
 		}
@@ -55,12 +55,12 @@ func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, eve
 				continue
 			}
 
-			content, err := kvStore.Get(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), key)
+			content, err := kvStore.Get(fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), key)
 			if err != nil {
 				return err
 			}
 
-			err = os.WriteFile(path.Join(workerDir, "jobs", job, "_modules", key), []byte(content), os.ModePerm)
+			err = os.WriteFile(path.Join(workerDir, "jobs", job, "_modules", key), []byte(content.Value), os.ModePerm)
 			if err != nil {
 				return err
 			}
@@ -68,12 +68,12 @@ func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, eve
 
 		caPath := path.Join(workerDir, "jobs", job, "_modules", "certs/ca.crt")
 		if _, err := os.Stat(caPath); os.IsNotExist(err) {
-			content, err := kvStore.Get(tx, "maand/worker", "certs/ca.crt")
+			content, err := kvStore.Get("maand/worker", "certs/ca.crt")
 			if err != nil {
 				return err
 			}
 
-			err = os.WriteFile(caPath, []byte(content), os.ModePerm)
+			err = os.WriteFile(caPath, []byte(content.Value), os.ModePerm)
 			if err != nil {
 				return err
 			}
@@ -106,7 +106,7 @@ func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, eve
 			return err
 		}
 
-		err = getCerts(workerIP)
+		err = copyCerts(workerIP)
 		if err != nil {
 			return err
 		}
@@ -148,7 +148,11 @@ func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, eve
 	close(semaphore)
 
 	if len(allocErrors) > 0 {
-		return &JobCommandError{Job: job, Command: command, Err: allocErrors}
+		errs := []string{}
+		for ip, msg := range allocErrors {
+			errs = append(errs, fmt.Sprintf("Allocation IP %s, %s", ip, msg))
+		}
+		return fmt.Errorf("%w: job %s command %s failed\n%s", bucket.ErrJobCommandFailed, job, command, strings.Join(errs, "\n"))
 	}
 
 	return nil
@@ -209,7 +213,6 @@ func runAllocationCommand(dockerClient *bucket.DockerClient, allocID string, job
 
 	cmd := exec.Command("python3", commandPath)
 	cmd.Dir = path.Join(jobDir, "_modules")
-	// TODO: copy job certs to modules folder
 
 	envs := os.Environ()
 	envs = append(envs, pEnvs...)
@@ -219,7 +222,7 @@ func runAllocationCommand(dockerClient *bucket.DockerClient, allocID string, job
 	envs = append(envs, fmt.Sprintf("JOB=%s", job))
 	envs = append(envs, fmt.Sprintf("EVENT=%s", event))
 	envs = append(envs, fmt.Sprintf("COMMAND=%s", command))
-	envs = append(envs, fmt.Sprintf("CONTAINER_HOST=%s", getContainerHost()))
+	envs = append(envs, fmt.Sprintf("HOST=%s", getHost()))
 	cmd.Env = envs
 
 	if verbose {
@@ -236,7 +239,7 @@ func runAllocationCommand(dockerClient *bucket.DockerClient, allocID string, job
 	return nil
 }
 
-func getContainerHost() string {
+func getHost() string {
 	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
 		return "host.docker.internal"
 	}

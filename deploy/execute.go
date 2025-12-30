@@ -77,33 +77,33 @@ func updateCerts(tx *sql.Tx, job, workerIP string) error {
 			return bucket.DatabaseError(err)
 		}
 
-		pubCert, err := kv.GetKVStore().Get(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), fmt.Sprintf("certs/%s.crt", name))
+		pubCert, err := kv.GetKVStore().Get(fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), fmt.Sprintf("certs/%s.crt", name))
 		if err != nil {
 			return err
 		}
 
-		err = os.WriteFile(path.Join(certsDir, fmt.Sprintf("%s.crt", name)), []byte(pubCert), os.ModePerm)
+		err = os.WriteFile(path.Join(certsDir, fmt.Sprintf("%s.crt", name)), []byte(pubCert.Value), os.ModePerm)
 		if err != nil {
 			return err
 		}
 
-		priCert, err := kv.GetKVStore().Get(tx, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), fmt.Sprintf("certs/%s.key", name))
+		priCert, err := kv.GetKVStore().Get(fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), fmt.Sprintf("certs/%s.key", name))
 		if err != nil {
 			return err
 		}
 
-		err = os.WriteFile(path.Join(certsDir, fmt.Sprintf("%s.key", name)), []byte(priCert), os.ModePerm)
+		err = os.WriteFile(path.Join(certsDir, fmt.Sprintf("%s.key", name)), []byte(priCert.Value), os.ModePerm)
 		if err != nil {
 			return err
 		}
 	}
 
-	pubCaCert, err := kv.GetKVStore().Get(tx, "maand/worker", "certs/ca.crt")
+	pubCaCert, err := kv.GetKVStore().Get("maand/worker", "certs/ca.crt")
 	if err != nil {
 		return err
 	}
 
-	err = os.WriteFile(path.Join(jobDir, "certs", "ca.crt"), []byte(pubCaCert), os.ModePerm)
+	err = os.WriteFile(path.Join(jobDir, "certs", "ca.crt"), []byte(pubCaCert.Value), os.ModePerm)
 	if err != nil {
 		return err
 	}
@@ -138,17 +138,17 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 			if len(utils.Difference([]string{ns}, allowedNamespaces)) > 0 {
 				panic(fmt.Sprintf("%s namespace is not available for job %s", ns, job))
 			}
-			value, err := kv.GetKVStore().Get(tx, ns, key)
+			value, err := kv.GetKVStore().Get(ns, key)
 			if err != nil {
 				panic(err)
 			}
-			return value
+			return value.Value
 		},
 		"keys": func(ns string) []string {
 			if len(utils.Difference([]string{ns}, allowedNamespaces)) > 0 {
 				panic(fmt.Sprintf("%s namespace is not available for job %s", ns, job))
 			}
-			value, err := kv.GetKVStore().GetKeys(tx, ns)
+			value, err := kv.GetKVStore().GetKeys(ns)
 			if err != nil {
 				panic(err)
 			}
@@ -635,13 +635,13 @@ func handleNewAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketI
 			workerWait.Wait()
 			close(errs)
 
-			faileMessages := make([]string, 0)
+			failedMessages := make([]string, 0)
 			for err := range errs {
-				faileMessages = append(faileMessages, err.Error())
+				failedMessages = append(failedMessages, err.Error())
 			}
 
-			if len(faileMessages) > 0 {
-				return fmt.Errorf("%s", strings.Join(faileMessages, "\n"))
+			if len(failedMessages) > 0 {
+				return fmt.Errorf("%s", strings.Join(failedMessages, "\n"))
 			}
 		}
 
@@ -864,7 +864,6 @@ func Execute(jobsFilter []string) error {
 
 	failedMessages := make([]string, 0)
 
-	// removing all jobs fails on deps seq
 	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
 
 		availableJobs, err := data.GetJobsByDeploymentSeq(tx, deploymentSeq)

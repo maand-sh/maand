@@ -24,6 +24,7 @@ var (
 	ErrHealthCheckFailed               = errors.New("health check failed")
 	ErrUnsupportedResourceConfigration = errors.New("unsupport resource configuration")
 	ErrRunCommand                      = errors.New("run command failed")
+	ErrJobCommandFailed                = errors.New("job command faield")
 )
 
 func KeyNotFoundError(namespace, key string) error {
