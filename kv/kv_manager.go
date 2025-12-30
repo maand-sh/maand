@@ -2,111 +2,183 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-// Package kv provides interfaces to work with kv store
+// Package kv provides kv functions
 package kv
 
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"maand/bucket"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
-const (
+// ErrValueNotFound is returned when a key is requested but is not found
+// or has been marked as deleted.
+var (
+	ErrValueNotFound  = errors.New("key not found or deleted")
 	MaxVersionsToKeep = 7
 )
 
-type KeyValueStore struct {
-	GlobalUnix int64
-	mutex      sync.Mutex
+type KeyValueItem struct {
+	Value            string
+	Version          int
+	TTL              int  // Time-to-Live in seconds (currently unused for expiration logic)
+	Deleted          int  // True if the item has been marked for deletion
+	Changed          bool // True if the item has been modified since last persistence/sync
+	LastModifiedTime int64
 }
 
-func (store *KeyValueStore) Put(tx *sql.Tx, namespace, key, value string, ttl int) error {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
+type Store struct {
+	mu sync.RWMutex
 
-	var version int
-	row := tx.QueryRow(
-		"SELECT max(version), value, deleted, ttl FROM key_value WHERE namespace = ? AND key = ? GROUP BY key, namespace",
-		namespace, key,
-	)
+	db map[string]map[string]*KeyValueItem
+}
 
-	var currentValue string
-	var currentTTL, deleted int
+func NewStore() *Store {
+	return &Store{
+		db: make(map[string]map[string]*KeyValueItem),
+	}
+}
 
-	err := row.Scan(&version, &currentValue, &deleted, &currentTTL)
-	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
-			return bucket.DatabaseError(err)
+func (store *Store) Put(namespace, key, value string, ttl int) {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	value = strings.Trim(value, " ")
+
+	ns, ok := store.db[namespace]
+	if !ok {
+		ns = make(map[string]*KeyValueItem)
+		store.db[namespace] = ns
+	}
+
+	item, ok := ns[key]
+	if !ok || item.Deleted == 1 {
+		// New item, or reviving a deleted item.
+		ns[key] = &KeyValueItem{
+			Value:   value,
+			Version: 1,
+			Changed: true,
+			TTL:     ttl,
+			Deleted: 0,
 		}
+		return
 	}
 
-	if version == 1 && currentValue == "" && currentValue == value {
-		currentValue = " "
+	item.Changed = false
+
+	if item.TTL != ttl {
+		item.TTL = ttl
+		item.Changed = true
 	}
 
-	if deleted == 0 && currentValue == value && currentTTL == ttl {
-		return nil
+	if item.Value != value {
+		item.Value = value
+		item.Changed = true
 	}
 
-	_, err = tx.Exec(
-		`INSERT INTO key_value (key, value, namespace, version, ttl, created_date, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		key, value, namespace, version+1, ttl, store.GlobalUnix, 0,
-	)
-	if err != nil {
-		return bucket.DatabaseError(err)
+	if item.Deleted == 1 {
+		item.Changed = true
 	}
+
+	if item.Changed {
+		item.Version++
+	}
+}
+
+func (store *Store) Delete(namespace, key string) error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	ns, ok := store.db[namespace]
+	if !ok {
+		return fmt.Errorf("namespace not found: %s", namespace)
+	}
+
+	item, ok := ns[key]
+	if !ok {
+		return fmt.Errorf("key not found: %s", key)
+	}
+
+	item.Deleted = 1
+	item.Changed = true
+	item.Version++
+
 	return nil
 }
 
-func (store *KeyValueStore) Get(tx *sql.Tx, namespace, key string) (string, error) {
-	query := `SELECT value FROM key_value WHERE namespace = ? AND key = ? 
-                    AND version = (SELECT max(version) FROM key_value WHERE namespace = ? AND key = ?) AND deleted = 0`
+func (store *Store) Get(namespace, key string) (KeyValueItem, error) {
+	store.mu.RLock() // Use RLock for read-only access
+	defer store.mu.RUnlock()
 
-	var value string
-	row := tx.QueryRow(query, namespace, key, namespace, key)
-	err := row.Scan(&value)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", bucket.KeyNotFoundError(namespace, key)
-		}
-		return "", bucket.DatabaseError(err)
+	ns, ok := store.db[namespace]
+	if !ok {
+		return KeyValueItem{}, ErrValueNotFound
 	}
 
-	return value, nil
-}
-
-func (store *KeyValueStore) GetMetadata(tx *sql.Tx, namespace, key string) (string, int, error) {
-	row := tx.QueryRow(
-		`SELECT value, version FROM key_value WHERE namespace = ? AND key = ? 
-                    AND version = (SELECT max(version) FROM key_value WHERE namespace = ? AND key = ?) AND deleted = 0`,
-		namespace, key, namespace, key,
-	)
-
-	var value string
-	var version int
-
-	if err := row.Scan(&value, &version); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", 0, nil
-		}
-		return "", 0, bucket.DatabaseError(err)
+	item, ok := ns[key]
+	if !ok || item.Deleted == 1 {
+		return KeyValueItem{}, ErrValueNotFound
 	}
-	return value, version, nil
+
+	return KeyValueItem{
+		Value:            item.Value,
+		Version:          item.Version,
+		TTL:              item.TTL,
+		Deleted:          item.Deleted,
+		LastModifiedTime: item.LastModifiedTime,
+		Changed:          item.Changed,
+	}, nil
 }
 
-func (store *KeyValueStore) Delete(tx *sql.Tx, namespace, key string) error {
-	store.mutex.Lock()
-	defer store.mutex.Unlock()
+func (store *Store) GetKeys(namespace string) ([]string, error) {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	ns, ok := store.db[namespace]
+	if !ok {
+		return []string{}, nil
+	}
+
+	keys := make([]string, 0, len(ns))
+	for key, item := range ns {
+		// Only return keys that are not marked as deleted.
+		if item.Deleted != 1 {
+			keys = append(keys, key)
+		}
+	}
+
+	return keys, nil
+}
+
+func (store *Store) GetNamespaces() []string {
+	store.mu.RLock()
+	defer store.mu.RUnlock()
+
+	namespaces := make([]string, 0, len(store.db))
+	for ns := range store.db {
+		namespaces = append(namespaces, ns)
+	}
+	return namespaces
+}
+
+func (store *Store) GC(tx *sql.Tx, maxDays int) error {
+	if maxDays < 0 {
+		maxDays = 0
+	}
 
 	_, err := tx.Exec(
-		`INSERT INTO key_value (key, value, namespace, version, ttl, created_date, deleted) SELECT key, value, namespace, max(version) + 1, ttl, created_date, 1 FROM key_value WHERE namespace = ? AND key = ? GROUP BY key, namespace`,
-		namespace, key,
-	)
+		`
+		DELETE FROM key_value WHERE EXISTS (
+				SELECT 1 FROM (
+					SELECT key, namespace, MAX(version) AS latest_version, deleted, created_date FROM key_value GROUP BY key, namespace
+				) kv2 WHERE key_value.key = kv2.key AND key_value.namespace = kv2.namespace AND (key_value.version < kv2.latest_version - ? OR kv2.deleted = 1)
+						AND kv2.created_date < strftime('%s','now') - ?*24*60*60
+		)`, MaxVersionsToKeep, maxDays)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
@@ -114,13 +186,10 @@ func (store *KeyValueStore) Delete(tx *sql.Tx, namespace, key string) error {
 	return nil
 }
 
-func (store *KeyValueStore) GetKeys(tx *sql.Tx, namespace string) ([]string, error) {
-	rows, err := tx.Query(
-		`SELECT key FROM (
-				SELECT namespace, key, max(version), deleted, created_date FROM key_value GROUP BY key, namespace
-		   ) t WHERE namespace = ? AND deleted = 0`,
-		namespace,
-	)
+func NewKeyValueStore(tx *sql.Tx) (*Store, error) {
+	store := NewStore()
+
+	rows, err := tx.Query("SELECT namespace, key, value, max(version), ttl, deleted, created_date FROM key_value GROUP BY key, namespace")
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
@@ -128,67 +197,70 @@ func (store *KeyValueStore) GetKeys(tx *sql.Tx, namespace string) ([]string, err
 		_ = rows.Close()
 	}()
 
-	var keys []string
 	for rows.Next() {
-		var key string
-		if err := rows.Scan(&key); err != nil {
+		var namespace, key, value string
+		var version, ttl, deleted int
+		var lastModifiedDate int64
+		err = rows.Scan(&namespace, &key, &value, &version, &ttl, &deleted, &lastModifiedDate)
+		if err != nil {
 			return nil, bucket.DatabaseError(err)
 		}
-		keys = append(keys, key)
+
+		ns, ok := store.db[namespace]
+		if !ok {
+			ns = make(map[string]*KeyValueItem)
+			store.db[namespace] = ns
+		}
+
+		ns[key] = &KeyValueItem{
+			Value:            value,
+			Version:          version,
+			TTL:              ttl,
+			Changed:          false,
+			Deleted:          deleted,
+			LastModifiedTime: lastModifiedDate,
+		}
 	}
-	return keys, nil
+
+	return store, nil
 }
 
-func (store *KeyValueStore) GC(tx *sql.Tx, maxDays int) error {
-	rows, err := tx.Query(
-		`SELECT namespace, key, max(CAST(version AS INTEGER)), deleted, created_date FROM key_value GROUP BY key, namespace`,
-	)
-	if err != nil {
-		return bucket.DatabaseError(err)
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
+func SaveKeyValueStore(tx *sql.Tx, store *Store) error {
+	epoch := time.Now().Unix()
 
-	currentTime := time.Now()
+	store.mu.RLock()
+	defer store.mu.RUnlock()
 
-	for rows.Next() {
-		var namespace, key string
-		var version, deleted int
-		var createdDate int64
-
-		err := rows.Scan(&namespace, &key, &version, &deleted, &createdDate)
-		if err != nil {
-			return bucket.DatabaseError(err)
-		}
-
-		createdTime := time.Unix(createdDate, 0)
-		if deleted == 1 && currentTime.Sub(createdTime).Hours() >= float64(maxDays*24) {
-			_, err := tx.Exec(`DELETE FROM key_value WHERE namespace = ? AND key = ?`, namespace, key)
+	for namespace, nsMap := range store.db {
+		for key, item := range nsMap {
+			if !item.Changed {
+				continue
+			}
+			_, err := tx.Exec(
+				`INSERT INTO key_value (key, value, namespace, version, ttl, created_date, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+				key, item.Value, namespace, item.Version, item.TTL, epoch, item.Deleted,
+			)
 			if err != nil {
 				return bucket.DatabaseError(err)
 			}
-		}
-
-		if version > MaxVersionsToKeep {
-			_, err := tx.Exec(`DELETE FROM key_value WHERE namespace = ? AND key = ? AND version <= ?`, namespace, key, version-MaxVersionsToKeep)
-			if err != nil {
-				return bucket.DatabaseError(err)
-			}
+			item.Changed = false
 		}
 	}
+
 	return nil
 }
 
-func GetKVStore() *KeyValueStore {
-	return kvStore
+var store *Store
+
+func Initialize(tx *sql.Tx) error {
+	s, err := NewKeyValueStore(tx)
+	if err != nil {
+		return err
+	}
+	store = s
+	return nil
 }
 
-var kvStore *KeyValueStore
-
-func init() {
-	kvStore = &KeyValueStore{
-		GlobalUnix: time.Now().Unix(),
-		mutex:      sync.Mutex{},
-	}
+func GetKVStore() *Store {
+	return store
 }

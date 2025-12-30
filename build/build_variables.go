@@ -145,9 +145,9 @@ func processWorkerData(tx *sql.Tx) error {
 		}
 
 		for _, ns := range nss {
-			keys, _ := kv.GetKVStore().GetKeys(tx, ns)
+			keys, _ := kv.GetKVStore().GetKeys(ns)
 			for _, key := range keys {
-				err := kv.GetKVStore().Delete(tx, ns, key)
+				err := kv.GetKVStore().Delete(ns, key)
 				if err != nil {
 					return err
 				}
@@ -375,20 +375,18 @@ func processJobData(tx *sql.Tx) error {
 func storeKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) error {
 	var availableKeys []string
 	for key, value := range keyValues {
-		if err := kv.GetKVStore().Put(tx, namespace, key, value, 0); err != nil {
-			return err
-		}
+		kv.GetKVStore().Put(namespace, key, value, 0)
 		availableKeys = append(availableKeys, key)
 	}
 
-	allKeys, err := kv.GetKVStore().GetKeys(tx, namespace)
+	allKeys, err := kv.GetKVStore().GetKeys(namespace)
 	if err != nil {
 		return err
 	}
 
 	diffs := utils.Difference(allKeys, availableKeys)
 	for _, diff := range diffs {
-		err := kv.GetKVStore().Delete(tx, namespace, diff)
+		err := kv.GetKVStore().Delete(namespace, diff)
 		if err != nil {
 			return err
 		}

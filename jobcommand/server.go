@@ -26,9 +26,9 @@ type kvResponse struct {
 }
 
 type demandResponse struct {
-	Job          string                 `json:"job"`
-	Command      string                 `json:"command"`
-	DemandConfig map[string]interface{} `json:"demand_config"`
+	Job          string         `json:"job"`
+	Command      string         `json:"command"`
+	DemandConfig map[string]any `json:"demand_config"`
 }
 
 const (

@@ -87,7 +87,7 @@ func handleKVGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 		return
 	}
 
-	value, err := kv.GetKVStore().Get(tx, req.Namespace, req.Key)
+	item, err := kv.GetKVStore().Get(req.Namespace, req.Key)
 	if err != nil {
 		log.Printf("KV get error: %v", err)
 		httpErrors.KVNotFound.Write(w)
@@ -97,7 +97,7 @@ func handleKVGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 	respondJSON(w, http.StatusOK, kvResponse{
 		Namespace: req.Namespace,
 		Key:       req.Key,
-		Value:     value,
+		Value:     item.Value,
 	})
 }
 
@@ -128,11 +128,7 @@ func handleKVPut(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 		return
 	}
 
-	if err := kv.GetKVStore().Put(tx, req.Namespace, req.Key, req.Value, 0); err != nil {
-		log.Printf("KV put error: %v", err)
-		httpErrors.KVStoreFailure.Write(w)
-		return
-	}
+	kv.GetKVStore().Put(req.Namespace, req.Key, req.Value, 0)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -149,10 +145,10 @@ func handleDemandsGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 
 	command := r.Header.Get(headerCommand)
 	rows, err := tx.Query(`
-		SELECT job AS requester_job, 
-		       name AS requester_job_command, 
-		       demand_config 
-		FROM job_commands 
+		SELECT job AS requester_job,
+		       name AS requester_job_command,
+		       demand_config
+		FROM job_commands
 		WHERE demand_job = ? AND demand_command = ?`,
 		job, command)
 	if err != nil {

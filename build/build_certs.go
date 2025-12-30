@@ -105,23 +105,23 @@ func Certs(tx *sql.Tx) error {
 					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 
-				vKey, err := kv.GetKVStore().Get(tx, ns, certKVName+".key")
+				vKey, err := kv.GetKVStore().Get(ns, certKVName+".key")
 				if err != nil && !errors.Is(err, bucket.ErrKeyNotFound) {
 					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
-				if len(vKey) > 0 {
-					err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)), []byte(vKey), os.ModePerm)
+				if len(vKey.Value) > 0 {
+					err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.key", certName)), []byte(vKey.Value), os.ModePerm)
 					if err != nil {
 						return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 					}
 				}
 
-				vCrt, err := kv.GetKVStore().Get(tx, ns, certKVName+".crt")
+				vCrt, err := kv.GetKVStore().Get(ns, certKVName+".crt")
 				if err != nil && !errors.Is(err, bucket.ErrKeyNotFound) {
 					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
-				if len(vCrt) > 0 {
-					err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)), []byte(vCrt), os.ModePerm)
+				if len(vCrt.Value) > 0 {
+					err = os.WriteFile(path.Join(certPath, fmt.Sprintf("%s.crt", certName)), []byte(vCrt.Value), os.ModePerm)
 					if err != nil {
 						return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 					}

@@ -86,6 +86,11 @@ func Execute() error {
 
 	ws := workspace.GetWorkspace()
 
+	err = kv.Initialize(tx)
+	if err != nil {
+		return err
+	}
+
 	err = Workers(tx, ws)
 	if err != nil {
 		return err
@@ -127,6 +132,11 @@ func Execute() error {
 	}
 
 	err = Validate(tx)
+	if err != nil {
+		return err
+	}
+
+	err = kv.SaveKeyValueStore(tx, kv.GetKVStore())
 	if err != nil {
 		return err
 	}
