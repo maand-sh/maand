@@ -529,7 +529,7 @@ func TestJobKVCountWorkerJSONRemovedLater(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 11, count)
+	assert.Equal(t, 12, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "workers.json"))
 	err = build.Execute()

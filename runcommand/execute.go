@@ -147,7 +147,7 @@ func Execute(workerCSV, labelCSV string, concurrency int, shCommand string, runH
 			}
 
 			for _, job := range jobs {
-				err := healthcheck.HealthCheck(tx, dockerClient, true, job, true)
+				err := healthcheck.HealthCheck(dockerClient, true, job, true)
 				if err != nil {
 					return err
 				}

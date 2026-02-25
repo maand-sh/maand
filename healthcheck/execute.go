@@ -6,7 +6,6 @@
 package healthcheck
 
 import (
-	"database/sql"
 	"fmt"
 	"strings"
 	"sync"
@@ -18,7 +17,21 @@ import (
 	"maand/utils"
 )
 
-func HealthCheck(tx *sql.Tx, dockerClient *bucket.DockerClient, wait bool, job string, verbose bool) error {
+func HealthCheck(dockerClient *bucket.DockerClient, wait bool, job string, verbose bool) error {
+	db, err := data.GetDatabase(true)
+	if err != nil {
+		return err
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
 	commands, err := data.GetJobCommands(tx, job, "health_check")
 	if err != nil {
 		return err
@@ -114,10 +127,10 @@ func Execute(wait bool, verbose bool, jobsComma string) error {
 
 		go func(tJob string) {
 			defer wg.Done()
-			hcErr := HealthCheck(tx, dockerClient, wait, tJob, verbose)
+			hcErr := HealthCheck(dockerClient, wait, tJob, verbose)
 			if hcErr != nil {
 				mu.Lock()
-				failedJobs = append(failedJobs, job)
+				failedJobs = append(failedJobs, tJob)
 				mu.Unlock()
 			}
 		}(job)
