@@ -646,7 +646,7 @@ func handleNewAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, bucketI
 		}
 
 		// When a new allocations get added, maand shouldn't wait for health check to pass before all allocations are online
-		err := healthcheck.HealthCheck(tx, dockerClient, true, job, true)
+		err := healthcheck.HealthCheck(dockerClient, true, job, true)
 		if err != nil {
 			return err
 		}
@@ -712,7 +712,7 @@ func handleUpdatedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 				return fmt.Errorf("%s", strings.Join(failedMessages, "\n"))
 			}
 
-			err := healthcheck.HealthCheck(tx, dockerClient, true, job, true)
+			err := healthcheck.HealthCheck(dockerClient, true, job, true)
 			if err != nil {
 				return err
 			}
@@ -775,7 +775,7 @@ func handleStoppedAllocations(tx *sql.Tx, dockerClient *bucket.DockerClient, buc
 
 		if len(allocatedWorkers) != len(currentlyAllocatedWorkers) {
 			// run health check only if more than on one active allocation available
-			err := healthcheck.HealthCheck(tx, dockerClient, true, job, true)
+			err := healthcheck.HealthCheck(dockerClient, true, job, true)
 			if err != nil {
 				return err
 			}
@@ -954,7 +954,7 @@ func Execute(jobsFilter []string) error {
 						}
 					}
 
-					err = healthcheck.HealthCheck(tx, dockerClient, true, tJob, true)
+					err = healthcheck.HealthCheck(dockerClient, true, tJob, true)
 					if err != nil {
 						errs <- err
 						return

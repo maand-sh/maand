@@ -1,3 +1,7 @@
+// Copyright 2025 Kiruba Sankar Swaminathan. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
 // Package tests provides tests for maand
 package tests
 
@@ -62,31 +66,28 @@ func GetRowValues(query string, args ...any) {
 			panic(err)
 		}
 	}()
-	row := db.QueryRow(query, args...)
+	row := db.QueryRow(query)
 	err := row.Scan(args...)
 	if err != nil {
 		panic(err)
 	}
 }
 
+// GetKey retrieves a value from the global Key-Value store.
+// It returns the string value and any error encountered.
 func GetKey(ns, key string) (string, error) {
-	db, _ := data.GetDatabase(false)
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			panic(err)
-		}
-	}()
+	store := kv.GetKVStore()
+	if store == nil {
+		return "", kv.ErrValueNotFound
+	}
 
-	tx, _ := db.Begin()
-	defer func() {
-		err := tx.Rollback()
-		if err != nil {
-			panic(err)
-		}
-	}()
+	// The Store.Get method now takes (namespace, key) and returns (KeyValueItem, error)
+	item, err := store.Get(ns, key)
+	if err != nil {
+		return "", err
+	}
 
-	return kv.GetKVStore().Get(tx, ns, key)
+	return item.Value, nil
 }
 
 func CopyFile(src, dst string) {

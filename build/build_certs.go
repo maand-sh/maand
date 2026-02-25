@@ -106,7 +106,7 @@ func Certs(tx *sql.Tx) error {
 				}
 
 				vKey, err := kv.GetKVStore().Get(ns, certKVName+".key")
-				if err != nil && !errors.Is(err, bucket.ErrKeyNotFound) {
+				if err != nil && !errors.Is(err, kv.ErrValueNotFound) {
 					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 				if len(vKey.Value) > 0 {
@@ -114,10 +114,13 @@ func Certs(tx *sql.Tx) error {
 					if err != nil {
 						return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 					}
+				} else {
+					// If key is missing from KV, we must regenerate
+					updateCerts = true
 				}
 
 				vCrt, err := kv.GetKVStore().Get(ns, certKVName+".crt")
-				if err != nil && !errors.Is(err, bucket.ErrKeyNotFound) {
+				if err != nil && !errors.Is(err, kv.ErrValueNotFound) {
 					return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 				}
 				if len(vCrt.Value) > 0 {
@@ -139,6 +142,9 @@ func Certs(tx *sql.Tx) error {
 					if !updateCerts && certExpired {
 						updateCerts = true
 					}
+				} else {
+					// If cert is missing from KV, we must regenerate
+					updateCerts = true
 				}
 
 				if updateCerts {
