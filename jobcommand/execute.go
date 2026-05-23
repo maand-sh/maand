@@ -2,18 +2,13 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-// Package jobcommand provides interface to work with job commands
+// Package jobcommand runs Python or Bun.js job commands inside the maand container across worker allocations.
 package jobcommand
 
 import (
 	"database/sql"
 	_ "embed"
-	"fmt"
 	"os"
-	"os/exec"
-	"path"
-	"runtime"
-	"strings"
 	"sync"
 
 	"maand/bucket"
@@ -25,144 +20,139 @@ import (
 //go:embed maand.py
 var MaandPy []byte
 
-func JobCommand(tx *sql.Tx, dockerClient *bucket.DockerClient, job, command, event string, concurrency int, verbose bool, envs []string) error {
-	allowedCommands, err := data.GetJobCommands(tx, job, event)
+//go:embed maand.ts
+var MaandTS []byte
+
+// JobCommand runs commandName for jobName on all active allocations for event.
+func JobCommand(
+	tx *sql.Tx,
+	rt *bucket.Runtime,
+	jobName, commandName, event string,
+	concurrency int,
+	verbose bool,
+	extraEnv []string,
+) error {
+	allowedCommands, err := data.GetJobCommands(tx, jobName, event)
 	if err != nil {
 		return err
 	}
-
-	if len(utils.Intersection([]string{command}, allowedCommands)) == 0 {
-		return &JobCommandNotFoundError{Command: command, Job: job, Event: event}
+	if !commandAllowed(allowedCommands, commandName) {
+		return &NotFoundError{Job: jobName, Command: commandName, Event: event}
 	}
 
-	workers, err := data.GetActiveAllocations(tx, job)
+	workerIPs, err := data.GetActiveAllocations(tx, jobName)
 	if err != nil {
 		return err
 	}
-
-	kvStore := kv.GetKVStore()
-
-	copyCerts := func(workerIP string) error {
-		workerDir := bucket.GetTempWorkerPath(workerIP)
-
-		keys, err := kvStore.GetKeys(fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
-		if err != nil {
-			return err
-		}
-
-		for _, key := range keys {
-			if !strings.HasPrefix(key, "certs/") {
-				continue
-			}
-
-			content, err := kvStore.Get(fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP), key)
-			if err != nil {
-				return err
-			}
-
-			err = os.WriteFile(path.Join(workerDir, "jobs", job, "_modules", key), []byte(content.Value), os.ModePerm)
-			if err != nil {
-				return err
-			}
-		}
-
-		caPath := path.Join(workerDir, "jobs", job, "_modules", "certs/ca.crt")
-		if _, err := os.Stat(caPath); os.IsNotExist(err) {
-			content, err := kvStore.Get("maand/worker", "certs/ca.crt")
-			if err != nil {
-				return err
-			}
-
-			err = os.WriteFile(caPath, []byte(content.Value), os.ModePerm)
-			if err != nil {
-				return err
-			}
-		}
-
+	if len(workerIPs) == 0 {
 		return nil
 	}
+	workerIPs = utils.Unique(workerIPs)
 
-	for _, workerIP := range workers {
-		workerDir := bucket.GetTempWorkerPath(workerIP)
-		err := os.MkdirAll(workerDir, os.ModePerm)
-		if err != nil {
-			return err
-		}
-
-		err = data.CopyJobFiles(tx, job, path.Join(workerDir, "jobs"))
-		if err != nil {
-			return err
-		}
-
-		moduleDir := path.Join(workerDir, "jobs", job, "_modules")
-		err = os.WriteFile(path.Join(moduleDir, "maand.py"), MaandPy, os.ModePerm)
-		if err != nil {
-			return err
-		}
-
-		certsDir := path.Join(workerDir, "jobs", job, "_modules", "certs")
-		err = os.MkdirAll(certsDir, os.ModePerm)
-		if err != nil {
-			return err
-		}
-
-		err = copyCerts(workerIP)
-		if err != nil {
-			return err
-		}
+	if err := validateHostRuntime(jobName, commandName); err != nil {
+		return err
 	}
 
-	allocErrors := map[string]error{}
-	semaphore := make(chan struct{}, concurrency)
-	var wait sync.WaitGroup
-	var mu sync.Mutex
-
-	for _, workerIP := range workers {
-		wait.Add(1)
-		semaphore <- struct{}{}
-
-		disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
-		if err != nil {
-			return err
-		}
-
-		allocID, err := data.GetAllocationID(tx, workerIP, job)
-		if err != nil {
-			return err
-		}
-
-		go func(tAllocID string, tWorkerIP string, tDisabled int) {
-			defer wait.Done()
-			defer func() { <-semaphore }()
-
-			err := runAllocationCommand(dockerClient, tAllocID, job, tWorkerIP, tDisabled, command, event, verbose, envs)
-			if err != nil {
-				mu.Lock()
-				allocErrors[tWorkerIP] = err
-				mu.Unlock()
-			}
-		}(allocID, workerIP, disabled)
+	if err := prepareWorkerWorkspaces(tx, jobName, workerIPs); err != nil {
+		return err
 	}
 
-	wait.Wait()
-	close(semaphore)
-
-	if len(allocErrors) > 0 {
-		errs := []string{}
-		for ip, msg := range allocErrors {
-			errs = append(errs, fmt.Sprintf("Allocation IP %s, %s", ip, msg))
-		}
-		return fmt.Errorf("%w: job %s command %s failed\n%s", bucket.ErrJobCommandFailed, job, command, strings.Join(errs, "\n"))
+	if concurrency < 1 {
+		concurrency = 1
 	}
 
-	return nil
+	return runCommandOnWorkers(tx, rt, jobName, commandName, event, workerIPs, concurrency, verbose, extraEnv)
 }
 
-func Execute(job, command, event string, concurrency int, verbose bool, envs []string) error {
-	db, err := data.GetDatabase(true)
-	if err != nil {
-		return bucket.DatabaseError(err)
+func runCommandOnWorkers(
+	tx *sql.Tx,
+	rt *bucket.Runtime,
+	jobName, commandName, event string,
+	workerIPs []string,
+	concurrency int,
+	verbose bool,
+	extraEnv []string,
+) error {
+	type allocation struct {
+		id       string
+		workerIP string
+		disabled int
 	}
+
+	allocations := make([]allocation, 0, len(workerIPs))
+	for _, workerIP := range workerIPs {
+		disabled, err := data.IsAllocationDisabled(tx, workerIP, jobName)
+		if err != nil {
+			return err
+		}
+		allocID, err := data.GetAllocationID(tx, workerIP, jobName)
+		if err != nil {
+			return err
+		}
+		allocations = append(allocations, allocation{
+			id:       allocID,
+			workerIP: workerIP,
+			disabled: disabled,
+		})
+	}
+
+	var (
+		waitGroup sync.WaitGroup
+		failures  []WorkerFailure
+		failureMu sync.Mutex
+		semaphore = make(chan struct{}, concurrency)
+	)
+
+	for _, alloc := range allocations {
+		waitGroup.Add(1)
+		semaphore <- struct{}{}
+
+		go func(alloc allocation) {
+			defer waitGroup.Done()
+			defer func() { <-semaphore }()
+
+			workerEnv := extraEnv
+			versionEnv, err := allocationVersionEnvForJobCommand(tx, jobName, alloc.workerIP)
+			if err != nil {
+				failureMu.Lock()
+				failures = append(failures, WorkerFailure{WorkerIP: alloc.workerIP, Err: err})
+				failureMu.Unlock()
+				return
+			}
+			workerEnv = append(append([]string(nil), extraEnv...), versionEnv...)
+
+			err = runCommandOnWorker(
+				rt,
+				alloc.id,
+				jobName,
+				alloc.workerIP,
+				alloc.disabled,
+				commandName,
+				event,
+				verbose,
+				workerEnv,
+			)
+			if err != nil {
+				failureMu.Lock()
+				failures = append(failures, WorkerFailure{WorkerIP: alloc.workerIP, Err: err})
+				failureMu.Unlock()
+			}
+		}(alloc)
+	}
+
+	waitGroup.Wait()
+	return newRunError(jobName, commandName, failures)
+}
+
+// Execute is the CLI entry point: open DB, start the job-command HTTP server, and run the command.
+func Execute(jobName, commandName, event string, concurrency int, verbose bool, extraEnv []string) error {
+	db, err := data.OpenDatabase(true)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = db.Close()
+	}()
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -172,76 +162,33 @@ func Execute(job, command, event string, concurrency int, verbose bool, envs []s
 		_ = tx.Rollback()
 	}()
 
-	cancel := SetupServer(tx)
-	defer cancel()
+	if err := kv.Initialize(tx); err != nil {
+		return err
+	}
+
+	cancelServer := StartRuntimeAPI(tx)
+	defer cancelServer()
 
 	bucketID, err := data.GetBucketID(tx)
 	if err != nil {
 		return err
 	}
 
-	dockerClient, err := bucket.SetupBucketContainer(bucketID)
+	rt, err := bucket.SetupRuntime(bucketID)
 	if err != nil {
 		return err
 	}
-
 	defer func() {
-		_ = dockerClient.Stop()
+		_ = rt.Stop()
 	}()
 
-	err = os.MkdirAll(bucket.TempLocation, os.ModePerm)
-	if err != nil {
+	if err := os.MkdirAll(bucket.TempLocation, 0o755); err != nil {
 		return err
 	}
 
-	err = JobCommand(tx, dockerClient, job, command, event, concurrency, verbose, envs)
-	if err != nil {
+	if err := JobCommand(tx, rt, jobName, commandName, event, concurrency, verbose, extraEnv); err != nil {
 		return err
 	}
 
-	if err = tx.Commit(); err != nil {
-		return bucket.DatabaseError(err)
-	}
-
-	return nil
-}
-
-func runAllocationCommand(dockerClient *bucket.DockerClient, allocID string, job string, workerIP string, disabled int, command, event string, verbose bool, pEnvs []string) error {
-	workerDir := path.Join("/bucket", "tmp", "workers", workerIP)
-	jobDir := path.Join(workerDir, "jobs", job)
-	commandPath := fmt.Sprintf("%s.py", command)
-
-	cmd := exec.Command("python3", commandPath)
-	cmd.Dir = path.Join(jobDir, "_modules")
-
-	envs := os.Environ()
-	envs = append(envs, pEnvs...)
-	envs = append(envs, fmt.Sprintf("ALLOCATION_ID=%s", allocID))
-	envs = append(envs, fmt.Sprintf("ALLOCATION_IP=%s", workerIP))
-	envs = append(envs, fmt.Sprintf("DISABLED=%d", disabled))
-	envs = append(envs, fmt.Sprintf("JOB=%s", job))
-	envs = append(envs, fmt.Sprintf("EVENT=%s", event))
-	envs = append(envs, fmt.Sprintf("COMMAND=%s", command))
-	envs = append(envs, fmt.Sprintf("HOST=%s", getHost()))
-	cmd.Env = envs
-
-	if verbose {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stdout
-	}
-
-	currPath := fmt.Sprintf("cd %s/jobs/%s/_modules", workerDir, job)
-	err := dockerClient.Exec(workerIP, []string{currPath, "python3 " + path.Join(jobDir, "_modules", commandPath)}, envs, verbose)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func getHost() string {
-	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
-		return "host.docker.internal"
-	}
-	return "0.0.0.0"
+	return tx.Commit()
 }

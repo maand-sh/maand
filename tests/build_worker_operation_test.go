@@ -43,17 +43,8 @@ func TestWorkerOperationAdded(t *testing.T) {
 	count = GetRowCount("SELECT COUNT(*) FROM worker")
 	assert.Equal(t, count, 3)
 
-	rows := GetRows("SELECT worker_ip, position FROM worker")
-	workers := make(map[string]int)
-	for rows.Next() {
-		var workerIP string
-		var position int
-		_ = rows.Scan(&workerIP, &position)
-		workers[workerIP] = position
-	}
-
-	e := map[string]int{"10.0.0.1": 0, "10.0.0.2": 1, "10.0.0.3": 2}
-	assert.Equal(t, e, workers)
+	workers := scanWorkerPositions(t)
+	assert.Equal(t, map[string]int{"10.0.0.1": 0, "10.0.0.2": 1, "10.0.0.3": 2}, workers)
 }
 
 // A worker get updated
@@ -84,17 +75,8 @@ func TestWorkerOperationUpdated(t *testing.T) {
 	count = GetRowCount("SELECT COUNT(*) FROM worker")
 	assert.Equal(t, count, 2)
 
-	rows := GetRows("SELECT worker_ip, position FROM worker")
-	workers := make(map[string]int)
-	for rows.Next() {
-		var workerIP string
-		var position int
-		_ = rows.Scan(&workerIP, &position)
-		workers[workerIP] = position
-	}
-
-	e := map[string]int{"10.0.0.1": 0, "10.0.0.3": 1}
-	assert.Equal(t, e, workers)
+	workers := scanWorkerPositions(t)
+	assert.Equal(t, map[string]int{"10.0.0.1": 0, "10.0.0.3": 1}, workers)
 }
 
 // A worker get removed later
@@ -127,17 +109,8 @@ func TestWorkerOperationRemoved(t *testing.T) {
 	count = GetRowCount("SELECT COUNT(*) FROM worker")
 	assert.Equal(t, count, 2)
 
-	rows := GetRows("SELECT worker_ip, position FROM worker")
-	workers := make(map[string]int)
-	for rows.Next() {
-		var workerIP string
-		var position int
-		_ = rows.Scan(&workerIP, &position)
-		workers[workerIP] = position
-	}
-
-	e := map[string]int{"10.0.0.1": 0, "10.0.0.3": 1}
-	assert.Equal(t, e, workers)
+	workers := scanWorkerPositions(t)
+	assert.Equal(t, map[string]int{"10.0.0.1": 0, "10.0.0.3": 1}, workers)
 }
 
 func TestWorkerDefaultKVLabels(t *testing.T) {

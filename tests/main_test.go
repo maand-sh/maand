@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"os"
 	"testing"
 
 	"maand/bucket"
@@ -9,6 +10,7 @@ import (
 func TestMain(m *testing.M) {
 	bucket.Location = "./test_project"
 	bucket.UpdatePath()
-	m.Run()
+
+	os.Exit(m.Run())
 	//_ = os.RemoveAll("./test_project")
 }

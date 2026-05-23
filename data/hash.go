@@ -12,9 +12,9 @@ import (
 )
 
 func UpdateHash(tx *sql.Tx, namespace, key, hash string) error {
-	var dbCurrentHash string
+	var storedCurrentHash string
 	row := tx.QueryRow("SELECT current_hash FROM hash WHERE namespace = ? AND key = ?", namespace, key)
-	err := row.Scan(&dbCurrentHash)
+	err := row.Scan(&storedCurrentHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			_, err = tx.Exec("INSERT INTO hash (namespace, key, current_hash) VALUES (?, ?, ?)", namespace, key, hash)
@@ -34,16 +34,16 @@ func UpdateHash(tx *sql.Tx, namespace, key, hash string) error {
 }
 
 func HashChanged(tx *sql.Tx, namespace, key string) (bool, error) {
-	var dbCurrentHash, dbPreviousHash string
+	var storedCurrentHash, storedPreviousHash string
 	row := tx.QueryRow("SELECT ifnull(current_hash, '') as current_hash, ifnull(previous_hash, '') as previous_hash FROM hash WHERE namespace = ? AND key = ?", namespace, key)
-	err := row.Scan(&dbCurrentHash, &dbPreviousHash)
+	err := row.Scan(&storedCurrentHash, &storedPreviousHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return true, nil
 		}
 		return false, bucket.DatabaseError(err)
 	}
-	return dbCurrentHash != dbPreviousHash, nil
+	return storedCurrentHash != storedPreviousHash, nil
 }
 
 func PromoteHash(tx *sql.Tx, namespace, key string) (err error) {

@@ -34,7 +34,7 @@ func TestBuild2(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(``), fs.ModePerm)
 
 	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
 func TestBuild3(t *testing.T) {
@@ -58,7 +58,7 @@ func TestBuild4(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{}]`), fs.ModePerm)
 
 	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
 func TestBuild5(t *testing.T) {
@@ -70,7 +70,7 @@ func TestBuild5(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`{}`), fs.ModePerm)
 
 	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
 func TestBuild6(t *testing.T) {
@@ -82,7 +82,7 @@ func TestBuild6(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"},{"host":"10.0.0.1"}]`), fs.ModePerm)
 
 	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
 func TestBuild7(t *testing.T) {
@@ -94,7 +94,7 @@ func TestBuild7(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1","labels":[1]}]`), fs.ModePerm)
 
 	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
 func TestBuild8(t *testing.T) {

@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,92 +19,109 @@ import (
 	"maand/bucket"
 )
 
-func CalculateFileMD5(filePath string) (string, error) {
-	f, err := os.Open(filePath)
+// HashFile returns the hex MD5 digest of a file.
+func HashFile(path string) (string, error) {
+	file, err := os.Open(path)
 	if err != nil {
-		return "", fmt.Errorf("%w: file %s %w", bucket.ErrUnexpectedError, filePath, err)
+		return "", fmt.Errorf("%w: file %s: %w", bucket.ErrUnexpectedError, path, err)
 	}
 	defer func() {
-		_ = f.Close()
+		_ = file.Close()
 	}()
 
-	hash := md5.New()
-	if _, err := io.Copy(hash, f); err != nil {
-		return "", fmt.Errorf("%w: file %s %w", bucket.ErrUnexpectedError, filePath, err)
+	digest := md5.New()
+	if _, err := io.Copy(digest, file); err != nil {
+		return "", fmt.Errorf("%w: file %s: %w", bucket.ErrUnexpectedError, path, err)
 	}
-
-	return hex.EncodeToString(hash.Sum(nil)), nil
+	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
-func CalculateDirMD5(folderPath string) (string, error) {
-	var files []string
-	// Walk through the folder and collect file paths.
-	err := filepath.Walk(folderPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
+// HashBytes returns the hex MD5 digest of content.
+func HashBytes(content []byte) (string, error) {
+	sum := md5.Sum(content)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// HashDirectory returns a stable MD5 over sorted file hashes under root (skips __pycache__).
+func HashDirectory(root string) (string, error) {
+	var filePaths []string
+	err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, walkErr)
 		}
 		if strings.Contains(path, "__pycache__") {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
 			return nil
 		}
 		if !info.IsDir() {
-			files = append(files, path)
+			filePaths = append(filePaths, path)
 		}
-
 		return nil
 	})
 	if err != nil {
 		return "", err
 	}
 
-	// Sort file paths to ensure a consistent order.
-	sort.Strings(files)
+	sort.Strings(filePaths)
 
-	fileMD5Map := make(map[string]string)
-	var wg sync.WaitGroup
+	fileHashes := make(map[string]string, len(filePaths))
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		firstErr error
+		sem      = make(chan struct{}, runtime.NumCPU())
+	)
 
-	// Limit concurrency to the number of CPUs.
-	sem := make(chan struct{}, runtime.NumCPU())
-	var mu sync.Mutex
-
-	// Compute MD5 of each file concurrently.
-	for _, file := range files {
+	for _, filePath := range filePaths {
 		wg.Add(1)
 		sem <- struct{}{}
-
-		go func(f string) {
+		go func(path string) {
 			defer func() {
-				wg.Done()
 				<-sem
+				wg.Done()
 			}()
 
-			md5Str, err := CalculateFileMD5(f)
+			digest, err := HashFile(path)
 			if err != nil {
-				log.Fatalln(err)
+				mu.Lock()
+				if firstErr == nil {
+					firstErr = err
+				}
+				mu.Unlock()
 				return
 			}
-
 			mu.Lock()
-			fileMD5Map[f] = md5Str
+			fileHashes[path] = digest
 			mu.Unlock()
-		}(file)
+		}(filePath)
+	}
+	wg.Wait()
+	if firstErr != nil {
+		return "", firstErr
 	}
 
-	wg.Wait()
-
-	// Update the global MD5 hash in sorted order.
-	globalHash := md5.New()
-	for _, file := range files {
-		if md5Str, ok := fileMD5Map[file]; ok {
-			globalHash.Write([]byte(md5Str))
+	combined := md5.New()
+	for _, filePath := range filePaths {
+		if _, err := combined.Write([]byte(fileHashes[filePath])); err != nil {
+			return "", err
 		}
 	}
-
-	return hex.EncodeToString(globalHash.Sum(nil)), nil
+	return hex.EncodeToString(combined.Sum(nil)), nil
 }
 
+// CalculateFileMD5 is deprecated; use HashFile.
+func CalculateFileMD5(filePath string) (string, error) {
+	return HashFile(filePath)
+}
+
+// CalculateDirMD5 is deprecated; use HashDirectory.
+func CalculateDirMD5(folderPath string) (string, error) {
+	return HashDirectory(folderPath)
+}
+
+// MD5Content is deprecated; use HashBytes.
 func MD5Content(content []byte) (string, error) {
-	hash := md5.New()
-	hash.Write(content)
-	md5Hash := hash.Sum(nil)
-	return hex.EncodeToString(md5Hash), nil
+	return HashBytes(content)
 }

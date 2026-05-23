@@ -9,32 +9,38 @@ import (
 	"os"
 	"path"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
-func GenerateCommandScript(commands []string, env []string) (string, error) {
-	newUUID := uuid.New()
-
-	commandScriptPath := fmt.Sprintf(path.Join(TempLocation, "%s.sh"), newUUID.String())
-
-	scriptLines := []string{"#!/bin/bash", "set -e", "set -u"}
-	for _, envVar := range env {
-		scriptLines = append(scriptLines, fmt.Sprintf("export %s", envVar))
+// BuildCommandScript assembles a bash script body for remote execution.
+// Environment variables must be included in the script; they are not applied separately over SSH.
+func BuildCommandScript(commands []string, envVars []string) string {
+	lines := []string{"#!/bin/bash", "set -e", "set -u"}
+	for _, envVar := range envVars {
+		envVar = strings.TrimSpace(envVar)
+		envVar = strings.TrimPrefix(envVar, "export ")
+		if envVar != "" {
+			lines = append(lines, fmt.Sprintf("export %s", envVar))
+		}
 	}
-	scriptLines = append(scriptLines, commands...)
+	lines = append(lines, commands...)
+	return strings.Join(lines, "\n") + "\n"
+}
 
-	script := strings.Join(scriptLines, "\n")
+// GenerateCommandScript writes a bash script under bucket/tmp and returns its filename (e.g. "<uuid>.sh").
+func GenerateCommandScript(commands []string, envVars []string) (scriptFileName string, err error) {
+	scriptFileName = newCommandScriptName()
+	scriptPath := path.Join(TempLocation, scriptFileName)
 
-	err := os.MkdirAll(TempLocation, os.ModePerm)
-	if err != nil {
+	if err := os.MkdirAll(TempLocation, 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(scriptPath, []byte(BuildCommandScript(commands, envVars)), 0o700); err != nil {
 		return "", err
 	}
 
-	err = os.WriteFile(commandScriptPath, []byte(script), 0o700)
-	if err != nil {
-		return "", err
-	}
+	return scriptFileName, nil
+}
 
-	return fmt.Sprintf("%s.sh", newUUID), nil
+func newCommandScriptName() string {
+	return newUniqueName() + ".sh"
 }

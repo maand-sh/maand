@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-// Package workspace provides interfaces for workspace
+// Package workspace reads job manifests and worker definitions from disk.
 package workspace
 
 import (
@@ -16,7 +16,30 @@ import (
 	"maand/bucket"
 )
 
+// Workspace loads on-disk workspace configuration.
+type Workspace interface {
+	ListWorkers() ([]Worker, error)
+	ListJobNames() ([]string, error)
+	LoadManifest(jobName string) (Manifest, error)
+	LoadDisabled() (DisabledAllocations, error)
+}
+
+// DefaultWorkspace reads from bucket.WorkspaceLocation.
 type DefaultWorkspace struct{}
+
+// Default returns the standard workspace reader.
+func Default() *DefaultWorkspace {
+	return &DefaultWorkspace{}
+}
+
+// GetWorkspace is deprecated; use Default.
+func GetWorkspace() *DefaultWorkspace {
+	return Default()
+}
+
+func (ws *DefaultWorkspace) ListWorkers() ([]Worker, error) {
+	return ws.GetWorkers()
+}
 
 func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 	data, err := os.ReadFile(path.Join(bucket.WorkspaceLocation, "workers.json"))
@@ -27,21 +50,29 @@ func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 		return nil, err
 	}
 
-	var dataWorkers []Worker
-	if err = json.Unmarshal(data, &dataWorkers); err != nil {
-		return nil, fmt.Errorf("%w: %w", bucket.ErrInvaildWorkerJSON, err)
+	var rawWorkers []Worker
+	if err = json.Unmarshal(data, &rawWorkers); err != nil {
+		return nil, fmt.Errorf("%w: %w", bucket.ErrInvalidWorkerJSON, err)
 	}
 
-	var workers []Worker
-	for idx, dataWorker := range dataWorkers {
-		dataWorker.Host = strings.Trim(dataWorker.Host, " ")
-		if dataWorker.Host == "" {
-			return nil, fmt.Errorf("%w: host attribute can't be empty", bucket.ErrInvaildWorkerJSON)
+	workers := make([]Worker, 0, len(rawWorkers))
+	seenHosts := make(map[string]struct{}, len(rawWorkers))
+	for idx, raw := range rawWorkers {
+		host := strings.TrimSpace(raw.Host)
+		if host == "" {
+			return nil, fmt.Errorf("%w: host attribute can't be empty", bucket.ErrInvalidWorkerJSON)
 		}
-		worker := NewWorker(dataWorker.Host, dataWorker.Labels, dataWorker.Memory, dataWorker.CPU, dataWorker.Tags, idx)
-		workers = append(workers, worker)
+		if _, dup := seenHosts[host]; dup {
+			return nil, fmt.Errorf("%w: duplicate host %q", bucket.ErrInvalidWorkerJSON, host)
+		}
+		seenHosts[host] = struct{}{}
+		workers = append(workers, NewWorker(host, raw.Labels, raw.Memory, raw.CPU, raw.Tags, idx))
 	}
 	return workers, nil
+}
+
+func (ws *DefaultWorkspace) ListJobNames() ([]string, error) {
+	return ws.GetJobs()
 }
 
 func (ws *DefaultWorkspace) GetJobs() ([]string, error) {
@@ -50,32 +81,38 @@ func (ws *DefaultWorkspace) GetJobs() ([]string, error) {
 		return nil, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 	}
 
-	var jobs []string
-	for idx := range paths {
-		manifestFile := paths[idx]
-		jobName := path.Dir(manifestFile)
-		jobs = append(jobs, jobName)
+	jobs := make([]string, 0, len(paths))
+	for _, manifestFile := range paths {
+		jobs = append(jobs, path.Dir(manifestFile))
 	}
 	return jobs, nil
 }
 
+func (ws *DefaultWorkspace) LoadManifest(jobName string) (Manifest, error) {
+	return ws.GetJobManifest(jobName)
+}
+
 func (ws *DefaultWorkspace) GetJobManifest(jobName string) (Manifest, error) {
 	manifestFile := path.Join(bucket.WorkspaceLocation, "jobs", jobName, "manifest.json")
-	f, err := os.ReadFile(manifestFile)
+	data, err := os.ReadFile(manifestFile)
 	if err != nil {
 		return Manifest{}, fmt.Errorf("%w:%w", bucket.ErrUnexpectedError, err)
 	}
 
 	var manifest Manifest
-	if err = json.Unmarshal(f, &manifest); err != nil {
+	if err = json.Unmarshal(data, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("%w: job %s\n%w", bucket.ErrInvalidManifest, jobName, err)
 	}
 	return manifest, nil
 }
 
+func (ws *DefaultWorkspace) LoadDisabled() (DisabledAllocations, error) {
+	return ws.GetDisabled()
+}
+
 func (ws *DefaultWorkspace) GetDisabled() (DisabledAllocations, error) {
 	disabledFile := path.Join(bucket.WorkspaceLocation, "disabled.json")
-	f, err := os.ReadFile(disabledFile)
+	data, err := os.ReadFile(disabledFile)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return DisabledAllocations{}, nil
@@ -83,14 +120,9 @@ func (ws *DefaultWorkspace) GetDisabled() (DisabledAllocations, error) {
 		return DisabledAllocations{}, err
 	}
 
-	var disabledAllocations DisabledAllocations
-	if err = json.Unmarshal(f, &disabledAllocations); err != nil {
+	var disabled DisabledAllocations
+	if err = json.Unmarshal(data, &disabled); err != nil {
 		return DisabledAllocations{}, err
 	}
-
-	return disabledAllocations, nil
-}
-
-func GetWorkspace() *DefaultWorkspace {
-	return &DefaultWorkspace{}
+	return disabled, nil
 }

@@ -7,6 +7,7 @@ package build
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 
@@ -17,56 +18,58 @@ import (
 	"maand/workspace"
 )
 
-func runPostBuild(tx *sql.Tx) error {
-	cancel := jobcommand.SetupServer(tx)
-	defer cancel()
+const postBuildEvent = "post_build"
+
+func runPostBuildHooks(tx *sql.Tx) error {
+	cancelJobCommandServer := jobcommand.StartRuntimeAPI(tx)
+	defer cancelJobCommandServer()
 
 	bucketID, err := data.GetBucketID(tx)
 	if err != nil {
-		return err
+		return fmt.Errorf("post_build: get bucket id: %w", err)
 	}
 
-	dockerClient, err := bucket.SetupBucketContainer(bucketID)
+	rt, err := bucket.SetupRuntime(bucketID)
 	if err != nil {
-		return err
+		return fmt.Errorf("post_build: setup runtime: %w", err)
 	}
 	defer func() {
-		_ = dockerClient.Stop()
+		_ = rt.Stop()
 	}()
 
-	maxDeploymentSequence, err := data.GetMaxDeploymentSeq(tx)
+	maxSequence, err := data.GetMaxDeploymentSeq(tx)
 	if err != nil {
-		return err
+		return fmt.Errorf("post_build: get max deployment sequence: %w", err)
 	}
 
-	for deploymentSeq := 0; deploymentSeq <= maxDeploymentSequence; deploymentSeq++ {
-		jobs, err := data.GetJobsByDeploymentSeq(tx, deploymentSeq)
+	var hookErrors []error
+	for sequence := 0; sequence <= maxSequence; sequence++ {
+		jobsAtSequence, err := data.GetJobsByDeploymentSeq(tx, sequence)
 		if err != nil {
-			return err
+			return fmt.Errorf("post_build: get jobs for deployment_seq %d: %w", sequence, err)
 		}
 
-		for _, job := range jobs {
-			postBuildCommands, err := data.GetJobCommands(tx, job, "post_build")
+		for _, jobName := range jobsAtSequence {
+			commandNames, err := data.GetJobCommands(tx, jobName, postBuildEvent)
 			if err != nil {
-				return err
-			}
-
-			if len(postBuildCommands) == 0 {
+				hookErrors = append(hookErrors, fmt.Errorf("post_build: get commands for job %s: %w", jobName, err))
 				continue
 			}
-			for _, command := range postBuildCommands {
-				err := jobcommand.JobCommand(tx, dockerClient, job, command, "post_build", 1, true, []string{})
+
+			for _, commandName := range commandNames {
+				err := jobcommand.JobCommand(tx, rt, jobName, commandName, postBuildEvent, 1, true, nil)
 				if err != nil {
-					return fmt.Errorf("post_build failed: %v", err)
+					hookErrors = append(hookErrors, fmt.Errorf("post_build: job %s command %s: %w", jobName, commandName, err))
 				}
 			}
 		}
 	}
-	return nil
+
+	return errors.Join(hookErrors...)
 }
 
 func Execute() error {
-	db, err := data.GetDatabase(true)
+	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return err
 	}
@@ -76,95 +79,91 @@ func Execute() error {
 		_ = os.RemoveAll(bucket.TempLocation)
 	}()
 
-	tx, err := db.Begin()
+	buildTx, err := db.Begin()
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
 	defer func() {
-		_ = tx.Rollback()
+		_ = buildTx.Rollback()
 	}()
 
-	ws := workspace.GetWorkspace()
+	jobWorkspace := workspace.GetWorkspace()
 
-	err = kv.Initialize(tx)
+	if err := kv.Initialize(buildTx); err != nil {
+		return err
+	}
+
+	removedWorkers, err := BuildWorkers(buildTx, jobWorkspace)
 	if err != nil {
 		return err
 	}
 
-	err = Workers(tx, ws)
+	removedJobs, err := BuildJobs(buildTx, jobWorkspace)
 	if err != nil {
 		return err
 	}
 
-	err = Jobs(tx, ws)
+	workspaceJobNames, err := jobWorkspace.GetJobs()
 	if err != nil {
 		return err
 	}
-
-	err = Allocations(tx, ws)
-	if err != nil {
+	if err := ValidateJobCommandDemands(jobWorkspace, workspaceJobNames); err != nil {
 		return err
 	}
 
-	err = DeploymentSequence(tx)
-	if err != nil {
+	if err := BuildAllocations(buildTx, jobWorkspace); err != nil {
 		return err
 	}
 
-	err = Variables(tx)
-	if err != nil {
+	if err := BuildDeploymentSequence(buildTx); err != nil {
 		return err
 	}
 
-	err = Certs(tx)
-	if err != nil {
+	if err := BuildVariables(buildTx, removedWorkers, removedJobs); err != nil {
 		return err
 	}
 
-	err = Container(tx)
-	if err != nil {
+	if err := BuildCerts(buildTx); err != nil {
 		return err
 	}
 
-	err = kv.GetKVStore().GC(tx, 7)
-	if err != nil {
+	if err := os.MkdirAll(bucket.TempLocation, 0o755); err != nil {
+		return bucket.UnexpectedError(err)
+	}
+
+	if err := kv.GetStore().PurgeStaleVersions(buildTx, 7); err != nil {
 		return err
 	}
 
-	err = Validate(tx)
-	if err != nil {
+	if err := ValidateWorkerResources(buildTx); err != nil {
 		return err
 	}
 
-	err = kv.SaveKeyValueStore(tx, kv.GetKVStore())
-	if err != nil {
+	if err := kv.PersistToTransaction(buildTx, kv.GetStore()); err != nil {
 		return err
 	}
 
-	err = tx.Commit()
-	if err != nil {
+	if err := buildTx.Commit(); err != nil {
 		return bucket.DatabaseError(err)
 	}
 
-	_, err = db.Exec("VACUUM")
-	if err != nil {
+	if _, err := db.Exec("VACUUM"); err != nil {
 		return bucket.DatabaseError(err)
 	}
 
-	tx, err = db.Begin()
+	postBuildTx, err := db.Begin()
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
 	defer func() {
-		_ = tx.Rollback()
+		_ = postBuildTx.Rollback()
 	}()
 
-	err = runPostBuild(tx)
-	if err != nil {
+	if err := runPostBuildHooks(postBuildTx); err != nil {
 		return err
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := postBuildTx.Commit(); err != nil {
 		return bucket.DatabaseError(err)
 	}
 

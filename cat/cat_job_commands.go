@@ -18,7 +18,7 @@ import (
 func JobCommands() error {
 	// TODO: demand job filter
 
-	db, err := data.GetDatabase(true)
+	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
@@ -47,6 +47,9 @@ func JobCommands() error {
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	t := utils.GetTable(table.Row{"job", "command_name", "executed_on", "demand_job", "demand_command", "demand_config"})
 
@@ -64,6 +67,9 @@ func JobCommands() error {
 		}
 
 		t.AppendRows([]table.Row{{jobName, commandName, executedOn, demandJob, demandCommand, demandConfig}})
+	}
+	if err := data.RowsErr(rows); err != nil {
+		return err
 	}
 
 	t.Render()

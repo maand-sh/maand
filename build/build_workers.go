@@ -17,102 +17,97 @@ import (
 	"github.com/google/uuid"
 )
 
-var removedWorkers []string // global variable captures removed workers from workspace
+func BuildWorkers(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, error) {
+	var workspaceWorkerIPs []string
 
-func Workers(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
-	var workspaceWorkers []string
-
-	wsWorkers, err := ws.GetWorkers()
+	workspaceWorkers, err := jobWorkspace.GetWorkers()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	var workersIP []string
-	for _, worker := range wsWorkers {
-		workersIP = append(workersIP, worker.Host)
+	workerIPs := make([]string, 0, len(workspaceWorkers))
+	for _, worker := range workspaceWorkers {
+		workerIPs = append(workerIPs, worker.Host)
 	}
 
-	if len(workersIP) != len(utils.Unique(workersIP)) {
+	if len(workerIPs) != len(utils.Unique(workerIPs)) {
 		// TODO: report duplicate ip address
-		return fmt.Errorf("%w: duplicate worker ip found", bucket.ErrInvaildWorkerJSON)
+		return nil, fmt.Errorf("%w: duplicate worker ip found", bucket.ErrInvalidWorkerJSON)
 	}
 
-	for _, worker := range wsWorkers {
+	for _, worker := range workspaceWorkers {
 		row := tx.QueryRow("SELECT worker_id FROM worker WHERE worker_ip = ?", worker.Host)
 
 		var workerID string
 		err := row.Scan(&workerID)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return bucket.DatabaseError(err)
+			return nil, bucket.DatabaseError(err)
 		}
 		if workerID == "" {
 			workerID = uuid.NewString()
 		}
 
-		workspaceWorkers = append(workspaceWorkers, worker.Host)
+		workspaceWorkerIPs = append(workspaceWorkerIPs, worker.Host)
 
-		availableMemory, err := utils.ExtractSizeInMB(worker.Memory)
+		availableMemoryMB, err := utils.ExtractSizeInMB(worker.Memory)
 		if err != nil {
-			return fmt.Errorf("%w: worker %s %w", bucket.ErrInvaildWorkerJSON, worker.Host, err)
+			return nil, fmt.Errorf("%w: worker %s %w", bucket.ErrInvalidWorkerJSON, worker.Host, err)
 		}
-		if availableMemory < 0 {
-			return fmt.Errorf("%w: worker %s memory can't be less than 0", bucket.ErrInvaildWorkerJSON, worker.Host)
-		}
-
-		availableCPU, err := utils.ExtractCPUFrequencyInMHz(worker.CPU)
-		if err != nil {
-			return fmt.Errorf("%w: worker %s %w", bucket.ErrInvaildWorkerJSON, worker.Host, err)
-		}
-		if availableCPU < 0 {
-			return fmt.Errorf("%w: worker %s, cpu can't be less than 0", bucket.ErrInvaildWorkerJSON, worker.Host)
+		if availableMemoryMB < 0 {
+			return nil, fmt.Errorf("%w: worker %s memory can't be less than 0", bucket.ErrInvalidWorkerJSON, worker.Host)
 		}
 
-		query := "INSERT OR REPLACE INTO worker (worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position) VALUES (?, ?, ?, ?, ?)"
-		_, err = tx.Exec(query, workerID, worker.Host, fmt.Sprintf("%v", availableMemory), fmt.Sprintf("%v", availableCPU), worker.Position)
+		availableCPUMHz, err := utils.ExtractCPUFrequencyInMHz(worker.CPU)
 		if err != nil {
-			return bucket.DatabaseError(err)
+			return nil, fmt.Errorf("%w: worker %s %w", bucket.ErrInvalidWorkerJSON, worker.Host, err)
+		}
+		if availableCPUMHz < 0 {
+			return nil, fmt.Errorf("%w: worker %s, cpu can't be less than 0", bucket.ErrInvalidWorkerJSON, worker.Host)
 		}
 
-		err = workerLabels(tx, workerID, worker)
+		upsertWorkerQuery := "INSERT OR REPLACE INTO worker (worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position) VALUES (?, ?, ?, ?, ?)"
+		_, err = tx.Exec(upsertWorkerQuery, workerID, worker.Host, fmt.Sprintf("%v", availableMemoryMB), fmt.Sprintf("%v", availableCPUMHz), worker.Position)
 		if err != nil {
-			return err
+			return nil, bucket.DatabaseError(err)
 		}
 
-		err = workerTags(tx, workerID, worker)
-		if err != nil {
-			return err
+		if err := syncWorkerLabels(tx, workerID, worker); err != nil {
+			return nil, err
+		}
+
+		if err := syncWorkerTags(tx, workerID, worker); err != nil {
+			return nil, err
 		}
 	}
 
-	removedWorkers = []string{}
-
-	availableWorkers, err := data.GetAllWorkers(tx)
+	databaseWorkerIPs, err := data.GetAllWorkers(tx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	diffs := utils.Difference(availableWorkers, workspaceWorkers)
-	for _, workerIP := range diffs {
+	workersToRemove := utils.Difference(databaseWorkerIPs, workspaceWorkerIPs)
+	removedWorkers := make([]string, 0, len(workersToRemove))
+	for _, workerIP := range workersToRemove {
 		_, err := tx.Exec("DELETE FROM worker_labels WHERE worker_id IN (SELECT worker_id FROM worker WHERE worker_ip = ?)", workerIP)
 		if err != nil {
-			return bucket.DatabaseError(err)
+			return nil, bucket.DatabaseError(err)
 		}
 
 		_, err = tx.Exec("DELETE FROM worker_tags WHERE worker_id IN (SELECT worker_id FROM worker WHERE worker_ip = ?)", workerIP)
 		if err != nil {
-			return bucket.DatabaseError(err)
+			return nil, bucket.DatabaseError(err)
 		}
 
 		_, err = tx.Exec("DELETE FROM worker WHERE worker_ip = ?", workerIP)
 		if err != nil {
-			return bucket.DatabaseError(err)
+			return nil, bucket.DatabaseError(err)
 		}
 		removedWorkers = append(removedWorkers, workerIP)
 	}
-	return nil
+	return removedWorkers, nil
 }
 
-func workerLabels(tx *sql.Tx, workerID string, worker workspace.Worker) error {
+func syncWorkerLabels(tx *sql.Tx, workerID string, worker workspace.Worker) error {
 	_, err := tx.Exec("DELETE FROM worker_labels WHERE worker_id = ?", workerID)
 	if err != nil {
 		return bucket.DatabaseError(err)
@@ -120,7 +115,7 @@ func workerLabels(tx *sql.Tx, workerID string, worker workspace.Worker) error {
 
 	labels := worker.Labels
 	if len(labels) != len(utils.Unique(labels)) {
-		return fmt.Errorf("%w: worker %s have duplicate labels", bucket.ErrInvaildWorkerJSON, worker.Host)
+		return fmt.Errorf("%w: worker %s have duplicate labels", bucket.ErrInvalidWorkerJSON, worker.Host)
 	}
 
 	for _, label := range labels {
@@ -132,7 +127,7 @@ func workerLabels(tx *sql.Tx, workerID string, worker workspace.Worker) error {
 	return nil
 }
 
-func workerTags(tx *sql.Tx, workerID string, worker workspace.Worker) error {
+func syncWorkerTags(tx *sql.Tx, workerID string, worker workspace.Worker) error {
 	_, err := tx.Exec("DELETE FROM worker_tags WHERE worker_id = ?", workerID)
 	if err != nil {
 		return bucket.DatabaseError(err)

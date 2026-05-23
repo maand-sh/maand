@@ -14,22 +14,26 @@ import (
 )
 
 func GetJobs(tx *sql.Tx) ([]string, error) {
-	rows, err := tx.Query("SELECT name FROM job")
+	rows, err := tx.Query(`SELECT name FROM job`)
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
-	jobs := make([]string, 0)
+	jobNames := make([]string, 0)
 	for rows.Next() {
 		var name string
-		err := rows.Scan(&name)
-		if err != nil {
+		if err := rows.Scan(&name); err != nil {
 			return nil, bucket.DatabaseError(err)
 		}
-
-		jobs = append(jobs, name)
+		jobNames = append(jobNames, name)
 	}
-	return jobs, nil
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return jobNames, nil
 }
 
 func GetJobMemoryLimits(tx *sql.Tx, job string) (string, string, error) {
@@ -82,30 +86,43 @@ func GetJobVersion(tx *sql.Tx, job string) (string, error) {
 	return version, nil
 }
 
-func GetJobSelectors(tx *sql.Tx, job string) ([]string, error) {
-	rows, err := tx.Query("SELECT selector FROM job_selectors WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
+func GetJobSelectors(tx *sql.Tx, jobName string) ([]string, error) {
+	rows, err := tx.Query(
+		`SELECT selector FROM job_selectors WHERE job_id = (SELECT job_id FROM job WHERE name = ?)`,
+		jobName,
+	)
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	selectors := make([]string, 0)
 	for rows.Next() {
 		var selector string
-		err := rows.Scan(&selector)
-		if err != nil {
+		if err := rows.Scan(&selector); err != nil {
 			return nil, bucket.DatabaseError(err)
 		}
-
 		selectors = append(selectors, selector)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
 	}
 	return selectors, nil
 }
 
-func CopyJobFiles(tx *sql.Tx, job string, outputPath string) error {
-	rows, err := tx.Query("SELECT path, content, isdir FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?) ORDER BY isdir DESC", job)
+func CopyJobFiles(tx *sql.Tx, jobName, outputPath string) error {
+	rows, err := tx.Query(
+		`SELECT path, content, isdir FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?) ORDER BY isdir DESC`,
+		jobName,
+	)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var filePath string
@@ -129,6 +146,9 @@ func CopyJobFiles(tx *sql.Tx, job string, outputPath string) error {
 		}
 	}
 
+	if err := rowsErr(rows); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -142,42 +162,62 @@ func GetAllocationID(tx *sql.Tx, workerIP, job string) (string, error) {
 	return allocID, nil
 }
 
-func GetNewAllocations(tx *sql.Tx, job string) ([]string, error) {
-	rows, err := tx.Query("SELECT a.worker_ip FROM hash h JOIN allocations a ON h.namespace = ? AND h.key = a.alloc_id AND h.previous_hash is NULL WHERE a.job = ? AND a.removed = 0 AND a.disabled = 0", fmt.Sprintf("%s_allocation", job), job)
+func GetNewAllocations(tx *sql.Tx, jobName string) ([]string, error) {
+	rows, err := tx.Query(
+		`SELECT a.worker_ip FROM hash h
+		 JOIN allocations a ON h.namespace = ? AND h.key = a.alloc_id AND h.previous_hash IS NULL
+		 WHERE a.job = ? AND a.removed = 0 AND a.disabled = 0`,
+		fmt.Sprintf("%s_allocation", jobName), jobName,
+	)
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
-	allocations := make([]string, 0)
+	workerIPs := make([]string, 0)
 	for rows.Next() {
-		var allocID string
-		err := rows.Scan(&allocID)
-		if err != nil {
+		var workerIP string
+		if err := rows.Scan(&workerIP); err != nil {
 			return nil, bucket.DatabaseError(err)
 		}
-
-		allocations = append(allocations, allocID)
+		workerIPs = append(workerIPs, workerIP)
 	}
-	return allocations, nil
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return workerIPs, nil
 }
 
-func GetUpdatedAllocations(tx *sql.Tx, job string) ([]string, error) {
-	rows, err := tx.Query("SELECT a.worker_ip FROM hash h JOIN allocations a ON h.namespace = ? AND h.key = a.alloc_id AND h.previous_hash IS NOT NULL AND h.previous_hash != h.current_hash WHERE a.job = ? AND a.removed = 0", fmt.Sprintf("%s_allocation", job), job)
+// GetUpdatedAllocations returns workers with promoted content that differs from the staged plan.
+func GetUpdatedAllocations(tx *sql.Tx, jobName string) ([]string, error) {
+	rows, err := tx.Query(
+		`SELECT a.worker_ip FROM hash h
+		 JOIN allocations a ON h.namespace = ? AND h.key = a.alloc_id
+		   AND h.previous_hash IS NOT NULL AND h.previous_hash != h.current_hash
+		 WHERE a.job = ? AND a.removed = 0 AND a.disabled = 0`,
+		fmt.Sprintf("%s_allocation", jobName), jobName,
+	)
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
-	allocations := make([]string, 0)
+	workerIPs := make([]string, 0)
 	for rows.Next() {
-		var allocID string
-		err := rows.Scan(&allocID)
-		if err != nil {
+		var workerIP string
+		if err := rows.Scan(&workerIP); err != nil {
 			return nil, bucket.DatabaseError(err)
 		}
-
-		allocations = append(allocations, allocID)
+		workerIPs = append(workerIPs, workerIP)
 	}
-	return allocations, nil
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return workerIPs, nil
 }
 
 func GetJobCommands(tx *sql.Tx, job, event string) ([]string, error) {
@@ -185,6 +225,9 @@ func GetJobCommands(tx *sql.Tx, job, event string) ([]string, error) {
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	commands := make([]string, 0)
 	for rows.Next() {
@@ -195,6 +238,9 @@ func GetJobCommands(tx *sql.Tx, job, event string) ([]string, error) {
 		}
 
 		commands = append(commands, command)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
 	}
 	return commands, nil
 }
@@ -210,39 +256,47 @@ func GetUpdateParallelCount(tx *sql.Tx, job string) (int, error) {
 }
 
 func GetJobsByDeploymentSeq(tx *sql.Tx, deploymentSeq int) ([]string, error) {
-	var jobs []string
-	rows, err := tx.Query("SELECT DISTINCT job FROM allocations WHERE deployment_seq = ?", deploymentSeq)
+	rows, err := tx.Query(`SELECT DISTINCT job FROM allocations WHERE deployment_seq = ?`, deploymentSeq)
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
+	jobNames := make([]string, 0)
 	for rows.Next() {
-		var job string
-		err = rows.Scan(&job)
-		if err != nil {
+		var jobName string
+		if err := rows.Scan(&jobName); err != nil {
 			return nil, bucket.DatabaseError(err)
 		}
-
-		jobs = append(jobs, job)
+		jobNames = append(jobNames, jobName)
 	}
-	return jobs, nil
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return jobNames, nil
 }
 
 func GetAllAllocatedJobs(tx *sql.Tx) ([]string, error) {
-	rows, err := tx.Query("SELECT DISTINCT job FROM allocations")
+	rows, err := tx.Query(`SELECT DISTINCT job FROM allocations`)
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
-	jobs := make([]string, 0)
+	jobNames := make([]string, 0)
 	for rows.Next() {
-		var job string
-		err := rows.Scan(&job)
-		if err != nil {
+		var jobName string
+		if err := rows.Scan(&jobName); err != nil {
 			return nil, bucket.DatabaseError(err)
 		}
-
-		jobs = append(jobs, job)
+		jobNames = append(jobNames, jobName)
 	}
-	return jobs, nil
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return jobNames, nil
 }

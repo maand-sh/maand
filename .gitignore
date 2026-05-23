@@ -1,2 +1,9 @@
 maand
 tests/test_project
+tests/integration/test_bucket
+.idea
+
+# Local integration test assets (see assets/README.md)
+assets/workers.json
+assets/worker.key
+assets/maand.conf

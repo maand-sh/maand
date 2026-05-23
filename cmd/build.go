@@ -5,7 +5,9 @@
 package cmd
 
 import (
-	"log"
+	"fmt"
+	"os"
+
 	"maand/build"
 
 	"github.com/spf13/cobra"
@@ -13,11 +15,11 @@ import (
 
 var buildCmd = &cobra.Command{
 	Use:   "build",
-	Short: "Build and plan object in the bucket",
+	Short: "Plan and build objects in the bucket",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := build.Execute()
-		if err != nil {
-			log.Fatalln(err)
+		if err := build.Execute(); err != nil {
+			fmt.Fprintln(os.Stderr, formatCommandError("build", err))
+			os.Exit(1)
 		}
 	},
 }

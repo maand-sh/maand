@@ -5,35 +5,54 @@
 package deploy
 
 import (
-	"errors"
 	"fmt"
+	"os/exec"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"maand/bucket"
+	"maand/worker"
 )
 
-func rsync(dockerClient *bucket.DockerClient, bucketID, workerIP string) error {
+func rsync(rt *bucket.Runtime, bucketID, workerIP string) error {
 	conf, err := bucket.GetMaandConf()
 	if err != nil {
 		return err
 	}
 
-	user := conf.SSHUser
-	keyFilePath := path.Join("/bucket", "secrets", conf.SSHKeyFile)
-	useSUDO := conf.UseSUDO
-
-	rs := "rsync"
-
-	remoteRS := "/usr/bin/rsync"
-	if useSUDO {
-		remoteRS = "sudo /usr/bin/rsync"
+	user := strings.TrimSpace(conf.SSHUser)
+	if user == "" {
+		user = "agent"
+	}
+	keyName := strings.TrimSpace(conf.SSHKeyFile)
+	if keyName == "" {
+		keyName = "worker.key"
+	}
+	keyFilePath, err := filepath.Abs(path.Join(bucket.SecretLocation, keyName))
+	if err != nil {
+		return err
 	}
 
-	ruleFilePath := path.Join("/bucket", "tmp", "workers", fmt.Sprintf("%s.rsync", workerIP))
-	workerDir := path.Join("/bucket", "tmp", "workers", workerIP)
+	if err := worker.EnsureSSHStateDir(); err != nil {
+		return err
+	}
 
-	rsOptions := []string{
+	remoteRS := "rsync"
+	if conf.UseSUDO {
+		remoteRS = "sudo rsync"
+	}
+
+	ruleFilePath, err := filepath.Abs(path.Join(bucket.TempLocation, "workers", fmt.Sprintf("%s.rsync", workerIP)))
+	if err != nil {
+		return err
+	}
+	workerDir, err := filepath.Abs(bucket.GetTempWorkerPath(workerIP))
+	if err != nil {
+		return err
+	}
+
+	args := []string{
 		"--timeout=30",
 		"--inplace",
 		"--whole-file",
@@ -51,17 +70,16 @@ func rsync(dockerClient *bucket.DockerClient, bucketID, workerIP string) error {
 		"--exclude=jobs/*/data",
 		"--exclude=jobs/*/logs",
 		"--exclude=jobs/*/_modules",
-		fmt.Sprintf("--rsync-path='%s'", remoteRS),
-		fmt.Sprintf("--filter='merge %s'", ruleFilePath),
-		fmt.Sprintf("--rsh='ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=10 -i %s'", keyFilePath),
-		fmt.Sprintf("%s/", workerDir),
+		"--rsync-path=" + remoteRS,
+		"--filter=merge " + ruleFilePath,
+		"--rsh=" + worker.RSHShell(keyFilePath, workerIP),
+		workerDir + string(filepath.Separator),
 		fmt.Sprintf("%s@%s:/opt/worker/%s", user, workerIP, bucketID),
 	}
 
-	cmd := append([]string{rs}, rsOptions...)
-	if err = dockerClient.Exec(workerIP, []string{strings.Join(cmd, " ")}, nil, true); err != nil {
-		return fmt.Errorf("rsync failed: worker %s %w", workerIP, errors.Unwrap(err))
+	cmd := exec.Command("rsync", args...)
+	if err := rt.RunCommand(workerIP, cmd); err != nil {
+		return fmt.Errorf("rsync failed: worker %s: %w", workerIP, err)
 	}
-
 	return nil
 }

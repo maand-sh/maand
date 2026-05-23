@@ -1,0 +1,29 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install build deps
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Test (unit packages)
+        env:
+          CGO_ENABLED: "1"
+        run: |
+          go test $(go list ./... | grep -v '/tests$') -count=1 -timeout 120s
+
+      - name: Build
+        env:
+          CGO_ENABLED: "1"
+        run: go build -o maand .

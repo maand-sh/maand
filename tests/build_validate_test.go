@@ -1,0 +1,53 @@
+// Copyright 2025 Kiruba Sankar Swaminathan. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
+package tests
+
+import (
+	"testing"
+
+	"maand/bucket"
+	"maand/build"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestBuildRejectsJobMemoryAboveWorkerCapacity(t *testing.T) {
+	initFreshBucket(t)
+	writeWorkersJSON(t, `[{"host":"10.0.0.1","memory":"128mb"}]`)
+
+	writeMinimalJob(t, "heavy", `{
+		"selectors": ["worker"],
+		"resources": {
+			"memory": {"min": "256mb", "max": "512mb"}
+		}
+	}`)
+
+	err := build.Execute()
+	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
+}
+
+func TestBuildRejectsDuplicateWorkerHost(t *testing.T) {
+	initFreshBucket(t)
+	writeWorkersJSON(t, `[{"host":"10.0.0.1"},{"host":"10.0.0.1"}]`)
+
+	err := build.Execute()
+	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
+}
+
+func TestBuildRejectsJobMemoryWhenWorkerUnconfigured(t *testing.T) {
+	initFreshBucket(t)
+	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+
+	writeMinimalJob(t, "heavy", `{
+		"selectors": ["worker"],
+		"resources": {
+			"memory": {"min": "256mb", "max": "512mb"}
+		}
+	}`)
+
+	err := build.Execute()
+	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
+	assert.Contains(t, err.Error(), "must specify memory")
+}

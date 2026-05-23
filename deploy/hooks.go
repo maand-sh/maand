@@ -1,0 +1,82 @@
+// Copyright 2025 Kiruba Sankar Swaminathan. All rights reserved.
+// Use of this source code is governed by a MIT style
+// license that can be found in the LICENSE file.
+
+package deploy
+
+import (
+	"maand/bucket"
+	"maand/worker"
+)
+
+// TestHooks overrides deploy side effects during tests. Clear with ClearTestHooks when done.
+type TestHooks struct {
+	WorkerCommand            func(rt *bucket.Runtime, workerIP string, commands []string, env []string) error
+	Rsync                    func(rt *bucket.Runtime, bucketID, workerIP string) error
+	SetupRuntime             func(bucketID string) (*bucket.Runtime, error)
+	CheckWorkerPrerequisites func(rt *bucket.Runtime, workers []string) error
+}
+
+var testHooks *TestHooks
+
+// SetTestHooks installs deploy test doubles. Not for production use.
+func SetTestHooks(h *TestHooks) {
+	testHooks = h
+}
+
+// ClearTestHooks removes deploy test doubles.
+func ClearTestHooks() {
+	testHooks = nil
+}
+
+// CommandRecorder captures worker commands when used as TestHooks.WorkerCommand.
+type CommandRecorder struct {
+	BucketID string
+	Commands []RecordedCommand
+}
+
+// RecordedCommand is one worker command invocation.
+type RecordedCommand struct {
+	WorkerIP string
+	Command  string
+}
+
+// Record implements TestHooks.WorkerCommand.
+func (r *CommandRecorder) Record(_ *bucket.Runtime, workerIP string, commands []string, _ []string) error {
+	for _, cmd := range commands {
+		r.Commands = append(r.Commands, RecordedCommand{WorkerIP: workerIP, Command: cmd})
+	}
+	return nil
+}
+
+// HasAction reports whether a runner action was recorded for a job on a worker.
+func (r *CommandRecorder) HasAction(workerIP, action, job string) bool {
+	want := runnerCommand(r.BucketID, action, job)
+	for _, c := range r.Commands {
+		if c.WorkerIP == workerIP && c.Command == want {
+			return true
+		}
+	}
+	return false
+}
+
+func runWorkerCommand(rt *bucket.Runtime, workerIP string, commands []string, env []string) error {
+	if testHooks != nil && testHooks.WorkerCommand != nil {
+		return testHooks.WorkerCommand(rt, workerIP, commands, env)
+	}
+	return worker.ExecuteCommand(rt, workerIP, commands, env)
+}
+
+func runRsync(rt *bucket.Runtime, bucketID, workerIP string) error {
+	if testHooks != nil && testHooks.Rsync != nil {
+		return testHooks.Rsync(rt, bucketID, workerIP)
+	}
+	return rsync(rt, bucketID, workerIP)
+}
+
+func setupDeployRuntime(bucketID string) (*bucket.Runtime, error) {
+	if testHooks != nil && testHooks.SetupRuntime != nil {
+		return testHooks.SetupRuntime(bucketID)
+	}
+	return bucket.SetupRuntime(bucketID)
+}

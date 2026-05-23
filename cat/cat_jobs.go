@@ -16,7 +16,7 @@ import (
 )
 
 func Jobs() error {
-	db, err := data.GetDatabase(true)
+	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
@@ -44,6 +44,9 @@ func Jobs() error {
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	t := utils.GetTable(table.Row{"job", "version", "disabled", "deployment_seq", "selectors"})
 
@@ -61,6 +64,9 @@ func Jobs() error {
 		}
 
 		t.AppendRows([]table.Row{{name, version, disabled, deploymentSeq, selectors}})
+	}
+	if err := data.RowsErr(rows); err != nil {
+		return err
 	}
 
 	t.Render()

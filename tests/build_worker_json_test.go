@@ -45,11 +45,8 @@ func TestWorkerJSON3Worker(t *testing.T) {
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	row := GetRow("SELECT COUNT(*) FROM worker")
-	var count int
-	_ = row.Scan(&count)
-
-	assert.Equal(t, count, 2)
+	count := MustQueryCount(t, "SELECT COUNT(*) FROM worker")
+	assert.Equal(t, 2, count)
 }
 
 func TestWorkerJSONDuplicateWorker(t *testing.T) {
@@ -61,7 +58,7 @@ func TestWorkerJSONDuplicateWorker(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{ "host": "10.0.0.1" },{ "host": "10.0.0.1" }]`), os.ModePerm)
 	err = build.Execute()
 
-	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
 func TestWorkerJSONInvalid(t *testing.T) {
@@ -73,7 +70,7 @@ func TestWorkerJSONInvalid(t *testing.T) {
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`{}`), os.ModePerm)
 	err = build.Execute()
 
-	assert.ErrorIs(t, err, bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
 func TestWorkerJSONRemains(t *testing.T) {

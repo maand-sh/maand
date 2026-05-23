@@ -2,56 +2,39 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-// Package worker
 package worker
 
 import (
 	"fmt"
-	"os"
-	"path"
+	"strings"
 
 	"maand/bucket"
 )
 
-func ExecuteCommand(dockerClient *bucket.DockerClient, workerIP string, commands []string, env []string) error {
-	commandScriptFileName, err := bucket.GenerateCommandScript(commands, env)
-	if err != nil {
-		return err
+// ExecuteCommand runs commands on a worker over SSH.
+func ExecuteCommand(rt *bucket.Runtime, workerIP string, commands []string, env []string) error {
+	workerIP = strings.TrimSpace(workerIP)
+	if workerIP == "" {
+		return remoteError("", fmt.Errorf("worker IP is required"))
 	}
 
-	commandScriptFilePath := path.Join(bucket.TempLocation, commandScriptFileName)
-	defer func() {
-		_ = os.Remove(commandScriptFilePath)
-	}()
-
-	return ExecuteFileCommand(dockerClient, workerIP, commandScriptFilePath, env)
+	script := bucket.BuildCommandScript(commands, env)
+	if err := RunRemoteScript(rt, workerIP, strings.NewReader(script), false); err != nil {
+		return remoteError(workerIP, err)
+	}
+	return nil
 }
 
-func ExecuteFileCommand(dockerClient *bucket.DockerClient, workerIP string, commandScriptFileName string, env []string) error {
-	conf, err := bucket.GetMaandConf()
-	if err != nil {
-		return err
+// ExecuteFileCommand runs an existing bash script (host path under the bucket) on a worker.
+// Environment variables must be embedded in the script file.
+func ExecuteFileCommand(rt *bucket.Runtime, workerIP string, hostScriptPath string, _ []string) error {
+	workerIP = strings.TrimSpace(workerIP)
+	if workerIP == "" {
+		return remoteError("", fmt.Errorf("worker IP is required"))
 	}
 
-	user := conf.SSHUser
-	keyFilePath := path.Join(bucket.SecretLocation, conf.SSHKeyFile)
-	useSudo := conf.UseSUDO
-
-	sh := "bash"
-	if useSudo {
-		sh = "sudo bash"
+	if err := RunRemoteScriptFile(rt, workerIP, hostScriptPath, false); err != nil {
+		return remoteError(workerIP, err)
 	}
-
-	commandScriptBucketFilePath := path.Join(commandScriptFileName)
-
-	sshCmd := fmt.Sprintf(
-		`ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes -o ConnectTimeout=10 -i %s %s@%s 'timeout 300 %s' < %s`,
-		keyFilePath, user, workerIP, sh, commandScriptBucketFilePath)
-
-	err = dockerClient.Exec(workerIP, []string{sshCmd}, env, true)
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
