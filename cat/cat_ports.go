@@ -18,7 +18,7 @@ import (
 func JobPorts() error {
 	// TODO: jobs filter
 
-	db, err := data.GetDatabase(true)
+	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
@@ -44,6 +44,9 @@ func JobPorts() error {
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	t := utils.GetTable(table.Row{"job", "name", "port"})
 
@@ -58,6 +61,9 @@ func JobPorts() error {
 		}
 
 		t.AppendRows([]table.Row{{job, name, port}})
+	}
+	if err := data.RowsErr(rows); err != nil {
+		return err
 	}
 
 	t.Render()

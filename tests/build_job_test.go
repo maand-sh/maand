@@ -260,7 +260,7 @@ func TestJobDisabled(t *testing.T) {
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE disabled = 0")
 	assert.Equal(t, 0, count)
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 22, count)
+	assert.Equal(t, 24, count)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{}}`), os.ModePerm)
 
@@ -295,7 +295,7 @@ func TestAllocationDisabled(t *testing.T) {
 	assert.Equal(t, 0, count)
 
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 22, count)
+	assert.Equal(t, 24, count)
 
 	// jobs is still disabled
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{"a":{"workers":[]}}}`), os.ModePerm)
@@ -304,7 +304,7 @@ func TestAllocationDisabled(t *testing.T) {
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE disabled = 0")
 	assert.Equal(t, 0, count)
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 22, count)
+	assert.Equal(t, 24, count)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{}}`), os.ModePerm)
 	err = build.Execute()
@@ -404,7 +404,7 @@ func TestJobMaxMemoryAsDefaultIfNotInJobConf(t *testing.T) {
 	err := initialize.Execute()
 	assert.NoError(t, err)
 
-	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "memory": "12"}]`), os.ModePerm)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "memory": "12", "cpu": "12"}]`), os.ModePerm)
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "resources":{"cpu": {"min":"12", "max": "12"}}}`), os.ModePerm)
@@ -437,15 +437,17 @@ func TestJobPortCollisionWithinJob(t *testing.T) {
 
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"a_port_web":4545, "a_port_web1":4545}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port": {}, "web_port1": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
-	assert.Error(t, err)
+	assert.NoError(t, err)
+
+	count := GetRowCount("SELECT COUNT(DISTINCT port) FROM job_ports")
+	assert.Equal(t, 2, count)
 }
 
-// test job resources port collision
-func TestJobPortCollisionWithDifferentJob(t *testing.T) {
+func TestJobAutoAssignUniquePorts(t *testing.T) {
 	_ = os.RemoveAll(bucket.Location)
 
 	err := initialize.Execute()
@@ -453,14 +455,21 @@ func TestJobPortCollisionWithDifferentJob(t *testing.T) {
 
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"a_port_web":4545}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"a_port_web": {}}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	jobPath = path.Join(bucket.WorkspaceLocation, "jobs", "b")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"b_port_web":4545}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"b_port_web": {}}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
-	assert.Error(t, err)
+	assert.NoError(t, err)
+
+	var portA, portB int
+	GetRowValues("SELECT port FROM job_ports WHERE name = 'a_port_web'", &portA)
+	GetRowValues("SELECT port FROM job_ports WHERE name = 'b_port_web'", &portB)
+	assert.NotEqual(t, portA, portB)
 }
 
 func TestJobKVCountJobRemovedNoWorker(t *testing.T) {
@@ -478,7 +487,7 @@ func TestJobKVCountJobRemovedNoWorker(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 11, count)
+	assert.Equal(t, 13, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "jobs", "a"))
 
@@ -486,7 +495,7 @@ func TestJobKVCountJobRemovedNoWorker(t *testing.T) {
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 3, count)
 }
 
 func TestJobKVCountJobRemoved(t *testing.T) {
@@ -506,7 +515,7 @@ func TestJobKVCountJobRemoved(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 22, count)
+	assert.Equal(t, 24, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "jobs", "a"))
 
@@ -514,7 +523,7 @@ func TestJobKVCountJobRemoved(t *testing.T) {
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 12, count)
+	assert.Equal(t, 14, count)
 }
 
 func TestJobKVCountWorkerJSONRemovedLater(t *testing.T) {
@@ -529,14 +538,14 @@ func TestJobKVCountWorkerJSONRemovedLater(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 12, count)
+	assert.Equal(t, 14, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "workers.json"))
 	err = build.Execute()
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 3, count)
 
 	err = cat.KV()
 	assert.NoError(t, err)
@@ -559,21 +568,21 @@ func TestCountKVWorkerJSONAndJobRemoved(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 22, count)
+	assert.Equal(t, 24, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "workers.json"))
 	err = build.Execute()
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 11, count)
+	assert.Equal(t, 13, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "jobs", "a"))
 	err = build.Execute()
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 3, count)
 }
 
 func TestJobKVMemoryCPUJobConf(t *testing.T) {
@@ -633,7 +642,7 @@ func TestJobKVMaxMemoryAsDefaultIfNotInJobConf(t *testing.T) {
 	err := initialize.Execute()
 	assert.NoError(t, err)
 
-	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "memory": "12"}]`), os.ModePerm)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "memory": "12", "cpu": "12"}]`), os.ModePerm)
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "resources":{"cpu": {"min":"12", "max": "12"}}}`), os.ModePerm)
@@ -730,7 +739,7 @@ cpu="1 GHZ"
 	`
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.jobs.conf"), []byte(jobsConf), os.ModePerm)
 	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInSufficientResource)
+	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
 }
 
 func TestJobInsufficientMemoryManifest(t *testing.T) {
@@ -746,7 +755,7 @@ func TestJobInsufficientMemoryManifest(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInSufficientResource)
+	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
 }
 
 func TestJobInsufficientMemoryManifest1(t *testing.T) {
@@ -762,7 +771,7 @@ func TestJobInsufficientMemoryManifest1(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInSufficientResource)
+	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
 }
 
 func TestJobDepsAndConfig(t *testing.T) {
@@ -775,6 +784,7 @@ func TestJobDepsAndConfig(t *testing.T) {
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	modulesDir := path.Join(jobDir, "_modules")
 	_ = os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
+	"version": "1.0.0",
 	"selectors": ["worker"],
 		"commands": {
 			"command_test_command": {
@@ -790,6 +800,7 @@ func TestJobDepsAndConfig(t *testing.T) {
 	jobDir = path.Join(bucket.WorkspaceLocation, "jobs", "b")
 	modulesDir = path.Join(jobDir, "_modules")
 	_ = os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
+	"version": "1.0.0",
 	"selectors": ["worker"],
 		"commands": {
 			"command_test_command": {
@@ -832,6 +843,7 @@ func TestJobDepsLevel3(t *testing.T) {
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	modulesDir := path.Join(jobDir, "_modules")
 	_ = os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
+	"version": "1.0.0",
 	"selectors": ["worker"],
 		"commands": {
 			"command_test_command": {
@@ -847,6 +859,7 @@ func TestJobDepsLevel3(t *testing.T) {
 	jobDir = path.Join(bucket.WorkspaceLocation, "jobs", "b")
 	modulesDir = path.Join(jobDir, "_modules")
 	_ = os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
+	"version": "1.0.0",
 	"selectors": ["worker"],
 		"commands": {
 			"command_test_command": {
@@ -866,6 +879,7 @@ func TestJobDepsLevel3(t *testing.T) {
 	jobDir = path.Join(bucket.WorkspaceLocation, "jobs", "c")
 	modulesDir = path.Join(jobDir, "_modules")
 	_ = os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
+	"version": "1.0.0",
 	"selectors": ["worker"],
 		"commands": {
 			"command_test_command": {
@@ -885,6 +899,7 @@ func TestJobDepsLevel3(t *testing.T) {
 	jobDir = path.Join(bucket.WorkspaceLocation, "jobs", "d")
 	modulesDir = path.Join(jobDir, "_modules")
 	_ = os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
+	"version": "1.0.0",
 	"selectors": ["worker"],
 		"commands": {
 			"command_test_command1": {

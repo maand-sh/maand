@@ -120,13 +120,13 @@ func TestWorkerResourcesInvalid(t *testing.T) {
 		{ "host": "10.0.0.1", "cpu": "-1" }
 	]`), os.ModePerm)
 
-	assert.ErrorIs(t, build.Execute(), bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, build.Execute(), bucket.ErrInvalidWorkerJSON)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[
 		{ "host": "10.0.0.1", "memory": "-1" }
 	]`), os.ModePerm)
 
-	assert.ErrorIs(t, build.Execute(), bucket.ErrInvaildWorkerJSON)
+	assert.ErrorIs(t, build.Execute(), bucket.ErrInvalidWorkerJSON)
 }
 
 func TestWorkerResourcesKVUpdated(t *testing.T) {

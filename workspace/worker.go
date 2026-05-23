@@ -4,10 +4,9 @@
 
 package workspace
 
-import (
-	"strings"
-)
+import "strings"
 
+// Worker describes a cluster node from workers.json.
 type Worker struct {
 	Host     string            `json:"host"`
 	Labels   []string          `json:"labels"`
@@ -17,34 +16,33 @@ type Worker struct {
 	Position int               `json:"position"`
 }
 
+// NewWorker normalizes labels/tags and applies defaults for empty resources.
 func NewWorker(host string, labels []string, memory string, cpu string, tags map[string]string, position int) Worker {
+	labels = append([]string(nil), labels...)
 	labels = append(labels, "worker")
 
 	for idx, label := range labels {
-		labels[idx] = strings.ToLower(label)
+		labels[idx] = strings.ToLower(strings.TrimSpace(label))
 	}
 
-	newTags := map[string]string{}
+	normalizedTags := make(map[string]string, len(tags))
 	for key, value := range tags {
-		key = strings.ToLower(key)
-		value = strings.ToLower(value)
-		newTags[key] = value
+		normalizedTags[strings.ToLower(strings.TrimSpace(key))] = strings.ToLower(strings.TrimSpace(value))
 	}
 
-	if memory == "" {
+	if strings.TrimSpace(memory) == "" {
 		memory = "0 MB"
 	}
-
-	if cpu == "" {
+	if strings.TrimSpace(cpu) == "" {
 		cpu = "0 MHZ"
 	}
 
 	return Worker{
-		Host:     host,
+		Host:     strings.TrimSpace(host),
 		Labels:   labels,
 		Memory:   memory,
 		CPU:      cpu,
-		Tags:     newTags,
+		Tags:     normalizedTags,
 		Position: position,
 	}
 }

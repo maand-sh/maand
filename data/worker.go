@@ -6,7 +6,6 @@ package data
 
 import (
 	"database/sql"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -17,36 +16,41 @@ func GetWorkers(tx *sql.Tx, labels []string) ([]string, error) {
 	workers := make([]string, 0)
 
 	readRows := func(rows *sql.Rows) error {
+		defer func() {
+			_ = rows.Close()
+		}()
 		for rows.Next() {
-			var ip string
-			err := rows.Scan(&ip)
-			if err != nil {
+			var workerIP string
+			if err := rows.Scan(&workerIP); err != nil {
 				return err
 			}
-			workers = append(workers, ip)
+			workers = append(workers, workerIP)
 		}
-		return rows.Err()
+		return rowsErr(rows)
 	}
 
 	if len(labels) == 0 {
-		rows, err := tx.Query("SELECT worker_ip FROM worker ORDER BY position")
+		rows, err := tx.Query(`SELECT worker_ip FROM worker ORDER BY position`)
 		if err != nil {
 			return workers, bucket.DatabaseError(err)
 		}
-		err = readRows(rows)
-		if err != nil {
+		if err := readRows(rows); err != nil {
 			return workers, bucket.DatabaseError(err)
 		}
 	}
 
 	if len(labels) > 0 {
-		query := fmt.Sprintf("SELECT DISTINCT worker_ip FROM worker w JOIN worker_labels wl ON w.worker_id = wl.worker_id WHERE label in ('%s') ORDER BY position", strings.Join(labels, `','`))
+		query := fmt.Sprintf(
+			`SELECT DISTINCT worker_ip FROM worker w
+			 JOIN worker_labels wl ON w.worker_id = wl.worker_id
+			 WHERE label IN ('%s') ORDER BY position`,
+			strings.Join(labels, `','`),
+		)
 		rows, err := tx.Query(query)
 		if err != nil {
 			return workers, bucket.DatabaseError(err)
 		}
-		err = readRows(rows)
-		if err != nil {
+		if err := readRows(rows); err != nil {
 			return workers, bucket.DatabaseError(err)
 		}
 	}
@@ -57,11 +61,8 @@ func GetWorkers(tx *sql.Tx, labels []string) ([]string, error) {
 func GetWorkerID(tx *sql.Tx, workerIP string) (string, error) {
 	var workerID string
 	row := tx.QueryRow("SELECT worker_id FROM worker WHERE worker_ip = ?", workerIP)
-	err := row.Scan(&workerID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return "", bucket.DatabaseError(err)
-		}
+	if err := row.Scan(&workerID); err != nil {
+		return "", bucket.DatabaseError(err)
 	}
 	return workerID, nil
 }
@@ -71,6 +72,9 @@ func GetWorkerLabels(tx *sql.Tx, workerID string) ([]string, error) {
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	labels := make([]string, 0)
 	for rows.Next() {
@@ -80,6 +84,9 @@ func GetWorkerLabels(tx *sql.Tx, workerID string) ([]string, error) {
 			return nil, bucket.DatabaseError(err)
 		}
 		labels = append(labels, label)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
 	}
 	return labels, nil
 }
@@ -89,6 +96,9 @@ func GetLabels(tx *sql.Tx) ([]string, error) {
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	labels := make([]string, 0)
 	for rows.Next() {
@@ -99,6 +109,9 @@ func GetLabels(tx *sql.Tx) ([]string, error) {
 		}
 		labels = append(labels, label)
 	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
 	return labels, nil
 }
 
@@ -107,6 +120,9 @@ func GetWorkerTags(tx *sql.Tx, workerID string) (map[string]string, error) {
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	tags := make(map[string]string)
 	for rows.Next() {
@@ -117,6 +133,9 @@ func GetWorkerTags(tx *sql.Tx, workerID string) (map[string]string, error) {
 		}
 		tags[key] = value
 	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
 	return tags, nil
 }
 
@@ -126,6 +145,9 @@ func GetAllWorkers(tx *sql.Tx) ([]string, error) {
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var workerIP string
@@ -134,6 +156,9 @@ func GetAllWorkers(tx *sql.Tx) ([]string, error) {
 			return nil, bucket.DatabaseError(err)
 		}
 		workers = append(workers, workerIP)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
 	}
 	return workers, nil
 }
@@ -165,6 +190,9 @@ func GetAllocatedJobs(tx *sql.Tx, workerIP string) ([]string, error) {
 	}
 
 	var allocatedJobs []string
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		var job string
 		err = rows.Scan(&job)
@@ -172,6 +200,33 @@ func GetAllocatedJobs(tx *sql.Tx, workerIP string) ([]string, error) {
 			return nil, bucket.DatabaseError(err)
 		}
 		allocatedJobs = append(allocatedJobs, job)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return allocatedJobs, nil
+}
+
+func GetActiveAllocatedJobs(tx *sql.Tx, workerIP string) ([]string, error) {
+	rows, err := tx.Query("SELECT job FROM allocations WHERE worker_ip = ? AND removed = 0 AND disabled = 0", workerIP)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+
+	var allocatedJobs []string
+	defer func() {
+		_ = rows.Close()
+	}()
+	for rows.Next() {
+		var job string
+		err = rows.Scan(&job)
+		if err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		allocatedJobs = append(allocatedJobs, job)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
 	}
 	return allocatedJobs, nil
 }
@@ -183,6 +238,9 @@ func GetAllocatedWorkers(tx *sql.Tx, job string) ([]string, error) {
 	}
 
 	var allocatedWorkers []string
+	defer func() {
+		_ = rows.Close()
+	}()
 	for rows.Next() {
 		var workerIP string
 		err = rows.Scan(&workerIP)
@@ -190,6 +248,9 @@ func GetAllocatedWorkers(tx *sql.Tx, job string) ([]string, error) {
 			return nil, bucket.DatabaseError(err)
 		}
 		allocatedWorkers = append(allocatedWorkers, workerIP)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
 	}
 	return allocatedWorkers, nil
 }
@@ -226,9 +287,15 @@ func GetActiveAllocations(tx *sql.Tx, job string) ([]string, error) {
 			return nil, bucket.DatabaseError(err)
 		}
 
-		if removed == 1 {
+		disabled, err := IsAllocationDisabled(tx, workerIP, job)
+		if err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+
+		if !IsActiveAllocation(removed, disabled) {
 			continue
 		}
+
 		activeWorkers = append(activeWorkers, workerIP)
 	}
 	return activeWorkers, nil

@@ -17,7 +17,7 @@ import (
 
 func Workers() error {
 	// TODO: labels filter
-	db, err := data.GetDatabase(true)
+	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
@@ -43,6 +43,9 @@ func Workers() error {
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	t := utils.GetTable(table.Row{"Worker IP", "CPU (mhz)", "Memory (mb)", "Position", "labels"})
 
@@ -60,6 +63,9 @@ func Workers() error {
 		}
 
 		t.AppendRows([]table.Row{{workerIP, availableMemoryMB, availableCPUMHZ, position, labels}})
+	}
+	if err := data.RowsErr(rows); err != nil {
+		return err
 	}
 
 	t.Render()

@@ -21,57 +21,50 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-func Variables(tx *sql.Tx) error {
-	err := processWorkerData(tx)
-	if err != nil {
+func BuildVariables(tx *sql.Tx, removedWorkers, removedJobs []string) error {
+	if err := buildWorkerVariables(tx, removedWorkers); err != nil {
 		return err
 	}
-	err = processJobData(tx)
-	if err != nil {
+	if err := buildJobVariables(tx, removedJobs); err != nil {
 		return err
 	}
-	err = processLabelData(tx)
-	if err != nil {
+	if err := buildSharedWorkerVariables(tx); err != nil {
 		return err
 	}
-	err = processBucketConf(tx)
-	if err != nil {
-		return err
-	}
-	return nil
+	return buildBucketVariables(tx)
 }
 
-func processWorkerData(tx *sql.Tx) error {
+func buildWorkerVariables(tx *sql.Tx, removedWorkers []string) error {
 	workers, err := data.GetWorkers(tx, nil)
 	if err != nil {
 		return err
 	}
 
 	for _, workerIP := range workers {
-		workerKV := make(map[string]string)
+		variables := make(map[string]string)
 
 		workerID, err := data.GetWorkerID(tx, workerIP)
 		if err != nil {
 			return err
 		}
 
-		workerKV["worker_ip"] = workerIP
-		workerKV["worker_id"] = workerID
+		variables["worker_ip"] = workerIP
+		variables["worker_id"] = workerID
 
 		workerLabels, err := data.GetWorkerLabels(tx, workerID)
 		if err != nil {
 			return err
 		}
-		workerKV["labels"] = strings.Join(workerLabels, ",")
+		variables["labels"] = strings.Join(workerLabels, ",")
 
 		for _, label := range workerLabels {
 			labelWorkers, err := data.GetWorkers(tx, []string{label})
 			if err != nil {
 				return err
 			}
-			peers := utils.Difference(labelWorkers, []string{workerIP})
-			if len(peers) > 0 {
-				workerKV[fmt.Sprintf("%s_peers", label)] = strings.Join(peers, ",")
+			peerWorkerIPs := utils.Difference(labelWorkers, []string{workerIP})
+			if len(peerWorkerIPs) > 0 {
+				variables[fmt.Sprintf("%s_peers", label)] = strings.Join(peerWorkerIPs, ",")
 			}
 		}
 
@@ -86,38 +79,38 @@ func processWorkerData(tx *sql.Tx) error {
 				return err
 			}
 
-			index := -1 // Default value if workerIP is not found
+			allocationIndex := -1
 			for i, worker := range labelWorkers {
 				if worker == workerIP {
-					index = i
+					allocationIndex = i
 					break
 				}
 			}
-			if index >= 0 {
-				workerKV[fmt.Sprintf("%s_allocation_index", label)] = strconv.Itoa(index)
+			if allocationIndex >= 0 {
+				variables[fmt.Sprintf("%s_allocation_index", label)] = strconv.Itoa(allocationIndex)
 			}
 		}
 
-		availableCPUMhz, err := data.GetWorkerCPU(tx, workerIP)
+		availableCPUMHz, err := data.GetWorkerCPU(tx, workerIP)
 		if err != nil {
 			return err
 		}
-		workerKV["worker_cpu_mhz"] = availableCPUMhz
+		variables["worker_cpu_mhz"] = availableCPUMHz
 
-		availableMemoryMb, err := data.GetWorkerMemory(tx, workerIP)
+		availableMemoryMB, err := data.GetWorkerMemory(tx, workerIP)
 		if err != nil {
 			return err
 		}
-		workerKV["worker_memory_mb"] = availableMemoryMb
+		variables["worker_memory_mb"] = availableMemoryMB
 
-		allocatedJobs, err := data.GetAllocatedJobs(tx, workerIP)
+		allocatedJobNames, err := data.GetActiveAllocatedJobs(tx, workerIP)
 		if err != nil {
 			return err
 		}
-		workerKV["jobs"] = strings.Join(allocatedJobs, ",")
+		variables["jobs"] = strings.Join(allocatedJobNames, ",")
 
-		workerKVNamespace := fmt.Sprintf("maand/worker/%s", workerIP)
-		err = storeKeyValues(tx, workerKVNamespace, workerKV)
+		workerNamespace := fmt.Sprintf("maand/worker/%s", workerIP)
+		err = syncKeyValues(tx, workerNamespace, variables)
 		if err != nil {
 			return err
 		}
@@ -126,28 +119,31 @@ func processWorkerData(tx *sql.Tx) error {
 		if err != nil {
 			return err
 		}
-		tagsNS := fmt.Sprintf("maand/worker/%s/tags", workerIP)
-		err = storeKeyValues(tx, tagsNS, tags)
+		tagsNamespace := fmt.Sprintf("maand/worker/%s/tags", workerIP)
+		err = syncKeyValues(tx, tagsNamespace, tags)
 		if err != nil {
 			return err
 		}
 	}
 
 	for _, workerIP := range removedWorkers {
-		nss := []string{fmt.Sprintf("maand/worker/%s", workerIP)}
-		workerJobs, err := data.GetAllocatedJobs(tx, workerIP)
+		namespaces := []string{fmt.Sprintf("maand/worker/%s", workerIP)}
+		allocatedJobNames, err := data.GetAllocatedJobs(tx, workerIP)
 		if err != nil {
 			return err
 		}
 
-		for _, job := range workerJobs {
-			nss = append(nss, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
+		for _, jobName := range allocatedJobNames {
+			namespaces = append(namespaces, fmt.Sprintf("maand/job/%s/worker/%s", jobName, workerIP))
 		}
 
-		for _, ns := range nss {
-			keys, _ := kv.GetKVStore().GetKeys(ns)
+		for _, namespace := range namespaces {
+			keys, err := kv.GetKVStore().GetKeys(namespace)
+			if err != nil {
+				return err
+			}
 			for _, key := range keys {
-				err := kv.GetKVStore().Delete(ns, key)
+				err := kv.GetKVStore().Delete(namespace, key)
 				if err != nil {
 					return err
 				}
@@ -158,13 +154,13 @@ func processWorkerData(tx *sql.Tx) error {
 	return nil
 }
 
-func processLabelData(tx *sql.Tx) error {
+func buildSharedWorkerVariables(tx *sql.Tx) error {
 	labels, err := data.GetLabels(tx)
 	if err != nil {
 		return err
 	}
 
-	workerKV := make(map[string]string)
+	sharedVariables := make(map[string]string)
 	for _, label := range labels {
 		labelWorkers, err := data.GetWorkers(tx, []string{label})
 		if err != nil {
@@ -172,25 +168,25 @@ func processLabelData(tx *sql.Tx) error {
 		}
 
 		if len(labelWorkers) > 0 {
-			workerKV[fmt.Sprintf("%s_label_id", label)] = workspace.GetHashUUID(label)
-			workerKV[fmt.Sprintf("%s_workers", label)] = strings.Join(labelWorkers, ",")
-			workerKV[fmt.Sprintf("%s_workers_length", label)] = strconv.Itoa(len(labelWorkers))
+			sharedVariables[fmt.Sprintf("%s_label_id", label)] = workspace.GetHashUUID(label)
+			sharedVariables[fmt.Sprintf("%s_workers", label)] = strings.Join(labelWorkers, ",")
+			sharedVariables[fmt.Sprintf("%s_workers_length", label)] = strconv.Itoa(len(labelWorkers))
 		}
-		for idx, node := range labelWorkers {
-			workerKV[fmt.Sprintf("%s_%d", label, idx)] = node
+		for idx, workerIP := range labelWorkers {
+			sharedVariables[fmt.Sprintf("%s_%d", label, idx)] = workerIP
 		}
 	}
 
-	content, err := os.ReadFile(path.Join(bucket.SecretLocation, "ca.crt"))
+	caCertificate, err := os.ReadFile(path.Join(bucket.SecretLocation, "ca.crt"))
 	if err != nil {
 		return fmt.Errorf("%w: unable to read ca.crt", bucket.ErrUnexpectedError)
 	}
-	workerKV["certs/ca.crt"] = string(content)
+	sharedVariables["certs/ca.crt"] = string(caCertificate)
 
-	return storeKeyValues(tx, "maand/worker", workerKV)
+	return syncKeyValues(tx, "maand/worker", sharedVariables)
 }
 
-func processBucketConf(tx *sql.Tx) error {
+func buildBucketVariables(tx *sql.Tx) error {
 	bucketConfig := make(map[string]string)
 
 	bucketConfPath := path.Join(bucket.WorkspaceLocation, "bucket.conf")
@@ -207,14 +203,14 @@ func processBucketConf(tx *sql.Tx) error {
 		}
 	}
 
-	availableJobs, err := data.GetJobs(tx)
+	jobNames, err := data.GetJobs(tx)
 	if err != nil {
 		return err
 	}
 
 	jobPorts := make(map[string]string)
-	for _, job := range availableJobs {
-		rows, err := tx.Query("SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", job)
+	for _, jobName := range jobNames {
+		rows, err := tx.Query("SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", jobName)
 		if err != nil {
 			return bucket.DatabaseError(err)
 		}
@@ -223,17 +219,24 @@ func processBucketConf(tx *sql.Tx) error {
 			var name, value string
 			err := rows.Scan(&name, &value)
 			if err != nil {
+				_ = rows.Close()
 				return bucket.DatabaseError(err)
 			}
 			jobPorts[name] = value
 		}
+		if err := rows.Close(); err != nil {
+			return bucket.DatabaseError(err)
+		}
+		if err := data.RowsErr(rows); err != nil {
+			return err
+		}
 	}
 
-	err = storeKeyValues(tx, "vars/bucket", bucketConfig)
+	err = syncKeyValues(tx, "vars/bucket", bucketConfig)
 	if err != nil {
 		return err
 	}
-	err = storeKeyValues(tx, "maand", jobPorts)
+	err = syncKeyValues(tx, "maand", jobPorts)
 	if err != nil {
 		return err
 	}
@@ -241,128 +244,131 @@ func processBucketConf(tx *sql.Tx) error {
 	return nil
 }
 
-func getJobConf(job string) (string, map[string]string, error) {
-	config := make(map[string]map[string]string)
+func loadJobBucketConfig(jobName string) (configFileName string, settings map[string]string, err error) {
+	allJobSettings := make(map[string]map[string]string)
 
 	maandConf, err := bucket.GetMaandConf()
 	if err != nil {
 		return "", nil, err
 	}
 
-	file := "bucket.jobs.conf"
+	configFileName = "bucket.jobs.conf"
 	maandConf.JobConfigSelector = strings.TrimSpace(maandConf.JobConfigSelector)
 	if maandConf.JobConfigSelector != "" {
-		file = fmt.Sprintf("bucket.jobs.%s.conf", maandConf.JobConfigSelector)
+		configFileName = fmt.Sprintf("bucket.jobs.%s.conf", maandConf.JobConfigSelector)
 	}
-	bucketJobConf := path.Join(bucket.WorkspaceLocation, file)
+	configFilePath := path.Join(bucket.WorkspaceLocation, configFileName)
 
-	if _, err := os.Stat(bucketJobConf); err == nil {
-		bucketData, err := os.ReadFile(bucketJobConf)
+	if _, err := os.Stat(configFilePath); err == nil {
+		configFileData, err := os.ReadFile(configFilePath)
 		if err != nil {
 			return "", nil, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 		}
 
-		err = toml.Unmarshal(bucketData, &config)
+		err = toml.Unmarshal(configFileData, &allJobSettings)
 		if err != nil {
-			return "", nil, fmt.Errorf("%w: bucket conf %s %w", bucket.ErrInvalidBucketConf, bucketJobConf, err)
+			return "", nil, fmt.Errorf("%w: bucket conf %s %w", bucket.ErrInvalidBucketConf, configFilePath, err)
 		}
 	}
 
-	if _, ok := config[job]; !ok {
-		config[job] = make(map[string]string)
+	if _, ok := allJobSettings[jobName]; !ok {
+		allJobSettings[jobName] = make(map[string]string)
 	}
 
-	return file, config[job], nil
+	return configFileName, allJobSettings[jobName], nil
 }
 
-func processJobData(tx *sql.Tx) error {
-	jobs, err := data.GetJobs(tx)
+func buildJobVariables(tx *sql.Tx, removedJobs []string) error {
+	jobNames, err := data.GetJobs(tx)
 	if err != nil {
 		return err
 	}
 
-	for _, job := range jobs {
+	for _, jobName := range jobNames {
+		variables := make(map[string]string)
 
-		jobKV := make(map[string]string)
+		variables["job_id"] = workspace.GetHashUUID(jobName)
+		variables["name"] = jobName
 
-		jobKV["job_id"] = workspace.GetHashUUID(job)
-		jobKV["name"] = job
-
-		version, err := data.GetJobVersion(tx, job)
+		version, err := data.GetJobVersion(tx, jobName)
 		if err != nil {
 			return err
 		}
-		jobKV["version"] = version
+		variables["version"] = data.NormalizeDeployVersion(version)
 
-		jobSelectors, err := data.GetJobSelectors(tx, job)
+		jobSelectors, err := data.GetJobSelectors(tx, jobName)
 		if err != nil {
 			return err
 		}
-		jobKV["selectors"] = strings.Join(jobSelectors, ",")
+		variables["selectors"] = strings.Join(jobSelectors, ",")
 
-		minMemory, maxMemory, err := data.GetJobMemoryLimits(tx, job)
+		minMemory, maxMemory, err := data.GetJobMemoryLimits(tx, jobName)
 		if err != nil {
 			return err
 		}
-		jobKV["min_memory_mb"] = minMemory
-		jobKV["max_memory_mb"] = maxMemory
+		variables["min_memory_mb"] = minMemory
+		variables["max_memory_mb"] = maxMemory
 
-		minCPU, maxCPU, err := data.GetJobCPULimits(tx, job)
+		minCPU, maxCPU, err := data.GetJobCPULimits(tx, jobName)
 		if err != nil {
 			return err
 		}
-		jobKV["min_cpu_mhz"] = minCPU
-		jobKV["max_cpu_mhz"] = maxCPU
+		variables["min_cpu_mhz"] = minCPU
+		variables["max_cpu_mhz"] = maxCPU
 
-		_, jobConfig, err := getJobConf(job)
+		_, bucketJobSettings, err := loadJobBucketConfig(jobName)
 		if err != nil {
 			return err
 		}
 
-		jobKV["memory"], err = data.GetJobMemory(tx, job)
+		variables["memory"], err = data.GetJobMemory(tx, jobName)
 		if err != nil {
 			return err
 		}
 		if minMemory == "0" && maxMemory == "0" {
-			jobKV["min_memory_mb"] = jobKV["memory"]
-			jobKV["max_memory_mb"] = jobKV["memory"]
+			variables["min_memory_mb"] = variables["memory"]
+			variables["max_memory_mb"] = variables["memory"]
 		}
 
-		jobKV["cpu"], err = data.GetJobCPU(tx, job)
+		variables["cpu"], err = data.GetJobCPU(tx, jobName)
 		if err != nil {
 			return err
 		}
-		if minCPU == "0" && maxMemory == "0" {
-			jobKV["min_cpu_mhz"] = jobKV["cpu"]
-			jobKV["max_cpu_mhz"] = jobKV["cpu"]
+		if minCPU == "0" && maxCPU == "0" {
+			variables["min_cpu_mhz"] = variables["cpu"]
+			variables["max_cpu_mhz"] = variables["cpu"]
 		}
 
-		namespace := fmt.Sprintf("maand/job/%s", job)
-		err = storeKeyValues(tx, namespace, jobKV)
+		jobNamespace := fmt.Sprintf("maand/job/%s", jobName)
+		err = syncKeyValues(tx, jobNamespace, variables)
 		if err != nil {
 			return err
 		}
 
-		namespace = fmt.Sprintf("vars/bucket/job/%s", job)
-		err = storeKeyValues(tx, namespace, jobConfig)
+		bucketJobNamespace := fmt.Sprintf("vars/bucket/job/%s", jobName)
+		err = syncKeyValues(tx, bucketJobNamespace, bucketJobSettings)
 		if err != nil {
 			return err
 		}
 	}
 
-	for _, job := range removedJobs {
-		nss := []string{fmt.Sprintf("maand/job/%s", job), fmt.Sprintf("vars/job/%s", job), fmt.Sprintf("vars/bucket/job/%s", job)}
-		jobWorkers, err := data.GetAllocatedWorkers(tx, job)
+	for _, jobName := range removedJobs {
+		namespaces := []string{
+			fmt.Sprintf("maand/job/%s", jobName),
+			fmt.Sprintf("vars/job/%s", jobName),
+			fmt.Sprintf("vars/bucket/job/%s", jobName),
+		}
+		allocatedWorkerIPs, err := data.GetAllocatedWorkers(tx, jobName)
 		if err != nil {
 			return err
 		}
 
-		for _, workerIP := range jobWorkers {
-			nss = append(nss, fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP))
+		for _, workerIP := range allocatedWorkerIPs {
+			namespaces = append(namespaces, fmt.Sprintf("maand/job/%s/worker/%s", jobName, workerIP))
 		}
 
-		for _, ns := range nss {
-			err := storeKeyValues(tx, ns, make(map[string]string))
+		for _, namespace := range namespaces {
+			err := syncKeyValues(tx, namespace, make(map[string]string))
 			if err != nil {
 				return err
 			}
@@ -372,21 +378,21 @@ func processJobData(tx *sql.Tx) error {
 	return nil
 }
 
-func storeKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) error {
-	var availableKeys []string
+func syncKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) error {
+	var presentKeys []string
 	for key, value := range keyValues {
 		kv.GetKVStore().Put(namespace, key, value, 0)
-		availableKeys = append(availableKeys, key)
+		presentKeys = append(presentKeys, key)
 	}
 
-	allKeys, err := kv.GetKVStore().GetKeys(namespace)
+	existingKeys, err := kv.GetKVStore().GetKeys(namespace)
 	if err != nil {
 		return err
 	}
 
-	diffs := utils.Difference(allKeys, availableKeys)
-	for _, diff := range diffs {
-		err := kv.GetKVStore().Delete(namespace, diff)
+	staleKeys := utils.Difference(existingKeys, presentKeys)
+	for _, staleKey := range staleKeys {
+		err := kv.GetKVStore().Delete(namespace, staleKey)
 		if err != nil {
 			return err
 		}

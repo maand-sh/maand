@@ -18,7 +18,7 @@ import (
 )
 
 func Allocations(jobsCSV, workersCSV string) error {
-	db, err := data.GetDatabase(true)
+	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
@@ -96,6 +96,9 @@ func Allocations(jobsCSV, workersCSV string) error {
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
+	defer func() {
+		_ = rows.Close()
+	}()
 
 	for rows.Next() {
 		var allocID string
@@ -110,6 +113,9 @@ func Allocations(jobsCSV, workersCSV string) error {
 		}
 
 		t.AppendRows([]table.Row{{allocID, workerIP, job, disabled, removed}})
+	}
+	if err := data.RowsErr(rows); err != nil {
+		return err
 	}
 
 	t.Render()

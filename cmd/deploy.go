@@ -33,6 +33,16 @@ var deployCmd = &cobra.Command{
 			}
 		}
 
+		dryRun, _ := flags.GetBool("dry-run")
+		if dryRun {
+			result, err := deploy.DryRun(jobsFilter)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			deploy.PrintDryRun(result)
+			return
+		}
+
 		err := deploy.Execute(jobsFilter)
 		if err != nil {
 			log.Fatalln(err)
@@ -44,4 +54,5 @@ func init() {
 	maandCmd.AddCommand(deployCmd)
 	deployCmd.Flags().StringP("jobs", "", "", "comma seperated jobs")
 	deployCmd.Flags().BoolP("build", "b", false, "build before deploy")
+	deployCmd.Flags().BoolP("dry-run", "n", false, "show whether deploy is required using allocation hashes (no changes)")
 }

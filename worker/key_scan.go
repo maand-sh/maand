@@ -6,9 +6,15 @@ package worker
 
 import (
 	"fmt"
+	"path/filepath"
+
 	"maand/bucket"
 )
 
-func KeyScan1(dockerClient *bucket.DockerClient, workerIP string) error {
-	return dockerClient.Exec("", []string{"mkdir -p ~/.ssh", fmt.Sprintf("ssh-keyscan -H %s >> ~/.ssh/known_hosts", workerIP)}, nil, false)
+func KeyScan1(rt *bucket.Runtime, workerIP string) error {
+	sshDir := filepath.Join(bucket.Location, ".ssh")
+	return rt.Exec("", []string{
+		fmt.Sprintf("mkdir -p %s", sshDir),
+		fmt.Sprintf("ssh-keyscan -H %s >> %s/known_hosts", workerIP, sshDir),
+	}, nil, false)
 }

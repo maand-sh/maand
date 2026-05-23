@@ -30,17 +30,7 @@ func TestWorkerPostionAdded(t *testing.T) {
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	rows := GetRows("SELECT worker_ip, position FROM worker")
-	workers := make(map[string]int)
-	for rows.Next() {
-		var workerIP string
-		var position int
-		_ = rows.Scan(&workerIP, &position)
-		workers[workerIP] = position
-	}
-
-	e := map[string]int{"10.0.0.1": 0, "10.0.0.2": 1, "10.0.0.3": 2}
-	assert.Equal(t, e, workers)
+	assert.Equal(t, map[string]int{"10.0.0.1": 0, "10.0.0.2": 1, "10.0.0.3": 2}, scanWorkerPositions(t))
 }
 
 // moved
@@ -60,17 +50,7 @@ func TestWorkerPostionMoved(t *testing.T) {
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	rows := GetRows("SELECT worker_ip, position FROM worker")
-	workers := make(map[string]int)
-	for rows.Next() {
-		var workerIP string
-		var position int
-		_ = rows.Scan(&workerIP, &position)
-		workers[workerIP] = position
-	}
-
-	e := map[string]int{"10.0.0.1": 0, "10.0.0.2": 1, "10.0.0.3": 2}
-	assert.Equal(t, e, workers)
+	assert.Equal(t, map[string]int{"10.0.0.1": 0, "10.0.0.2": 1, "10.0.0.3": 2}, scanWorkerPositions(t))
 }
 
 // removed
@@ -90,15 +70,5 @@ func TestWorkerPostionRemoved(t *testing.T) {
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	rows := GetRows("SELECT worker_ip, position FROM worker")
-	workers := make(map[string]int)
-	for rows.Next() {
-		var workerIP string
-		var position int
-		_ = rows.Scan(&workerIP, &position)
-		workers[workerIP] = position
-	}
-
-	e := map[string]int{"10.0.0.1": 0, "10.0.0.3": 1}
-	assert.Equal(t, e, workers)
+	assert.Equal(t, map[string]int{"10.0.0.1": 0, "10.0.0.3": 1}, scanWorkerPositions(t))
 }

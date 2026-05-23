@@ -158,9 +158,7 @@ func TestInitFiles(t *testing.T) {
 	assert.DirExists(t, path.Join(bucket.Location, "data"))
 	assert.FileExists(t, path.Join(bucket.Location, "data", "maand.db"))
 	assert.DirExists(t, path.Join(bucket.WorkspaceLocation))
-	assert.DirExists(t, path.Join(bucket.WorkspaceLocation, "docker"))
-	assert.FileExists(t, path.Join(bucket.WorkspaceLocation, "docker", "Dockerfile"))
-	assert.FileExists(t, path.Join(bucket.WorkspaceLocation, "docker", "requirements.txt"))
+	assert.DirExists(t, bucket.TempLocation)
 }
 
 func TestJobConfAddedLater(t *testing.T) {
@@ -350,63 +348,69 @@ func TestJobPortOpsKV(t *testing.T) {
 
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"a_port_web": 4545}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	value, _ := GetKey("maand", "a_port_web")
-	assert.Equal(t, "4545", value)
-
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"a_port_web": 4547, "a_port_web2": 4546}}}`), os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
+	value, _ := GetKey("maand", "web_port")
+	firstPort := value
+	assert.NotEmpty(t, firstPort)
 
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	value, _ = GetKey("maand", "a_port_web")
-	assert.Equal(t, "4547", value)
-	value, _ = GetKey("maand", "a_port_web2")
-	assert.Equal(t, "4546", value)
+	value, _ = GetKey("maand", "web_port")
+	assert.Equal(t, firstPort, value)
 
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"a_port_web2": 4546}}}`), os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port": {}, "web_port2": {}}}}`), os.ModePerm)
 
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	value, _ = GetKey("maand", "a_port_web")
+	value, _ = GetKey("maand", "web_port")
+	assert.Equal(t, firstPort, value)
+	value, _ = GetKey("maand", "web_port2")
+	assert.NotEmpty(t, value)
+	assert.NotEqual(t, firstPort, value)
+
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port2": {}}}}`), os.ModePerm)
+
+	err = build.Execute()
+	assert.NoError(t, err)
+
+	value, _ = GetKey("maand", "web_port")
 	assert.Equal(t, "", value)
-	value, _ = GetKey("maand", "a_port_web2")
-	assert.Equal(t, "4546", value)
+	value, _ = GetKey("maand", "web_port2")
+	assert.NotEmpty(t, value)
 }
 
-func TestJobUniquePort(t *testing.T) {
+func TestJobPortRangeExhausted(t *testing.T) {
 	_ = os.RemoveAll(bucket.Location)
 
 	err := initialize.Execute()
 	assert.NoError(t, err)
 
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.conf"), []byte(`port_min = "30000"
+port_max = "30000"
+`), os.ModePerm)
+
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"a_port_web": 4545}}}`), os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
-
-	jobPath = path.Join(bucket.WorkspaceLocation, "jobs", "b")
-	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"b_port_web": 4545}}}`), os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
-
-	err = build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrPortCollision)
-
-	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"b_port_web": 4546}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"p1": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
 	assert.NoError(t, err)
+
+	jobPath = path.Join(bucket.WorkspaceLocation, "jobs", "b")
+	_ = os.MkdirAll(jobPath, os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"p1": {}}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
+
+	err = build.Execute()
+	assert.ErrorIs(t, err, bucket.ErrPortRangeExhausted)
 }
 
 func TestJobPortPrefixFormat(t *testing.T) {
@@ -417,18 +421,18 @@ func TestJobPortPrefixFormat(t *testing.T) {
 
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"a_port_web": 4546}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	jobPath = path.Join(bucket.WorkspaceLocation, "jobs", "b")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"b_port_web": 4545}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"b_port_web": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"port_web": 4546}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"Bad-Port": {}}}}`), os.ModePerm)
 
 	err = build.Execute()
 	assert.ErrorIs(t, err, bucket.ErrPortKeyFormat)
@@ -573,13 +577,13 @@ func TestCatCommand(t *testing.T) {
 	jobPath = path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(path.Join(jobPath, "_modules"), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "_modules", "command_health_check.py"), []byte(``), os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors": ["worker"], "commands":{"command_health_check":{"executed_on":["post_build"]}}, "resources":{"ports":{"a_port_web":4545}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors": ["worker"], "commands":{"command_health_check":{"executed_on":["cli"]}}, "resources":{"ports":{"web_port":{}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	jobPath = path.Join(bucket.WorkspaceLocation, "jobs", "b")
 	_ = os.MkdirAll(path.Join(jobPath, "_modules"), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "_modules", "command_health_check.py"), []byte(``), os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors": ["worker"], "commands":{"command_health_check":{"executed_on":["post_build"]}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors": ["worker"], "commands":{"command_health_check":{"executed_on":["cli"]}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
 	err = build.Execute()
@@ -776,7 +780,7 @@ func TestMakefileNotFound(t *testing.T) {
 	err = build.Execute()
 
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, "invaild job: job a, Makefile not found")
+	assert.ErrorContains(t, err, "invalid job: job a, Makefile not found")
 }
 
 func TestInvalidmanifestJSON(t *testing.T) {
@@ -794,4 +798,31 @@ func TestInvalidmanifestJSON(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "invalid manifest.json: job a\nunexpected end of JSON input")
+}
+
+func TestCertsRemovedFromManifestPurgesKV(t *testing.T) {
+	_ = os.RemoveAll(bucket.Location)
+
+	err := initialize.Execute()
+	assert.NoError(t, err)
+
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"}]`), os.ModePerm)
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
+	_ = os.MkdirAll(jobPath, os.ModePerm)
+	manifestWithCerts := `{"selectors":["worker"], "certs":{"a":{"subject":{"common_name":"3"}}}}`
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(manifestWithCerts), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
+
+	err = build.Execute()
+	assert.NoError(t, err)
+
+	crt, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
+	assert.NotEmpty(t, crt)
+
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"]}`), os.ModePerm)
+	err = build.Execute()
+	assert.NoError(t, err)
+
+	crt, _ = GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
+	assert.Empty(t, crt)
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func Info() error {
-	db, err := data.GetDatabase(true)
+	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return err
 	}
@@ -31,7 +31,7 @@ func Info() error {
 		return err
 	}
 
-	updateSeq, err := data.GetUpdateSeq(tx)
+	updateSeq, err := data.GetBucketUpdateSeq(tx)
 	if err != nil {
 		return err
 	}
@@ -46,14 +46,20 @@ func Info() error {
 		return err
 	}
 
+	allocations, err := data.CountAllocations(tx, true)
+	if err != nil {
+		return err
+	}
+
 	t := table.NewWriter()
 	t.SetOutputMirror(os.Stdout)
 	t.AppendHeader(table.Row{"Description", "Value"})
 	t.SetStyle(table.StyleRounded)
 	t.AppendRow(table.Row{"Bucket ID", bucketID})
 	t.AppendRow(table.Row{"Update Sequence", updateSeq})
-	t.AppendRow(table.Row{"Number of Allocations", len(workers)})
+	t.AppendRow(table.Row{"Number of Workers", len(workers)})
 	t.AppendRow(table.Row{"Number of Jobs", len(jobs)})
+	t.AppendRow(table.Row{"Number of Allocations", allocations})
 	t.Render()
 
 	return nil

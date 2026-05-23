@@ -14,15 +14,7 @@ import (
 	"maand/workspace"
 )
 
-func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
-	workers, err := data.GetWorkers(tx, nil)
-	if err != nil {
-		return err
-	}
-
-	for _, workerIP := range workers {
-
-		query := `
+const matchingJobsByLabelsQuery = `
 			SELECT DISTINCT j.name
             FROM job j
             JOIN job_selectors js ON js.job_id = j.job_id
@@ -43,46 +35,61 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 			) 
 		`
 
-		rows, err := tx.Query(query, workerIP)
+func BuildAllocations(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) error {
+	workerIPs, err := data.GetWorkers(tx, nil)
+	if err != nil {
+		return err
+	}
+
+	for _, workerIP := range workerIPs {
+		rows, err := tx.Query(matchingJobsByLabelsQuery, workerIP)
 		if err != nil {
 			return bucket.DatabaseError(err)
 		}
 
-		var assignedJobs []string
+		var matchedJobNames []string
 		for rows.Next() {
-			var job string
-			err = rows.Scan(&job)
+			var jobName string
+			err = rows.Scan(&jobName)
 			if err != nil {
+				_ = rows.Close()
 				return bucket.DatabaseError(err)
 			}
 
-			assignedJobs = append(assignedJobs, job)
+			matchedJobNames = append(matchedJobNames, jobName)
 
-			allocID, err := data.GetAllocationID(tx, workerIP, job)
+			allocationID, err := data.GetAllocationID(tx, workerIP, jobName)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
+				_ = rows.Close()
 				return err
 			}
 
-			if allocID == "" {
-				allocID = workspace.GetHashUUID(job + "|" + workerIP)
+			if allocationID == "" {
+				allocationID = workspace.GetHashUUID(jobName + "|" + workerIP)
 			}
 
-			query = "INSERT OR REPLACE INTO allocations (alloc_id, job, worker_ip, disabled, removed, deployment_seq) VALUES (?, ?, ?, ?, ?, ?)"
-			_, err = tx.Exec(query, allocID, job, workerIP, 0, 0, 0)
+			upsertAllocationQuery := "INSERT OR REPLACE INTO allocations (alloc_id, job, worker_ip, disabled, removed, deployment_seq) VALUES (?, ?, ?, ?, ?, ?)"
+			_, err = tx.Exec(upsertAllocationQuery, allocationID, jobName, workerIP, 0, 0, 0)
 			if err != nil {
+				_ = rows.Close()
 				return bucket.DatabaseError(err)
 			}
 		}
+		if err := rows.Close(); err != nil {
+			return bucket.DatabaseError(err)
+		}
+		if err := data.RowsErr(rows); err != nil {
+			return err
+		}
 
-		// handle missing allocations
-		allocatedJobs, err := data.GetAllocatedJobs(tx, workerIP)
+		persistedJobNames, err := data.GetAllocatedJobs(tx, workerIP)
 		if err != nil {
 			return err
 		}
 
-		diffs := utils.Difference(allocatedJobs, assignedJobs)
-		for _, deletedJob := range diffs {
-			_, err := tx.Exec("UPDATE allocations SET removed = 1 WHERE job = ? AND worker_ip = ?", deletedJob, workerIP)
+		jobNamesToRemove := utils.Difference(persistedJobNames, matchedJobNames)
+		for _, jobName := range jobNamesToRemove {
+			_, err := tx.Exec("UPDATE allocations SET removed = 1 WHERE job = ? AND worker_ip = ?", jobName, workerIP)
 			if err != nil {
 				return bucket.DatabaseError(err)
 			}
@@ -94,27 +101,27 @@ func Allocations(tx *sql.Tx, ws *workspace.DefaultWorkspace) error {
 		return bucket.DatabaseError(err)
 	}
 
-	disabledAllocations, err := ws.GetDisabled()
+	disableConfig, err := jobWorkspace.GetDisabled()
 	if err != nil {
 		return err
 	}
 
-	for _, workerIP := range disabledAllocations.Workers {
+	for _, workerIP := range disableConfig.Workers {
 		_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE worker_ip = ?", workerIP)
 		if err != nil {
 			return bucket.DatabaseError(err)
 		}
 	}
 
-	for job, obj := range disabledAllocations.Jobs {
-		if len(obj.Allocations) == 0 {
-			_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ?", job)
+	for jobName, jobDisableSpec := range disableConfig.Jobs {
+		if len(jobDisableSpec.Allocations) == 0 {
+			_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ?", jobName)
 			if err != nil {
 				return bucket.DatabaseError(err)
 			}
 		} else {
-			for _, allocationIP := range obj.Allocations {
-				_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ? AND worker_ip = ?", job, allocationIP)
+			for _, workerIP := range jobDisableSpec.Allocations {
+				_, err := tx.Exec("UPDATE allocations SET disabled = 1 WHERE job = ? AND worker_ip = ?", jobName, workerIP)
 				if err != nil {
 					return bucket.DatabaseError(err)
 				}

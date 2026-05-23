@@ -7,9 +7,9 @@ package tests
 
 import (
 	"database/sql"
-	"io"
 	"os"
 	"path"
+	"testing"
 
 	"maand/bucket"
 	"maand/data"
@@ -18,113 +18,98 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func GetRow(query string) *sql.Row {
-	db, err := data.GetDatabase(false)
+func withDatabase(fn func(*sql.DB) error) error {
+	db, err := data.OpenDatabase(false)
 	if err != nil {
-		panic(err)
+		return err
 	}
 	defer func() {
-		err := db.Close()
-		if err != nil {
-			panic(err)
-		}
+		_ = db.Close()
 	}()
-	row := db.QueryRow(query)
-	return row
+	return fn(db)
 }
 
-func GetRows(query string) *sql.Rows {
-	db, _ := data.GetDatabase(false)
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			panic(err)
-		}
-	}()
-	rows, err := db.Query(query)
+// MustQueryRow runs a query and scans one row; fails the test on error.
+func MustQueryRow(t *testing.T, query string, dest ...any) {
+	t.Helper()
+	err := withDatabase(func(db *sql.DB) error {
+		return db.QueryRow(query).Scan(dest...)
+	})
 	if err != nil {
-		panic(err)
+		t.Fatalf("query %q: %v", query, err)
 	}
-	return rows
 }
 
-func GetRowCount(query string) int {
-	row := GetRow(query)
+// MustQueryCount returns the integer from a COUNT query.
+func MustQueryCount(t *testing.T, query string, args ...any) int {
+	t.Helper()
 	var count int
-	err := row.Scan(&count)
+	err := withDatabase(func(db *sql.DB) error {
+		return db.QueryRow(query, args...).Scan(&count)
+	})
+	if err != nil {
+		t.Fatalf("query %q: %v", query, err)
+	}
+	return count
+}
+
+// ScanQueryRows runs query and passes open rows to scanFn (rows are closed before return).
+func ScanQueryRows(t *testing.T, query string, scanFn func(*sql.Rows) error, args ...any) {
+	t.Helper()
+	err := withDatabase(func(db *sql.DB) error {
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			_ = rows.Close()
+		}()
+		return scanFn(rows)
+	})
+	if err != nil {
+		t.Fatalf("query %q: %v", query, err)
+	}
+}
+
+// GetRowCount returns the result of a COUNT query. Prefer MustQueryCount in new tests.
+func GetRowCount(query string) int {
+	var count int
+	err := withDatabase(func(db *sql.DB) error {
+		return db.QueryRow(query).Scan(&count)
+	})
 	if err != nil {
 		panic(err)
 	}
 	return count
 }
 
-func GetRowValues(query string, args ...any) {
-	db, _ := data.GetDatabase(false)
-	defer func() {
-		err := db.Close()
-		if err != nil {
-			panic(err)
-		}
-	}()
-	row := db.QueryRow(query)
-	err := row.Scan(args...)
+// GetRowValues scans one row. Prefer MustQueryRow in new tests.
+func GetRowValues(query string, dest ...any) {
+	err := withDatabase(func(db *sql.DB) error {
+		return db.QueryRow(query).Scan(dest...)
+	})
 	if err != nil {
 		panic(err)
 	}
 }
 
-// GetKey retrieves a value from the global Key-Value store.
-// It returns the string value and any error encountered.
+// GetKey retrieves a value from the in-memory KV store after build.
 func GetKey(ns, key string) (string, error) {
 	store := kv.GetKVStore()
 	if store == nil {
 		return "", kv.ErrValueNotFound
 	}
-
-	// The Store.Get method now takes (namespace, key) and returns (KeyValueItem, error)
 	item, err := store.Get(ns, key)
 	if err != nil {
 		return "", err
 	}
-
 	return item.Value, nil
 }
 
-func CopyFile(src, dst string) {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		err := sourceFile.Close()
-		if err != nil {
-			panic(err)
-		}
-	}()
-
-	destinationFile, err := os.Create(dst)
-	if err != nil {
-		panic(err)
-	}
-
-	defer func() {
-		err := destinationFile.Close()
-		if err != nil {
-			panic(err)
-		}
-	}()
-
-	_, err = io.Copy(destinationFile, sourceFile)
-	if err != nil {
-		panic(err)
-	}
-
-	// Ensure the destination file is properly written
-	err = destinationFile.Sync()
-	if err != nil {
-		panic(err)
-	}
+func createJob(name string) {
+	_ = os.MkdirAll(path.Join(bucket.WorkspaceLocation, "jobs", name), os.ModePerm)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", name, "manifest.json"), []byte(`{"selectors":["worker"]}`), 0o644)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", name, "Makefile"), []byte(Makefile()), 0o644)
 }
 
 func Makefile() string {
@@ -147,14 +132,4 @@ restart:
 	mkdir -p ./data
 	@echo $$(($(shell cat ./data/restart 2>/dev/null || echo 0) + 1)) > ./data/restart
 `
-}
-
-func createJob(name string) {
-	_ = os.MkdirAll(path.Join(bucket.WorkspaceLocation, "jobs", name), os.ModePerm)
-	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", name, "manifest.json"), []byte(`{"selectors":["worker"]}`), 0o644)
-	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", name, "Makefile"), []byte(Makefile()), 0o644)
-}
-
-func clearBucket() {
-	_ = os.RemoveAll(bucket.Location)
 }
