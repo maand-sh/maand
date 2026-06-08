@@ -34,9 +34,31 @@ type HealthCheckWait struct {
 	IntervalSeconds int `json:"interval_seconds"`
 }
 
-// ValidateHealthCheck ensures manifest health_check references declared ports and known probe types.
+func hasManifestHealthChecks(manifest Manifest) bool {
+	return manifest.HealthCheck != nil && len(manifest.HealthCheck.Checks) > 0
+}
+
+func hasHealthCheckCommand(manifest Manifest) bool {
+	for _, command := range GetCommands(manifest) {
+		for _, executedOn := range command.ExecutedOn {
+			if executedOn == "health_check" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ValidateHealthCheck ensures a job uses either manifest probes or health_check
+// commands, not both, and that manifest probes reference declared ports and known types.
 func ValidateHealthCheck(jobName string, manifest Manifest) error {
-	if manifest.HealthCheck == nil || len(manifest.HealthCheck.Checks) == 0 {
+	hasManifest := hasManifestHealthChecks(manifest)
+	hasCommand := hasHealthCheckCommand(manifest)
+	if hasManifest && hasCommand {
+		return fmt.Errorf("%w: job %s cannot define both health_check in manifest and a command with executed_on health_check",
+			bucket.ErrInvalidManifest, jobName)
+	}
+	if !hasManifest {
 		return nil
 	}
 

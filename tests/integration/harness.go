@@ -419,7 +419,7 @@ func jobUpdateParallelCount(t *testing.T, job string) int {
 
 func dryRunPlanForJob(t *testing.T, job string) deploy.JobPlan {
 	t.Helper()
-	result, err := deploy.DryRun([]string{job})
+	result, err := deploy.DryRun([]string{job}, false)
 	require.NoError(t, err)
 	for _, plan := range result.Jobs {
 		if plan.Job == job {
@@ -542,11 +542,17 @@ func allocationHashVersions(t *testing.T, job, workerIP string) (currentVersion,
 	require.NoError(t, err)
 
 	namespace := fmt.Sprintf("%s_allocation", job)
-	var current, newVer sql.NullString
+	var current sql.NullString
 	err = tx.QueryRow(
-		`SELECT current_version, new_version FROM hash WHERE namespace = ? AND key = ?`,
+		`SELECT current_version FROM hash WHERE namespace = ? AND key = ?`,
 		namespace, allocID,
-	).Scan(&current, &newVer)
+	).Scan(&current)
+	require.NoError(t, err)
+	var newVer sql.NullString
+	err = tx.QueryRow(
+		`SELECT new_version FROM allocations WHERE alloc_id = ?`,
+		allocID,
+	).Scan(&newVer)
 	require.NoError(t, err)
 
 	if current.Valid && current.String != "" {

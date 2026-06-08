@@ -129,7 +129,7 @@ func Execute(workerCSV, labelCSV string, batchSize int, shellCommand string, run
 
 		if runHealthChecks {
 			time.Sleep(healthCheckDelay)
-			if err := healthcheck.RunJobs(tx, rt, true, true, jobNames); err != nil {
+			if _, err := healthcheck.RunJobs(tx, rt, true, false, true, jobNames); err != nil {
 				return fmt.Errorf("after worker batch %d: %w", batchNumber, err)
 			}
 		}

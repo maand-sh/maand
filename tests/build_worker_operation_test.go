@@ -125,7 +125,7 @@ func TestWorkerDefaultKVLabels(t *testing.T) {
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	err = cat.KV()
+	err = cat.KV("", false, false)
 	assert.NoError(t, err)
 
 	value, _ := GetKey("maand/worker", "worker_workers")

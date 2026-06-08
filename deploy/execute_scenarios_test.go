@@ -22,7 +22,7 @@ func TestExecute_disabledAllocationDoesNotStart(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	assert.Empty(t, rec.Commands)
 }
 
@@ -34,7 +34,7 @@ func TestExecute_addsSecondAllocationOnLaterDeploy(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	rec := installNoopDeployHooks(t, env.bucketID)
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	assert.True(t, rec.HasAction("10.0.0.1", "start", "app"))
 
 	tx = env.begin(t)
@@ -44,7 +44,7 @@ func TestExecute_addsSecondAllocationOnLaterDeploy(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	rec = installNoopDeployHooks(t, env.bucketID)
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	assert.True(t, rec.HasAction("10.0.0.2", "start", "app"))
 }
 
@@ -72,7 +72,7 @@ func TestExecute_threeJobsOrderedByDeploymentSequence(t *testing.T) {
 	env.seedMakefileJob(t, tx, "seq1", "10.0.0.1", 1)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	require.GreaterOrEqual(t, len(order), 3)
 	assert.Equal(t, "seq0", order[0])
 }
@@ -89,7 +89,7 @@ func TestExecute_removedJobWithoutGC(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 }
 
 func indexJobFlag(cmd string) int {
@@ -117,7 +117,7 @@ func TestExecute_rollingUpgradeParallelismFromJob(t *testing.T) {
 	env.setAllocationHash(t, tx, "app", "alloc-10.0.0.3", "n", "o")
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	restarts := 0
 	for _, c := range rec.Commands {
 		if strings.Contains(c.Command, "restart") && strings.Contains(c.Command, "app") {

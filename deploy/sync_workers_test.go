@@ -1,9 +1,45 @@
 package deploy
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"maand/bucket"
+
+	"github.com/stretchr/testify/require"
 )
+
+func TestWriteRsyncFilter_writesMergeFile(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	mergePath, err := writeRsyncFilter("10.0.0.1", []string{"api", "worker"}, true)
+	require.NoError(t, err)
+	require.Contains(t, mergePath, "10.0.0.1.rsync")
+
+	data, err := os.ReadFile(mergePath)
+	require.NoError(t, err)
+	content := string(data)
+	require.Contains(t, content, "+ jobs/api/")
+	require.Contains(t, content, "+ jobs/worker/")
+	require.Contains(t, content, "- jobs/*")
+	_ = env
+}
+
+func TestSyncWorkers_usesHooks(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	var synced []string
+	SetTestHooks(&TestHooks{
+		Rsync: func(_ *bucket.Runtime, _, workerIP string) error {
+			synced = append(synced, workerIP)
+			return nil
+		},
+		WorkerCommand: func(*bucket.Runtime, string, []string, []string) error { return nil },
+	})
+	t.Cleanup(ClearTestHooks)
+
+	require.NoError(t, syncWorkers(nil, env.bucketID, []string{"10.0.0.1", "10.0.0.2"}, []string{"app"}, true))
+	require.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, synced)
+}
 
 func TestBuildRsyncFilterLines_singleJobFinalSync(t *testing.T) {
 	lines := buildRsyncFilterLines([]string{"api"}, true)

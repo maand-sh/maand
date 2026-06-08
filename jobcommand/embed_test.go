@@ -21,6 +21,8 @@ func TestEmbeddedMaandPythonAPI(t *testing.T) {
 		"acquire_semaphore",
 		"release_semaphore",
 		"/semaphore/acquire",
+		"run_runner_target",
+		"load_ssh",
 	} {
 		if !strings.Contains(py, needle) {
 			t.Fatalf("maand.py missing %q", needle)

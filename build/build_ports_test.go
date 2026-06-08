@@ -5,6 +5,7 @@ import (
 
 	"maand/bucket"
 	"maand/data"
+	"maand/workspace"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -102,6 +103,35 @@ func TestPortAllocatorFixedPort(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 30000, port)
 }
+
+func TestPortAllocatorFixedPortChangeReleasesPrevious(t *testing.T) {
+	existing := data.JobPortAssignments{
+		"api": {"http_port": 30001},
+	}
+	alloc := newPortAllocator(existing, bucket.PortRange{Min: 30000, Max: 30005})
+
+	port, err := alloc.assignFixed("api", "http_port", 30002)
+	require.NoError(t, err)
+	assert.Equal(t, 30002, port)
+
+	port, err = alloc.assignFixed("worker", "metrics_port", 30001)
+	require.NoError(t, err)
+	assert.Equal(t, 30001, port)
+}
+
+func TestPortAllocatorResolveProvisionedAndFixed(t *testing.T) {
+	alloc := newPortAllocator(nil, bucket.PortRange{Min: 30000, Max: 30005})
+
+	port, err := alloc.resolve("api", "http_port", workspace.ManifestPortBinding{Fixed: intPtr(30001)})
+	require.NoError(t, err)
+	assert.Equal(t, 30001, port)
+
+	port, err = alloc.resolve("worker", "metrics_port", workspace.ManifestPortBinding{})
+	require.NoError(t, err)
+	assert.Equal(t, 30000, port)
+}
+
+func intPtr(v int) *int { return &v }
 
 func TestPortAllocatorFixedPortOutOfRange(t *testing.T) {
 	alloc := newPortAllocator(nil, bucket.PortRange{Min: 30000, Max: 30005})

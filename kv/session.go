@@ -35,3 +35,8 @@ func RequireStore() (*Store, error) {
 func GetKVStore() *Store {
 	return GetStore()
 }
+
+// ResetStoreForTest clears the process-wide session store (tests only).
+func ResetStoreForTest() {
+	sessionStore = nil
+}

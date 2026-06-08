@@ -13,8 +13,27 @@ import (
 
 	"maand/kv"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDryRun_forceRequiresDeploymentAfterPromote(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	installNoopDeployHooks(t, env.bucketID)
+
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	require.NoError(t, tx.Commit())
+
+	require.NoError(t, Execute(nil, false))
+
+	result, err := DryRun(nil, true)
+	require.NoError(t, err)
+	require.True(t, result.Required)
+	require.Len(t, result.Jobs, 1)
+	require.True(t, result.Jobs[0].NeedsRollout)
+	require.Equal(t, rolloutActionRestart, result.Jobs[0].Allocations[0].Action)
+}
 
 func TestDryRun_noDeploymentAfterPromote(t *testing.T) {
 	env := setupDeployTestEnv(t)
@@ -24,9 +43,9 @@ func TestDryRun_noDeploymentAfterPromote(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 
-	result, err := DryRun(nil)
+	result, err := DryRun(nil, false)
 	require.NoError(t, err)
 	require.False(t, result.Required)
 	require.Len(t, result.Jobs, 1)
@@ -42,13 +61,13 @@ func TestDryRun_detectsContentChange(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 
 	tx = env.begin(t)
 	env.insertJobFile(t, tx, "job-app", path.Join("app", "marker.txt"), "v2", false)
 	require.NoError(t, tx.Commit())
 
-	result, err := DryRun(nil)
+	result, err := DryRun(nil, false)
 	require.NoError(t, err)
 	require.True(t, result.Required)
 	require.Len(t, result.Jobs, 1)
@@ -71,7 +90,7 @@ func TestDryRun_firstDeploy(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	result, err := DryRun(nil)
+	result, err := DryRun(nil, false)
 	require.NoError(t, err)
 	require.True(t, result.Required)
 	require.Equal(t, rolloutActionStart, result.Jobs[0].Allocations[0].Action)
@@ -84,7 +103,7 @@ func TestDryRun_doesNotPersistHashes(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	result, err := DryRun(nil)
+	result, err := DryRun(nil, false)
 	require.NoError(t, err)
 	require.True(t, result.Required)
 
@@ -94,6 +113,188 @@ func TestDryRun_doesNotPersistHashes(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, needs, "dry-run must not write hashes that skip a real deploy")
 	require.NoError(t, tx.Rollback())
+}
+
+func TestPlanJobRollout_startNewAllocation(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	require.NoError(t, tx.Commit())
+
+	tx = env.begin(t)
+	plan, err := planJobRollout(tx, "app", 0, false)
+	require.NoError(t, err)
+	require.True(t, plan.NeedsRollout)
+	require.Len(t, plan.Allocations, 1)
+	assert.Equal(t, rolloutActionStart, plan.Allocations[0].Action)
+	require.NoError(t, tx.Rollback())
+}
+
+func TestPlanJobRollout_noActiveAllocations(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.insertJob(t, tx, "orphan", 0, 1)
+	require.NoError(t, tx.Rollback())
+
+	tx = env.begin(t)
+	plan, err := planJobRollout(tx, "orphan", 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, "no active allocations", plan.SkipReason)
+	assert.False(t, plan.NeedsRollout)
+	require.NoError(t, tx.Rollback())
+}
+
+func TestPlanJobRollout_forceRestart(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "same", "same")
+	require.NoError(t, tx.Commit())
+
+	tx = env.begin(t)
+	plan, err := planJobRollout(tx, "app", 0, true)
+	require.NoError(t, err)
+	require.True(t, plan.NeedsRollout)
+	require.Len(t, plan.Allocations, 1)
+	assert.Equal(t, rolloutActionRestart, plan.Allocations[0].Action)
+	require.NoError(t, tx.Rollback())
+}
+
+func TestPlanJobRollout_alreadyPromoted(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "same", "same")
+	require.NoError(t, tx.Commit())
+
+	tx = env.begin(t)
+	plan, err := planJobRollout(tx, "app", 0, false)
+	require.NoError(t, err)
+	assert.False(t, plan.NeedsRollout)
+	assert.Equal(t, "already promoted on all allocations", plan.SkipReason)
+	require.Equal(t, rolloutActionSkip, plan.Allocations[0].Action)
+	require.NoError(t, tx.Rollback())
+}
+
+func TestPrintAllocationPlan_actions(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+
+	printAllocationPlan(AllocationPlan{
+		WorkerIP:     "10.0.0.1",
+		Action:       rolloutActionRestart,
+		PreviousHash: "aaa",
+		CurrentHash:  "bbb",
+	})
+
+	require.NoError(t, w.Close())
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	out := buf.String()
+	require.Contains(t, out, "10.0.0.1")
+	require.Contains(t, out, "restart")
+	require.Contains(t, out, "previous_hash=aaa")
+	require.Contains(t, out, "current_hash=bbb")
+}
+
+func TestPrintDryRun_noJobs(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	PrintDryRun(DryRunResult{})
+	require.NoError(t, w.Close())
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "no jobs matched")
+}
+
+func TestPrintDryRun_skipJob(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	PrintDryRun(DryRunResult{
+		Jobs: []JobPlan{{
+			Job:           "app",
+			DeploymentSeq: 0,
+			NeedsRollout:  false,
+			SkipReason:    "already promoted on all allocations",
+		}},
+	})
+	require.NoError(t, w.Close())
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "no deployment required")
+	require.Contains(t, buf.String(), "skip")
+}
+
+func TestPrintDryRun_skipAndDefaultActions(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	PrintDryRun(DryRunResult{
+		Required: true,
+		Jobs: []JobPlan{{
+			Job:           "app",
+			DeploymentSeq: 0,
+			NeedsRollout:  true,
+			Allocations: []AllocationPlan{
+				{WorkerIP: "10.0.0.1", Action: rolloutActionSkip, CurrentHash: "same"},
+				{WorkerIP: "10.0.0.2", Action: "unknown"},
+			},
+		}},
+	})
+	require.NoError(t, w.Close())
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	out := buf.String()
+	require.Contains(t, out, "skip")
+	require.Contains(t, out, "hash=same")
+	require.Contains(t, out, "10.0.0.2  unknown")
+}
+
+func TestPrintDryRun_startAction(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stdout = w
+	PrintDryRun(DryRunResult{
+		Required: true,
+		Jobs: []JobPlan{{
+			Job:           "app",
+			DeploymentSeq: 0,
+			NeedsRollout:  true,
+			Allocations: []AllocationPlan{{
+				WorkerIP:    "10.0.0.1",
+				Action:      rolloutActionStart,
+				CurrentHash: "abc",
+			}},
+		}},
+	})
+	require.NoError(t, w.Close())
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, err = io.Copy(&buf, r)
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "start")
+	require.Contains(t, buf.String(), "current_hash=abc")
 }
 
 func TestPrintDryRun(t *testing.T) {

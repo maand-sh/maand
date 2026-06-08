@@ -62,7 +62,11 @@ See [job.md](../job.md).
 
 ## Health checks
 
-Define a command in **`manifest.json`**:
+Each job uses **one** approach (not both):
+
+**Option A — manifest probes** (tcp/http/ssh) in `manifest.json` — see [health-check.md](../health-check.md#built-in-manifest-health-recommended).
+
+**Option B — custom command:**
 
 ```json
 "commands": {
@@ -81,7 +85,20 @@ maand health_check
 maand health_check --jobs api --wait --verbose
 ```
 
-Deploy runs health checks automatically after restart when commands exist.
+Mark unhealthy command-based allocations and redeploy:
+
+```bash
+maand health_check --update-hash --jobs api
+maand deploy --jobs api
+```
+
+Force a full redeploy without workspace changes:
+
+```bash
+maand deploy --force --jobs api
+```
+
+Deploy runs health checks automatically after restart when health is configured.
 
 See [health-check.md](../health-check.md).
 
@@ -105,6 +122,8 @@ See [run-command.md](../run-command.md).
 ---
 
 ## Disable an allocation temporarily
+
+See [disabled.md](../disabled.md) for the full guide (per-allocation, per-job, per-worker, re-enable).
 
 Create or edit **`workspace/disabled.json`**:
 
@@ -143,7 +162,7 @@ maand build
 maand deploy
 ```
 
-Disabled allocations are skipped for deploy and job commands; deploy may **stop** them on workers.
+Disabled allocations are skipped for start/restart/rsync; deploy **stops** them if running and **keeps** artifacts and KV. Re-enable: clear **`disabled.json`**, **`maand build`**, **`maand deploy`**.
 
 ---
 
@@ -151,8 +170,8 @@ Disabled allocations are skipped for deploy and job commands; deploy may **stop*
 
 1. Remove the host from **`workers.json`** or delete **`workspace/jobs/<name>/`**
 2. **`maand build`** — marks related allocations **`removed = 1`**
-3. **`maand deploy`** — stops jobs, removes files under `/opt/worker/<bucket_id>/`
-4. **`maand gc`** — deletes allocation rows and KV references; cleans `data/`/`logs/`/`bin/` if deploy missed them
+3. **`maand deploy`** — stops jobs, removes deployed job files (keeps `data/` and `logs/` on workers)
+4. **`maand gc`** — deletes worker `data/`/`logs/`/`bin/`, allocation rows, and KV references
 
 ```bash
 # after editing workspace
@@ -181,6 +200,13 @@ maand deploy --jobs api,worker
 ```
 
 If deploy fails partway, fix the issue and re-run — hash tracking resumes unchanged allocations.
+
+Force redeploy when content is already promoted:
+
+```bash
+maand deploy --force --jobs api
+maand deploy --dry-run --force    # preview
+```
 
 See [deploy.md](../deploy.md).
 
@@ -218,7 +244,15 @@ maand deploy
 
 ---
 
+## Rolling upgrades
+
+See [rolling-upgrade.md](../rolling-upgrade.md) for **`update_parallel_count`**, version-only deploys, and rolling worker reboots.
+
+---
+
 ## Troubleshooting checklist
+
+See [deploy-debugging.md](../deploy-debugging.md) for a full deploy troubleshooting guide.
 
 | Symptom | Likely fix |
 |---------|------------|

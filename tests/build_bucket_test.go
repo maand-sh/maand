@@ -32,7 +32,7 @@ func TestInitKV(t *testing.T) {
 	err = build.Execute()
 	assert.NoError(t, err)
 
-	err = cat.KV()
+	err = cat.KV("", false, false)
 	assert.NoError(t, err)
 
 	key, _ := GetKey("maand/worker", "certs/ca.crt")
@@ -598,7 +598,7 @@ func TestCatCommand(t *testing.T) {
 	err = cat.JobPorts()
 	assert.NoError(t, err)
 
-	err = cat.KV()
+	err = cat.KV("", false, false)
 	assert.NoError(t, err)
 
 	err = cat.Allocations("", "")

@@ -324,7 +324,11 @@ func buildSharedCertPEM(
 			return nil, nil, err
 		}
 		for _, workerIP := range workerIPs {
-			if err := writeCertFiles(workerCertDir(workerIP, jobDir), spec.name, certPEM, keyPEM); err != nil {
+			targetPath := workerCertDir(workerIP, jobDir)
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return nil, nil, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
+			}
+			if err := writeCertFiles(targetPath, spec.name, certPEM, keyPEM); err != nil {
 				return nil, nil, err
 			}
 		}

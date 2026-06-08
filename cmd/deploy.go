@@ -33,9 +33,10 @@ var deployCmd = &cobra.Command{
 			}
 		}
 
+		force, _ := flags.GetBool("force")
 		dryRun, _ := flags.GetBool("dry-run")
 		if dryRun {
-			result, err := deploy.DryRun(jobsFilter)
+			result, err := deploy.DryRun(jobsFilter, force)
 			if err != nil {
 				log.Fatalln(err)
 			}
@@ -43,7 +44,7 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		err := deploy.Execute(jobsFilter)
+		err := deploy.Execute(jobsFilter, force)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -55,4 +56,5 @@ func init() {
 	deployCmd.Flags().StringP("jobs", "", "", "comma seperated jobs")
 	deployCmd.Flags().BoolP("build", "b", false, "build before deploy")
 	deployCmd.Flags().BoolP("dry-run", "n", false, "show whether deploy is required using allocation hashes (no changes)")
+	deployCmd.Flags().Bool("force", false, "Redeploy jobs even when all allocations are already promoted")
 }

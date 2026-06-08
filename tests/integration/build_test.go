@@ -47,20 +47,20 @@ func TestIntegrationEndToEndBuildTarget(t *testing.T) {
 	assert.Equal(t, 0, countJobAllocationHashes(t, integrationJobName),
 		"build must not write job allocation plan hashes")
 
-	result, err := deploy.DryRun(nil)
+	result, err := deploy.DryRun(nil, false)
 	require.NoError(t, err)
 	assert.True(t, result.Required, "first deploy should be required after build only")
 
-	require.NoError(t, deploy.Execute(nil))
+	require.NoError(t, deploy.Execute(nil, false))
 	assert.Greater(t, countJobAllocationHashes(t, integrationJobName), 0)
 	assert.True(t, jobAllocationHashesPromoted(t, integrationJobName))
 
-	result, err = deploy.DryRun(nil)
+	result, err = deploy.DryRun(nil, false)
 	require.NoError(t, err)
 	assert.False(t, result.Required, "deploy should be in sync after promote")
 
 	require.NoError(t, build.Execute())
-	result, err = deploy.DryRun(nil)
+	result, err = deploy.DryRun(nil, false)
 	require.NoError(t, err)
 	assert.False(t, result.Required, "unchanged rebuild should not require deploy")
 
@@ -71,14 +71,14 @@ func TestIntegrationEndToEndBuildTarget(t *testing.T) {
 	assert.Greater(t, countJobAllocationHashes(t, integrationJobName), 0,
 		"rebuild must not remove existing allocation hash rows")
 
-	result, err = deploy.DryRun(nil)
+	result, err = deploy.DryRun(nil, false)
 	require.NoError(t, err)
 	assert.True(t, result.Required, "deploy plan-hash refresh should detect workspace change after rebuild")
 
-	require.NoError(t, deploy.Execute(nil))
+	require.NoError(t, deploy.Execute(nil, false))
 	assert.True(t, jobAllocationHashesPromoted(t, integrationJobName))
 
-	result, err = deploy.DryRun(nil)
+	result, err = deploy.DryRun(nil, false)
 	require.NoError(t, err)
 	assert.False(t, result.Required)
 

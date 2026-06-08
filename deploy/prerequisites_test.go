@@ -25,7 +25,7 @@ func TestCheckWorkerPrerequisitesFailsBeforeDeploy(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	err := Execute(nil)
+	err := Execute(nil, false)
 	require.Error(t, err)
 	require.ErrorContains(t, err, "missing prerequisites: make")
 }

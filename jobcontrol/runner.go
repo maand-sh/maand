@@ -64,7 +64,7 @@ func runRunnerTarget(
 		}
 
 		if healthCheck {
-			if err := healthcheck.HealthCheck(tx, rt, true, job, true); err != nil {
+			if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
 				return &JobRunError{Job: job, Target: target, Err: err}
 			}
 		}

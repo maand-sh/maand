@@ -101,7 +101,7 @@ func prepareOneWorkerFiles(tx *sql.Tx, workerIP string) error {
 
 func prepareJobsFiles(tx *sql.Tx, jobs []string) error {
 	for _, job := range jobs {
-		workers, err := data.GetActiveAllocations(tx, job)
+		workers, err := data.GetNonRemovedAllocations(tx, job)
 		if err != nil {
 			return err
 		}

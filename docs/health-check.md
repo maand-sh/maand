@@ -1,13 +1,20 @@
 # `maand health_check`
 
-**Health check** verifies workers are reachable, then checks each job using **built-in manifest probes** (TCP / HTTP) and/or **`health_check` job commands** on active allocations.
+**Health check** verifies workers are reachable, then checks each job on active allocations.
+
+Each job uses **one** health mechanism (enforced at build):
+
+- **Manifest probes** — `health_check.checks` in `manifest.json` (tcp / http / ssh), or
+- **Custom command** — `command_*` with `executed_on: ["health_check"]`
+
+**Not both** on the same job.
 
 Order when you run **`maand health_check`**:
 
 1. **Worker health** — TCP dial to each worker’s **SSH port** (`maand.conf` `ssh_port`, default **22**).
-2. **Job health** — manifest `health_check` probes, then custom `command_*` scripts.
+2. **Job health** — manifest probes **or** `health_check` command scripts (per job).
 
-Deploy also runs **job** health automatically after **restart** / **job_control** (built-in probes + commands). Deploy does **not** re-run the worker SSH gate on every job (use `maand health_check` for that).
+Deploy runs **job** health automatically after **restart** / **job_control** for jobs that define one of the above. Deploy does **not** re-run the worker SSH gate on every job (use `maand health_check` for that).
 
 ---
 
@@ -22,6 +29,7 @@ maand health_check [flags]
 | `--jobs` | all jobs | Comma-separated job names. Unknown names error. |
 | `--wait` | false | Retry until success or **30 attempts** (1 second apart). |
 | `--verbose` | false | Stream command output. |
+| `--update-hash` | false | Mark failed allocations for redeploy when **`health_check` commands** fail (manifest probes only; no effect). |
 
 Examples:
 
@@ -29,6 +37,7 @@ Examples:
 maand health_check
 maand health_check --jobs api,worker
 maand health_check --jobs api --wait --verbose
+maand health_check --update-hash --jobs vault
 ```
 
 ---
@@ -37,7 +46,7 @@ maand health_check --jobs api --wait --verbose
 
 1. **`maand build`** (allocations and `job_commands` in DB).
 2. **Host tools**: `python3`, `bun` (if needed), `bash`, `ssh`.
-3. Jobs need either a **`health_check`** section in `manifest.json` **or** a command with **`executed_on`: `["health_check"]`** (or both).
+3. Jobs need either a **`health_check`** section in `manifest.json` **or** a command with **`executed_on`: `["health_check"]`** — **not both** (`maand build` fails if both are defined).
 
 If a job has **neither**:
 
@@ -102,7 +111,7 @@ Example **`ssh`** probe (systemd on the worker):
 }
 ```
 
-Script: `_modules/command_health.py`. Runs **after** built-in probes when both are defined. Use for cluster readiness (`nodetool status`, etc.).
+Script: `_modules/command_health.py`. Use for cluster readiness (`nodetool status`, etc.) when manifest probes are not enough. Do not combine with a manifest **`health_check`** section on the same job.
 
 **Health-fast workspace:** for `health_check` commands only, maand stages **`_modules/command_<name>.*`**, embedded `maand.py` / `maand.ts`, and certs — not the full job tree (Makefile, templates, etc.).
 
@@ -137,16 +146,16 @@ kv.Initialize + StartRuntimeAPI (localhost:8080 for scripts)
 CheckWorkers (SSH TCP on all workers)
 Resolve job list (--jobs filter or all jobs from DB)
 Run jobs in parallel (up to 4 jobs at a time)
-  For each job:
-    Run manifest health_check probes (tcp/http per allocation)
-    For each health_check command name (in DB order):
+  For each job (one path per job):
+    Either manifest health_check probes (tcp/http/ssh per allocation)
+    Or each health_check command (in DB order):
       jobcommand.JobCommand(..., event="health_check", concurrency=1)
-Commit transaction on success
+Commit transaction on success (or on failure when --update-hash marked allocations)
 ```
 
 ### Per-allocation execution
 
-**Built-in probes** dial `worker_ip:assigned_port` from the maand host (no containers or scripts).
+**Built-in probes** dial `worker_ip:assigned_port` from the CLI host (no scripts).
 
 **Custom commands** — for each **active** worker hosting the job:
 
@@ -173,14 +182,29 @@ Without `--wait`, a single failure prints `health check failed: <job>` and retur
 
 ---
 
+## `--update-hash` and redeploy
+
+When **`--update-hash`** is set and a **`health_check` command** exits non-zero on a worker, that allocation is marked for redeploy (`previous_hash` diverges from `current_hash`). Marks are **committed even when the health check fails**.
+
+Does **not** apply to manifest probe failures — use **`maand deploy --force`** to roll those jobs again.
+
+```bash
+maand health_check --update-hash --jobs vault   # command-based jobs
+maand deploy --jobs vault                       # restarts marked allocations only
+
+maand deploy --force --jobs cassandra           # force full redeploy (e.g. after manifest probe issues)
+```
+
+---
+
 ## Relationship to deploy
 
-| Context | `wait` | `verbose` |
-|---------|--------|-----------|
-| `maand health_check` | User-controlled (`--wait`) | User-controlled (`--verbose`) |
-| Deploy after **restart** / **job_control** | **true** (wait for recovery) | **true** |
+| Context | `wait` | `verbose` | `--update-hash` |
+|---------|--------|-----------|-----------------|
+| `maand health_check` | User-controlled (`--wait`) | User-controlled (`--verbose`) | CLI only |
+| Deploy after **restart** / **job_control** | **true** (wait for recovery) | **true** | not used |
 
-So production deploy waits for health to pass after rolling updates; ad-hoc CLI checks can be one-shot unless you pass `--wait`.
+Production deploy waits for health to pass after rolling updates; ad-hoc CLI checks can be one-shot unless you pass `--wait`. See [`deploy.md`](./deploy.md#which-jobs-run-in-a-deploy-wave) for **`--force`**.
 
 ---
 
@@ -229,6 +253,19 @@ maand health_check --jobs myservice --verbose
 
 ```bash
 maand health_check --wait && echo OK
+```
+
+**Mark unhealthy nodes for redeploy** (command-based health only):
+
+```bash
+maand health_check --update-hash --jobs vault
+maand deploy --jobs vault
+```
+
+**Force redeploy** without workspace or hash changes:
+
+```bash
+maand deploy --force --jobs api
 ```
 
 ---

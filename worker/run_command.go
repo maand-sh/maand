@@ -18,6 +18,10 @@ func ExecuteCommand(rt *bucket.Runtime, workerIP string, commands []string, env 
 		return remoteError("", fmt.Errorf("worker IP is required"))
 	}
 
+	if testHooks != nil && testHooks.ExecuteCommand != nil {
+		return testHooks.ExecuteCommand(rt, workerIP, commands, env)
+	}
+
 	script := bucket.BuildCommandScript(commands, env)
 	if err := RunRemoteScript(rt, workerIP, strings.NewReader(script), false); err != nil {
 		return remoteError(workerIP, err)

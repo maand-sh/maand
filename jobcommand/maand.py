@@ -2,9 +2,11 @@
 # Use of this source code is governed by a MIT style
 # license that can be found in the LICENSE file.
 
-"""Client for the maand command runtime API (KV store and command demands)."""
+"""Client for the maand command runtime API (KV store, demands, worker SSH)."""
 
 import os
+import subprocess
+from pathlib import Path
 
 import requests
 
@@ -205,3 +207,112 @@ def kv_put_secret(key, value):
 
 def get_demands():
     return list_command_demands()
+
+
+def get_kv_value(namespace, key):
+    """Read a KV value as a plaintext string."""
+    response = get_store_value(namespace, key)
+    response.raise_for_status()
+    return response.json()["value"]
+
+
+def find_bucket_root():
+    """Locate the bucket root (directory containing maand.conf)."""
+    for start in (Path.cwd().resolve(), Path(__file__).resolve().parent):
+        for directory in [start, *start.parents]:
+            if (directory / "maand.conf").is_file():
+                return directory
+    raise FileNotFoundError(f"maand.conf not found (cwd={Path.cwd()})")
+
+
+def load_ssh():
+    """Return (ssh_user, key_path, use_sudo) from maand.conf and secrets/."""
+    bucket = find_bucket_root()
+    conf = {}
+    conf_path = bucket / "maand.conf"
+    if conf_path.is_file():
+        for line in conf_path.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            conf[key.strip()] = value.strip().strip("'\"")
+    user = conf.get("ssh_user", "root")
+    key_name = conf.get("ssh_key", "worker.key")
+    use_sudo = conf.get("use_sudo", "false").lower() in ("true", "1", "yes")
+    key = bucket / "secrets" / key_name
+    if not key.is_file():
+        fallback = bucket / key_name
+        if fallback.is_file():
+            key = fallback
+        else:
+            raise FileNotFoundError(
+                f"SSH key not found: {key} (also checked {fallback})"
+            )
+    return user, key, use_sudo
+
+
+def run_ssh(
+    worker_ip,
+    remote_cmd,
+    *,
+    timeout=300,
+    check=True,
+    connect_timeout=15,
+):
+    """Run a remote command over SSH using maand.conf worker credentials."""
+    user, key_path, use_sudo = load_ssh()
+    prefix = "sudo -E " if use_sudo else ""
+    wrapped = f"{prefix}timeout {timeout} {remote_cmd}"
+    return subprocess.run(
+        [
+            "ssh",
+            "-i",
+            str(key_path),
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            f"ConnectTimeout={connect_timeout}",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            f"{user}@{worker_ip}",
+            wrapped,
+        ],
+        check=check,
+        text=True,
+        capture_output=True,
+        timeout=timeout + connect_timeout + 30,
+    )
+
+
+def run_runner_target(
+    target,
+    *,
+    worker_ip=None,
+    job=None,
+    timeout=300,
+):
+    """Run runner.py <target> --jobs <job> on a worker (same as deploy)."""
+    worker_ip = worker_ip or allocation_ip()
+    job = job or job_name()
+    bucket_id = get_kv_value("maand", "bucket_id")
+    remote = (
+        f"python3 /opt/worker/{bucket_id}/bin/runner.py "
+        f"{bucket_id} {target} --jobs {job}"
+    )
+    return run_ssh(worker_ip, remote, timeout=timeout)
+
+
+def run_make_target(
+    target,
+    *,
+    worker_ip=None,
+    job=None,
+    timeout=300,
+):
+    """Run make <target> in the job directory on a worker."""
+    worker_ip = worker_ip or allocation_ip()
+    job = job or job_name()
+    bucket_id = get_kv_value("maand", "bucket_id")
+    remote = f"make -C /opt/worker/{bucket_id}/jobs/{job} {target}"
+    return run_ssh(worker_ip, remote, timeout=timeout)

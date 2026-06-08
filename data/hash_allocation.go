@@ -7,14 +7,20 @@ package data
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 
 	"maand/bucket"
 )
 
-// UpdateAllocationPlan records staged content hash and target version for an allocation.
-func UpdateAllocationPlan(tx *sql.Tx, namespace, key, hash, newVersion string) error {
-	newVersion = NormalizeDeployVersion(newVersion)
+// RemoveAllocationHash deletes the deploy plan hash row for an allocation.
+func RemoveAllocationHash(tx *sql.Tx, job, allocID string) error {
+	namespace := fmt.Sprintf("%s_allocation", job)
+	return RemoveHash(tx, namespace, allocID)
+}
 
+// UpdateAllocationPlan records staged content hash for an allocation.
+// Target version lives on the allocations row (updated by build).
+func UpdateAllocationPlan(tx *sql.Tx, namespace, key, hash string) error {
 	var storedCurrentHash string
 	row := tx.QueryRow(
 		`SELECT ifnull(current_hash, '') FROM hash WHERE namespace = ? AND key = ?`,
@@ -24,9 +30,9 @@ func UpdateAllocationPlan(tx *sql.Tx, namespace, key, hash, newVersion string) e
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			_, err = tx.Exec(
-				`INSERT INTO hash (namespace, key, current_hash, current_version, new_version)
-				 VALUES (?, ?, ?, ?, ?)`,
-				namespace, key, hash, DefaultAllocationVersion, newVersion,
+				`INSERT INTO hash (namespace, key, current_hash, current_version)
+				 VALUES (?, ?, ?, ?)`,
+				namespace, key, hash, DefaultAllocationVersion,
 			)
 			if err != nil {
 				return bucket.DatabaseError(err)
@@ -37,8 +43,8 @@ func UpdateAllocationPlan(tx *sql.Tx, namespace, key, hash, newVersion string) e
 	}
 
 	_, err = tx.Exec(
-		`UPDATE hash SET current_hash = ?, new_version = ? WHERE namespace = ? AND key = ?`,
-		hash, newVersion, namespace, key,
+		`UPDATE hash SET current_hash = ? WHERE namespace = ? AND key = ?`,
+		hash, namespace, key,
 	)
 	if err != nil {
 		return bucket.DatabaseError(err)
@@ -46,14 +52,30 @@ func UpdateAllocationPlan(tx *sql.Tx, namespace, key, hash, newVersion string) e
 	return nil
 }
 
-// PromoteAllocationState marks staged content and target version as live on the allocation.
+// PromoteAllocationState marks staged content and running version as live on the allocation.
 func PromoteAllocationState(tx *sql.Tx, namespace, key string) error {
 	_, err := tx.Exec(
 		`UPDATE hash
 		 SET previous_hash = current_hash,
-		     current_version = ifnull(new_version, ?)
+		     current_version = COALESCE(
+		       (SELECT new_version FROM allocations WHERE alloc_id = ?),
+		       ?
+		     )
 		 WHERE namespace = ? AND key = ?`,
-		DefaultAllocationVersion, namespace, key,
+		key, DefaultAllocationVersion, namespace, key,
+	)
+	if err != nil {
+		return bucket.DatabaseError(err)
+	}
+	return nil
+}
+
+// MarkAllocationStartPending clears previous_hash so deploy treats a re-enabled allocation as needing start.
+func MarkAllocationStartPending(tx *sql.Tx, job, allocID string) error {
+	namespace := fmt.Sprintf("%s_allocation", job)
+	_, err := tx.Exec(
+		`UPDATE hash SET previous_hash = NULL WHERE namespace = ? AND key = ?`,
+		namespace, allocID,
 	)
 	if err != nil {
 		return bucket.DatabaseError(err)
@@ -73,26 +95,25 @@ func ClearAllocationLiveState(tx *sql.Tx, namespace, key string) error {
 	return nil
 }
 
-// GetAllocationVersions returns running and target versions for an allocation hash row.
+// GetAllocationVersions returns running version from hash and target version from allocations.
 func GetAllocationVersions(tx *sql.Tx, namespace, key string) (AllocationVersions, error) {
-	var currentVersion, newVersion sql.NullString
+	var currentVersion sql.NullString
 	row := tx.QueryRow(
-		`SELECT current_version, new_version FROM hash WHERE namespace = ? AND key = ?`,
+		`SELECT ifnull(h.current_version, '') FROM hash h WHERE h.namespace = ? AND h.key = ?`,
 		namespace, key,
 	)
-	err := row.Scan(&currentVersion, &newVersion)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return AllocationVersions{
-				CurrentVersion: DefaultAllocationVersion,
-				NewVersion:     DefaultAllocationVersion,
-			}, nil
-		}
+	err := row.Scan(&currentVersion)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return AllocationVersions{}, bucket.DatabaseError(err)
+	}
+
+	newVersion, err := GetAllocationNewVersion(tx, key)
+	if err != nil {
+		return AllocationVersions{}, err
 	}
 
 	return AllocationVersions{
 		CurrentVersion: normalizeStoredVersion(currentVersion),
-		NewVersion:     normalizeStoredVersion(newVersion),
+		NewVersion:     newVersion,
 	}, nil
 }

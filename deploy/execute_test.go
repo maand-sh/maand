@@ -23,7 +23,7 @@ func TestExecute_deploysSingleJob(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 
 	tx = env.begin(t)
 	assert.True(t, env.allocationHashPromoted(t, tx, "app", "alloc-app-10.0.0.1"))
@@ -40,10 +40,26 @@ func TestExecute_deployWithJobFilter(t *testing.T) {
 	env.seedMakefileJob(t, tx, "other", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute([]string{"app"}))
+	require.NoError(t, Execute([]string{"app"}, false))
 
 	assert.True(t, rec.HasAction("10.0.0.1", "start", "app"))
 	assert.False(t, rec.HasAction("10.0.0.1", "start", "other"))
+}
+
+func TestExecute_forceRedeploysPromotedJob(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	rec := installNoopDeployHooks(t, env.bucketID)
+
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	require.NoError(t, tx.Commit())
+
+	require.NoError(t, Execute(nil, false))
+	require.NotEmpty(t, rec.Commands)
+
+	rec2 := installNoopDeployHooks(t, env.bucketID)
+	require.NoError(t, Execute(nil, true))
+	assert.True(t, rec2.HasAction("10.0.0.1", "restart", "app"))
 }
 
 func TestExecute_skipsAlreadyPromotedJob(t *testing.T) {
@@ -54,11 +70,11 @@ func TestExecute_skipsAlreadyPromotedJob(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	require.NotEmpty(t, rec.Commands)
 
 	rec2 := installNoopDeployHooks(t, env.bucketID)
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	assert.Empty(t, rec2.Commands)
 }
 
@@ -71,7 +87,7 @@ func TestExecute_restartsUpdatedAllocations(t *testing.T) {
 	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "new", "old")
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	assert.True(t, rec.HasAction("10.0.0.1", "restart", "app"))
 	assert.False(t, rec.HasAction("10.0.0.1", "start", "app"))
 }
@@ -100,7 +116,7 @@ func TestExecute_partialDeployPromotesOnlySuccessfulJob(t *testing.T) {
 	env.seedMakefileJob(t, tx, failJob, "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	err := Execute(nil)
+	err := Execute(nil, false)
 	require.Error(t, err)
 
 	tx = env.begin(t)
@@ -110,12 +126,12 @@ func TestExecute_partialDeployPromotesOnlySuccessfulJob(t *testing.T) {
 
 	// Retry deploy should continue broken only (good stays skipped)
 	rec := installNoopDeployHooks(t, env.bucketID)
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	assert.True(t, rec.HasAction("10.0.0.1", "start", failJob))
 	assert.False(t, rec.HasAction("10.0.0.1", "start", "good"))
 }
 
-func TestExecute_stopsRemovedAllocationAndRemovesJobTree(t *testing.T) {
+func TestExecute_stopsRemovedAllocationAndPreservesDataLogs(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	var recorded []string
 	SetTestHooks(&TestHooks{
@@ -141,11 +157,22 @@ func TestExecute_stopsRemovedAllocationAndRemovesJobTree(t *testing.T) {
 	env.insertJobFile(t, tx, jobID, path.Join("gone", "Makefile"), makefileContent(), false)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 
 	joined := strings.Join(recorded, "\n")
 	assert.Contains(t, joined, runnerCommand(env.bucketID, "stop", "gone"))
-	assert.Contains(t, joined, "rm -rf /opt/worker/"+env.bucketID+"/jobs/gone")
+	assert.Contains(t, joined, "/opt/worker/"+env.bucketID+"/jobs/gone")
+	assert.Contains(t, joined, "! -name data")
+	assert.Contains(t, joined, "! -name logs")
+	assert.NotContains(t, joined, "rm -rf /opt/worker/"+env.bucketID+"/jobs/gone")
+
+	tx = env.begin(t)
+	var hashCount int
+	require.NoError(t, tx.QueryRow(
+		`SELECT count(*) FROM hash WHERE namespace = 'gone_allocation' AND key = 'alloc-gone'`,
+	).Scan(&hashCount))
+	assert.Equal(t, 0, hashCount)
+	require.NoError(t, tx.Rollback())
 }
 
 func TestExecute_removesBucketFromOffCatalogWorker(t *testing.T) {
@@ -173,11 +200,14 @@ func TestExecute_removesBucketFromOffCatalogWorker(t *testing.T) {
 	env.insertJobFile(t, tx, jobID, path.Join("app", "Makefile"), makefileContent(), false)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 
 	joined := strings.Join(recorded, "\n")
 	assert.Contains(t, joined, runnerCommand(env.bucketID, "stop", "app"))
-	assert.Contains(t, joined, "10.0.0.99:rm -rf /opt/worker/"+env.bucketID+"/jobs/app")
+	assert.Contains(t, joined, "10.0.0.99:")
+	assert.Contains(t, joined, "/opt/worker/"+env.bucketID+"/jobs/app")
+	assert.Contains(t, joined, "! -name data")
+	assert.NotContains(t, joined, "rm -rf /opt/worker/"+env.bucketID+"/jobs/app")
 	assert.Contains(t, joined, "10.0.0.99:rm -rf /opt/worker/"+env.bucketID)
 }
 
@@ -205,7 +235,7 @@ func TestExecute_offCatalogWorkerUnreachableAssumedDead(t *testing.T) {
 	env.insertJobFile(t, tx, jobID, path.Join("app", "Makefile"), makefileContent(), false)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 }
 
 func TestExecute_respectsDeploymentSequence(t *testing.T) {
@@ -233,10 +263,25 @@ func TestExecute_respectsDeploymentSequence(t *testing.T) {
 	env.seedMakefileJob(t, tx, "seq1", "10.0.0.1", 1)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil))
+	require.NoError(t, Execute(nil, false))
 	require.GreaterOrEqual(t, len(order), 3)
 	first := order[0]
 	assert.Equal(t, "seq0", first)
+}
+
+func TestExecute_notInitialized(t *testing.T) {
+	root := t.TempDir()
+	orig := bucket.Location
+	bucket.Location = root
+	bucket.UpdatePath()
+	t.Cleanup(func() {
+		bucket.Location = orig
+		bucket.UpdatePath()
+	})
+
+	err := Execute(nil, false)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, bucket.ErrNotInitialized)
 }
 
 func TestUpdateSeq_increments(t *testing.T) {

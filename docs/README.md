@@ -10,12 +10,49 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 
 | Document | Description |
 |----------|-------------|
+| [capabilities.md](./capabilities.md) | What maand can do — strengths, limits, and fit |
 | [concepts.md](./concepts.md) | **Worker**, **job**, **allocation**, bucket layout, lifecycle |
-| [jobs-and-dependencies.md](./jobs-and-dependencies.md) | **Job** manifest, **demands**, **`version`**, **`current_version`/`new_version`**, **`deployment_seq`**, deploy waves |
-| [commands.md](./commands.md) | Full **command reference** |
-| [tutorials/getting-started.md](./tutorials/getting-started.md) | Step-by-step: init → workers → job → build → deploy |
+| [tutorials/getting-started.md](./tutorials/getting-started.md) | Hands-on: init → workers → job → build → deploy |
+
+---
+
+## Tutorials
+
+| Document | Description |
+|----------|-------------|
+| [tutorials/getting-started.md](./tutorials/getting-started.md) | First bucket and deploy |
 | [tutorials/day-2-operations.md](./tutorials/day-2-operations.md) | Job control, health checks, disable/remove, GC |
 | [tutorials/job-commands.md](./tutorials/job-commands.md) | Python/Bun hooks and CLI commands |
+
+---
+
+## Command reference
+
+| Document | Command / topic |
+|----------|-----------------|
+| [commands.md](./commands.md) | Full CLI reference (all commands and flags) |
+| [configuration.md](./configuration.md) | `maand.conf`, `bucket.conf`, `bucket.jobs.conf`, `vars.toml` |
+| [build.md](./build.md) | `maand build` |
+| [deploy.md](./deploy.md) | `maand deploy` |
+| [health-check.md](./health-check.md) | `maand health_check` |
+| [job.md](./job.md) | `maand job` (start/stop/restart/run/status/create) |
+| [job-command.md](./job-command.md) | `maand job_command` and hook events |
+| [run-command.md](./run-command.md) | `maand run_command` |
+| [gc.md](./gc.md) | `maand gc` |
+| [info.md](./info.md) | `maand info` |
+
+---
+
+## Job and deploy model
+
+| Document | Topic |
+|----------|-------|
+| [jobs-and-dependencies.md](./jobs-and-dependencies.md) | Manifest, **demands**, **version**, **`deployment_seq`**, deploy waves |
+| [kv.md](./kv.md) | KV namespaces, secrets, persistence |
+| [templates.md](./templates.md) | `.tpl` rendering at deploy |
+| [rolling-upgrade.md](./rolling-upgrade.md) | Rolling job upgrades and worker reboots |
+| [disabled.md](./disabled.md) | Disable/re-enable workers, jobs, allocations |
+| [deploy-debugging.md](./deploy-debugging.md) | Troubleshoot deploy skips, failures, partial rollouts |
 
 ---
 
@@ -23,28 +60,12 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 
 ```text
 maand init          # once per bucket directory
-# edit workspace/workers.json, workspace/jobs/*, workspace/maand.conf
-maand build         # plan: workers, jobs, allocations, KV, certs
-maand deploy        # push to workers, start/restart, hooks
-maand health_check  # optional: run health_check commands
+# edit workspace/workers.json, workspace/jobs/*, maand.conf
+maand build         # catalog + KV + certs; post_build hooks
+maand deploy        # rsync + start/restart + hooks
+maand health_check  # optional: worker + job health
 maand gc            # optional: purge removed allocations + old KV
 ```
-
----
-
-## Command guides
-
-| Document | Command | Role |
-|----------|---------|------|
-| [build.md](./build.md) | `maand build` | Read workspace → SQLite + KV; certs; `post_build` hooks |
-| [jobs-and-dependencies.md](./jobs-and-dependencies.md) | Jobs & deps | Manifest, demands, **version**, allocation **current/new version**, `deployment_seq` |
-| [deploy.md](./deploy.md) | `maand deploy` | Stage files, rsync, rollout, hooks, version env, `--dry-run` |
-| [health-check.md](./health-check.md) | `maand health_check` | Run `health_check` job commands |
-| [job-command.md](./job-command.md) | Job commands (all events) | Python/Bun scripts, runtime API, KV, demands |
-| [job.md](./job.md) | `maand job` | Manual start/stop/restart/run/status |
-| [run-command.md](./run-command.md) | `maand run_command` | Ad-hoc SSH commands on workers |
-| [gc.md](./gc.md) | `maand gc` | Purge removed allocations and old KV |
-| [info.md](./info.md) | `maand info` | Bucket summary |
 
 ---
 
@@ -55,27 +76,31 @@ maand info
 maand cat workers
 maand cat jobs
 maand cat allocations
+maand cat hashes
 maand cat job_commands
 maand cat job_ports
 maand cat kv
 maand cat kv get <namespace> <key>
+maand cat kv get --reveal secrets/job/<job> <key>
 ```
+
+Rollout debugging: [deploy-debugging.md](./deploy-debugging.md) · Hash columns: [commands.md](./commands.md#maand-cat-hashes)
 
 ---
 
 ## Bucket layout (after `maand init`)
 
 ```text
-./                          # bucket root (bucket.Location)
-├── maand.conf              # SSH user, key, sudo, cert TTL, job_config_selector
+./                          # bucket root
+├── maand.conf              # SSH, certs, job config selector — see configuration.md
 ├── data/maand.db           # SQLite catalog + KV history
 ├── workspace/
 │   ├── workers.json
 │   ├── disabled.json       # optional
-│   ├── bucket.conf         # port pool (port_min/port_max) + vars → KV
+│   ├── bucket.conf         # port pool + vars → KV
 │   └── jobs/<job>/
 │       ├── manifest.json
-│       ├── Makefile        # required (start/stop/restart for default deploy)
+│       ├── Makefile        # start/stop/restart (default deploy)
 │       ├── _modules/       # command_<name>.py | .ts | .js
 │       └── *.tpl           # optional templates
 ├── secrets/                # CA, worker SSH key, kv.key

@@ -178,7 +178,7 @@ Body JSON:
 ```
 
 - **GET**: Read key (must be in **allowed namespaces** for that job/worker). Values under `secrets/job/<job>` are returned decrypted.
-- **PUT**: Write a non-secret key under `vars/job/<job>` (in-memory store; persisted when deploy checkpoints, at the end of **`post_build`**, or when **`maand jobcommand`** exits successfully).
+- **PUT**: Write a non-secret key under `vars/job/<job>` (in-memory store; persisted per [kv.md](./kv.md#persistence-timing)).
 
 ### `PUT` `/kv/secret`
 
@@ -228,6 +228,8 @@ Scoped per job/event via request headers **`EVENT`**, **`COMMAND`**, **`X-ALLOCA
 
 Embedded **`maand.py`** / **`maand.ts`** wrap the HTTP API (KV, demands, semaphores). Prefer these over raw HTTP in command scripts.
 
+**Worker SSH** (Python `maand.py` only): `load_ssh()`, `run_ssh()`, `run_runner_target()`, and `run_make_target()` run commands on workers using `maand.conf` credentials — the same paths deploy uses (`runner.py` / Makefile targets).
+
 ### Python virtualenv (recommended)
 
 Create a venv **per job** under `_modules` (not copied into `tmp/` during runs; maand calls the workspace interpreter):
@@ -266,9 +268,9 @@ bun install
 |---------|--------------------------------------|
 | **`maand build`** | End of main build transaction (`PersistToTransaction`). |
 | **`maand job_command`** | Successful CLI commit. |
-| **`maand deploy`** | **`kv.PersistSession()`** after each job’s `pre_deploy` and after each **`deployJob`** (separate connection; survives deploy tx rollback). |
-| **`maand health_check`** | With deploy/CLI transaction commit. |
-| **`post_build`** | Does not commit hook transaction KV to DB unless you persist via API and a later build/deploy saves it. |
+| **`maand deploy`** | **`kv.PersistSession()`** after each job’s `pre_deploy` and after each **`deployJob`**. |
+| **`maand health_check`** | KV writes rejected (read-only). |
+| **`post_build`** | **`kv.PersistToSessionTransaction`** at end of hook pass (failures fail build). |
 
 Use **`pre_deploy`** to write secrets via **`put_job_secret`** / **`putJobSecret`** or plain vars via **`put_job_variable`**, consumed by **`.tpl`** files on the same deploy (`getSecret` / `get`).
 
@@ -278,22 +280,14 @@ Use **`pre_deploy`** to write secrets via **`put_job_secret`** / **`putJobSecret
 
 ### `post_build`
 
-- Runs after catalog commit.
-- Good for: validation, generating artifacts, dry-run tests.
-- **Failure does not fail build.**
+- Runs on the **CLI host** after the main catalog commit, in **`deployment_seq`** order.
+- Good for: validation, codegen, seeding **`vars/job`** before deploy.
+- **Any hook failure fails `maand build`.**
 
 ### `pre_deploy`
 
-- Runs before rsync for jobs that need rollout.
-- Failure: job skipped for this deploy wave; KV still checkpointed if written before failure (checkpoint runs after hook returns in execute loop — check code: persist runs after pre_deploy even on failure?)
-
-From execute.go:
-```go
-preErr := executePreJobCommandsForJob(...)
-if persistErr := persistJobCommandKV(job); ...
-if preErr != nil { continue }
-```
-So KV from a failing pre_deploy is still persisted if PersistSession succeeds.
+- Runs on the **CLI host** before rsync for jobs that need rollout.
+- Failure: job skipped for this deploy wave; KV written before failure is still checkpointed if the persist step succeeds.
 
 ### `post_deploy`
 
@@ -309,6 +303,8 @@ So KV from a failing pre_deploy is still persisted if PersistSession succeeds.
 ### `health_check`
 
 - See [`health-check.md`](./health-check.md).
+- **Mutually exclusive** with a manifest **`health_check`** section on the same job (build fails if both).
+- CLI **`--update-hash`** on **`maand health_check`** marks allocations whose **command** failed for redeploy; follow with **`maand deploy`** (or **`maand deploy --force`**).
 
 ### `cli`
 

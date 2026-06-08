@@ -25,12 +25,12 @@ func purgeRemovedAllocationWorkerData(
 
 	for _, alloc := range allocs {
 		if catalog.Contains(alloc.WorkerIP) {
-			if err := worker.RemoveJobRuntimeDirs(rt, bucketID, alloc.WorkerIP, alloc.Job); err != nil {
+			if err := worker.RemoveJobTree(rt, bucketID, alloc.WorkerIP, alloc.Job); err != nil {
 				return err
 			}
 			continue
 		}
-		worker.RemoveJobRuntimeDirsOrAssumeDead(rt, bucketID, alloc.WorkerIP, alloc.Job)
+		worker.RemoveJobTreeOrAssumeDead(rt, bucketID, alloc.WorkerIP, alloc.Job)
 	}
 	return nil
 }

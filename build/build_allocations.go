@@ -36,6 +36,11 @@ const matchingJobsByLabelsQuery = `
 		`
 
 func BuildAllocations(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) error {
+	disabledBefore, err := loadDisabledAllocations(tx)
+	if err != nil {
+		return err
+	}
+
 	workerIPs, err := data.GetWorkers(tx, nil)
 	if err != nil {
 		return err
@@ -68,8 +73,16 @@ func BuildAllocations(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) erro
 				allocationID = workspace.GetHashUUID(jobName + "|" + workerIP)
 			}
 
-			upsertAllocationQuery := "INSERT OR REPLACE INTO allocations (alloc_id, job, worker_ip, disabled, removed, deployment_seq) VALUES (?, ?, ?, ?, ?, ?)"
-			_, err = tx.Exec(upsertAllocationQuery, allocationID, jobName, workerIP, 0, 0, 0)
+			targetVersion, err := data.TargetJobVersion(tx, jobName)
+			if err != nil {
+				_ = rows.Close()
+				return err
+			}
+
+			upsertAllocationQuery := `INSERT OR REPLACE INTO allocations (
+				alloc_id, job, worker_ip, disabled, removed, deployment_seq, new_version
+			) VALUES (?, ?, ?, ?, ?, ?, ?)`
+			_, err = tx.Exec(upsertAllocationQuery, allocationID, jobName, workerIP, 0, 0, 0, targetVersion)
 			if err != nil {
 				_ = rows.Close()
 				return bucket.DatabaseError(err)
@@ -129,5 +142,56 @@ func BuildAllocations(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) erro
 		}
 	}
 
-	return nil
+	return markReenabledAllocations(tx, disabledBefore)
+}
+
+func loadDisabledAllocations(tx *sql.Tx) (map[string]struct{}, error) {
+	rows, err := tx.Query(`SELECT worker_ip, job FROM allocations WHERE disabled = 1 AND removed = 0`)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	disabled := make(map[string]struct{})
+	for rows.Next() {
+		var workerIP, job string
+		if err := rows.Scan(&workerIP, &job); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		disabled[workerIP+"|"+job] = struct{}{}
+	}
+	if err := data.RowsErr(rows); err != nil {
+		return nil, err
+	}
+	return disabled, nil
+}
+
+func markReenabledAllocations(tx *sql.Tx, disabledBefore map[string]struct{}) error {
+	if len(disabledBefore) == 0 {
+		return nil
+	}
+
+	rows, err := tx.Query(`SELECT worker_ip, job, alloc_id FROM allocations WHERE disabled = 0 AND removed = 0`)
+	if err != nil {
+		return bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	for rows.Next() {
+		var workerIP, job, allocID string
+		if err := rows.Scan(&workerIP, &job, &allocID); err != nil {
+			return bucket.DatabaseError(err)
+		}
+		if _, wasDisabled := disabledBefore[workerIP+"|"+job]; !wasDisabled {
+			continue
+		}
+		if err := data.MarkAllocationStartPending(tx, job, allocID); err != nil {
+			return err
+		}
+	}
+	return data.RowsErr(rows)
 }

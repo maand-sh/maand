@@ -17,33 +17,35 @@ import (
 
 // deployJob runs the full deploy pipeline for one job on the current deployment sequence.
 // Called sequentially per job because *sql.Tx is not safe for concurrent use (SQLite).
-func deployJob(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string) error {
+func deployJob(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string, force bool) error {
 	commands, err := data.GetJobCommands(tx, job, "job_control")
 	if err != nil {
 		return &JobError{Job: job, Err: err}
 	}
 
 	if len(commands) > 0 {
-		return deployJobWithCommands(tx, rt, job, commands)
+		return deployJobWithCommands(tx, rt, job, commands, force)
 	}
 
 	if err := handleNewAllocations(tx, rt, bucketID, job); err != nil {
 		return &JobError{Job: job, Err: fmt.Errorf("start new allocations: %w", err)}
 	}
-	if err := handleUpdatedAllocations(tx, rt, bucketID, job); err != nil {
+	if err := handleUpdatedAllocations(tx, rt, bucketID, job, force); err != nil {
 		return &JobError{Job: job, Err: fmt.Errorf("restart updated allocations: %w", err)}
 	}
 
 	return finalizeJobDeploy(tx, rt, job)
 }
 
-func deployJobWithCommands(tx *sql.Tx, rt *bucket.Runtime, job string, commands []string) error {
-	needsRollout, err := JobNeedsRollout(tx, job)
-	if err != nil {
-		return &JobError{Job: job, Err: err}
-	}
-	if !needsRollout {
-		return nil
+func deployJobWithCommands(tx *sql.Tx, rt *bucket.Runtime, job string, commands []string, force bool) error {
+	if !force {
+		needsRollout, err := JobNeedsRollout(tx, job)
+		if err != nil {
+			return &JobError{Job: job, Err: err}
+		}
+		if !needsRollout {
+			return nil
+		}
 	}
 
 	allocations, err := data.GetAllocatedWorkers(tx, job)
@@ -55,7 +57,7 @@ func deployJobWithCommands(tx *sql.Tx, rt *bucket.Runtime, job string, commands 
 	if err != nil {
 		return &JobError{Job: job, Err: err}
 	}
-	updatedAllocations, err := data.GetUpdatedAllocations(tx, job)
+	updatedAllocations, err := allocationsNeedingRestart(tx, job, force)
 	if err != nil {
 		return &JobError{Job: job, Err: err}
 	}
@@ -73,7 +75,7 @@ func deployJobWithCommands(tx *sql.Tx, rt *bucket.Runtime, job string, commands 
 		}
 	}
 
-	if err := healthcheck.HealthCheck(tx, rt, true, job, true); err != nil {
+	if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
 		return &JobError{Job: job, Err: err}
 	}
 	return finalizeJobDeploy(tx, rt, job)

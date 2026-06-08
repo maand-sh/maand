@@ -31,6 +31,7 @@ Rules enforced at build:
 
 - Command names must start with **`command_`**
 - **`executed_on`** must use allowed events: `post_build`, `pre_deploy`, `post_deploy`, `job_control`, `health_check`, `cli`
+- A job with **`executed_on`: `["health_check"]`** cannot also define manifest **`health_check`** probes (build fails)
 - Matching script must exist: `_modules/command_<name>.py` (or `.ts` / `.js`)
 
 ---
@@ -150,7 +151,7 @@ Commands read/write KV via the runtime API (`maand.kv.get`, `maand.kv.put`, …)
 - `maand/job/<job>` — job metadata
 - `maand/job/<job>/worker/<ip>` — per-allocation certs and vars
 
-Template files (`.tpl`) rendered at deploy use the same data. See [job-command.md](../job-command.md) for the full API.
+Template files (`.tpl`) rendered at deploy use the same data. See [job-command.md](../job-command.md) (runtime API) and [kv.md](../kv.md) / [templates.md](../templates.md).
 
 ---
 

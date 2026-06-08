@@ -12,6 +12,22 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestUpdateCerts_skipsWhenJobHasNoCerts(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, prepareJobsFiles(tx, []string{"app"}))
+	require.NoError(t, updateCerts(tx, "app", "10.0.0.1"))
+	require.NoError(t, tx.Rollback())
+
+	certsDir := path.Join(bucket.GetTempWorkerPath("10.0.0.1"), "jobs", "app", "certs")
+	_, err := os.Stat(path.Join(certsDir, "tls.crt"))
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(path.Join(certsDir, "ca.crt"))
+	require.NoError(t, err)
+}
+
 func TestUpdateCerts_writesWorkerCerts(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)

@@ -19,7 +19,7 @@ func TestDeployJob_startsNewAllocation(t *testing.T) {
 	require.NoError(t, kv.Initialize(tx))
 	require.NoError(t, prepareJobsFiles(tx, []string{"app"}))
 	require.NoError(t, updateAllocationHash(tx, []string{"app"}))
-	require.NoError(t, deployJob(tx, nil, env.bucketID, "app"))
+	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", false))
 	assert.True(t, rec.HasAction("10.0.0.1", "start", "app"))
 	assert.True(t, env.allocationHashPromoted(t, tx, "app", "alloc-app-10.0.0.1"))
 	require.NoError(t, tx.Rollback())
@@ -33,7 +33,85 @@ func TestDeployJob_skipsWhenAlreadyPromoted(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "same", "same")
 	require.NoError(t, kv.Initialize(tx))
-	require.NoError(t, deployJob(tx, nil, env.bucketID, "app"))
+	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", false))
+	assert.Empty(t, rec.Commands)
+	require.NoError(t, tx.Rollback())
+}
+
+func TestDeployJobWithCommands_skipsWhenAlreadyPromoted(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	rec := installNoopDeployHooks(t, env.bucketID)
+
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "same", "same")
+	_, err := tx.Exec(
+		`INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config)
+		 VALUES ('job-app', 'app', 'command_ctl', 'job_control', '', '', '{}')`,
+	)
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, tx.Commit())
+
+	tx = env.begin(t)
+	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", false))
+	assert.Empty(t, rec.Commands)
+	require.NoError(t, tx.Rollback())
+}
+
+func TestFinalizeJobDeploy_runsPostDeployCommands(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	_, err := tx.Exec(
+		`INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config)
+		 VALUES ('job-app', 'app', 'broken_post', 'post_deploy', '', '', '{}')`,
+	)
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, prepareJobsFiles(tx, []string{"app"}))
+	require.NoError(t, updateAllocationHash(tx, []string{"app"}))
+
+	err = finalizeJobDeploy(tx, nil, "app")
+	require.Error(t, err)
+	var jobErr *JobError
+	require.ErrorAs(t, err, &jobErr)
+	assert.Equal(t, "app", jobErr.Job)
+	require.NoError(t, tx.Rollback())
+}
+
+func TestFinalizeJobDeploy_promotesHashes(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, prepareJobsFiles(tx, []string{"app"}))
+	require.NoError(t, updateAllocationHash(tx, []string{"app"}))
+	require.NoError(t, finalizeJobDeploy(tx, nil, "app"))
+	assert.True(t, env.allocationHashPromoted(t, tx, "app", "alloc-app-10.0.0.1"))
+	require.NoError(t, tx.Rollback())
+}
+
+func TestDeployJobWithCommands_forceRollout(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	rec := installNoopDeployHooks(t, env.bucketID)
+
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "same", "same")
+	_, err := tx.Exec(
+		`INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config)
+		 VALUES ('job-app', 'app', 'ctl', 'job_control', '', '', '{}')`,
+	)
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, prepareJobsFiles(tx, []string{"app"}))
+	require.NoError(t, updateAllocationHash(tx, []string{"app"}))
+	commands, err := data.GetJobCommands(tx, "app", "job_control")
+	require.NoError(t, err)
+
+	err = deployJobWithCommands(tx, nil, "app", commands, true)
+	require.Error(t, err)
 	assert.Empty(t, rec.Commands)
 	require.NoError(t, tx.Rollback())
 }

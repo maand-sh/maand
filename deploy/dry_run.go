@@ -46,7 +46,7 @@ type DryRunResult struct {
 // DryRun stages job files locally, refreshes allocation content hashes in a rolled-back
 // transaction, and reports which jobs and allocations would be deployed. No workers are
 // contacted and no hash promotions are persisted.
-func DryRun(jobsFilter []string) (DryRunResult, error) {
+func DryRun(jobsFilter []string, force bool) (DryRunResult, error) {
 	var result DryRunResult
 
 	db, err := data.OpenDatabase(true)
@@ -106,7 +106,7 @@ func DryRun(jobsFilter []string) (DryRunResult, error) {
 		}
 
 		for _, job := range jobs {
-			plan, err := planJobRollout(tx, job, deploymentSeq)
+			plan, err := planJobRollout(tx, job, deploymentSeq, force)
 			if err != nil {
 				return result, err
 			}
@@ -120,7 +120,7 @@ func DryRun(jobsFilter []string) (DryRunResult, error) {
 	return result, nil
 }
 
-func planJobRollout(tx *sql.Tx, job string, deploymentSeq int) (JobPlan, error) {
+func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, force bool) (JobPlan, error) {
 	plan := JobPlan{
 		Job:           job,
 		DeploymentSeq: deploymentSeq,
@@ -161,10 +161,26 @@ func planJobRollout(tx *sql.Tx, job string, deploymentSeq int) (JobPlan, error) 
 			ap.PreviousHash = previous
 			ap.CurrentHash = current
 			plan.NeedsRollout = true
-		default:
-			ap.Action = rolloutActionSkip
+		case force:
+			ap.Action = rolloutActionRestart
 			ap.PreviousHash = previous
 			ap.CurrentHash = current
+			plan.NeedsRollout = true
+		default:
+			needsVersion, err := data.AllocationNeedsVersionRollout(tx, job, workerIP)
+			if err != nil {
+				return plan, err
+			}
+			if needsVersion {
+				ap.Action = rolloutActionRestart
+				ap.PreviousHash = previous
+				ap.CurrentHash = current
+				plan.NeedsRollout = true
+			} else {
+				ap.Action = rolloutActionSkip
+				ap.PreviousHash = previous
+				ap.CurrentHash = current
+			}
 		}
 		plan.Allocations = append(plan.Allocations, ap)
 	}

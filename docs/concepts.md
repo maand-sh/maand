@@ -86,8 +86,8 @@ Workers are declared in **`workspace/workers.json`**:
 | Add host to `workers.json` + **build** | New row in `worker` table |
 | **Deploy** | Creates `/opt/worker/<bucket_id>/`, syncs jobs |
 | Remove host from `workers.json` + **build** | Allocations marked **`removed`**; worker row dropped from catalog |
-| **Deploy** after removal | Full `/opt/worker/<bucket_id>/` tree removed on that host |
-| **GC** | Purges removed allocation rows and KV for dead workers |
+| **Deploy** after removal | Stop job; remove deployed files; keep `data/` and `logs/`; clear allocation hash on deploy (redeploy starts fresh, reuses data/logs) |
+| **GC** | Delete worker `data/`/`logs/`/`bin/`; purge removed allocation rows and KV |
 
 Workers do not run a maand agent. Deploy and `maand job` invoke **`runner.py`** over SSH; `maand run_command` runs arbitrary shell commands over SSH.
 
@@ -118,9 +118,10 @@ workspace/jobs/api/
 | `resources.ports` | Named ports: `{}` (maand assigns from pool) or an integer (fixed in manifest); range from `bucket.conf` |
 | `update_parallel_count` | Rolling restart batch size during deploy |
 | `commands` | Named hooks (`command_*`) with `executed_on` events |
+| `health_check` | Optional built-in probes (tcp/http/ssh) — **or** a `health_check` command, not both |
 | `certs` | TLS material generated into KV per allocation |
 
-See [build.md](./build.md) for the full manifest schema and [job-command.md](./job-command.md) for command scripts and the runtime API.
+Manifest reference: [jobs-and-dependencies.md](./jobs-and-dependencies.md). Configuration files: [configuration.md](./configuration.md). Command scripts: [job-command.md](./job-command.md).
 
 ### Job lifecycle on workers
 
@@ -160,7 +161,7 @@ workers.json          jobs/api/manifest.json
 | `removed` | `1` when worker or job left the workspace (soft delete until deploy/GC) |
 | `deployment_seq` | Wave order during deploy (from command **demands**) |
 
-Each allocation also tracks **`current_version`** (last promoted) and **`new_version`** (deploy target) in the **`hash`** table — see [deploy.md](./deploy.md#allocation-version-tracking).
+Each allocation tracks **`current_version`** (last promoted, in **`hash`**) and **`new_version`** (build target, in **`allocations`**) — see [deploy.md](./deploy.md#allocation-version-tracking).
 
 ### Active vs inactive
 
@@ -195,6 +196,8 @@ maand cat allocations --jobs api --workers 10.0.0.1
 - Disable every job on a worker: `"workers": ["10.0.0.3"]`
 
 Run **`maand build`** after editing `disabled.json`.
+
+Full how-to (disable one allocation, entire job, entire worker, re-enable): [disabled.md](./disabled.md).
 
 ---
 
@@ -254,7 +257,9 @@ edit workspace/workers.json, workspace/jobs/*
 
 ## Further reading
 
+- [capabilities.md](./capabilities.md) — what maand can and cannot do
 - [Getting started tutorial](./tutorials/getting-started.md)
 - [Day-2 operations](./tutorials/day-2-operations.md)
 - [Job commands tutorial](./tutorials/job-commands.md)
 - [Command reference](./commands.md)
+- [KV store](./kv.md) · [Templates](./templates.md)
