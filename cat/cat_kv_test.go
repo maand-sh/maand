@@ -151,7 +151,7 @@ func TestKVJobFilter(t *testing.T) {
 		{"vars/job/vault", "cluster_initialized", "true"},
 		{"secrets/job/vault", "root_token", "enc:v1:x"},
 		{"maand/job/vault", "version", "1.0.0"},
-		{"maand/job/vault/worker/10.0.0.1", "is_primary", "1"},
+		{"maand/job/vault/worker/10.0.0.1", "vault_allocation_index", "0"},
 		{"maand", "bucket_id", "bucket-1"},
 		{"vars/bucket", "port_min", "1024"},
 		{"maand/worker/10.0.0.1", "worker_ip", "10.0.0.1"},

@@ -231,7 +231,7 @@ All steps run in one **transaction** (except post-build hooks), then `VACUUM`:
 | 6 | `BuildDeploymentSequence` | Compute `deployment_seq` from **command demands** (dependency order). |
 | 7 | `BuildVariables` | Populate KV namespaces (workers, jobs, bucket vars, job/allocation metadata). |
 | 8 | `BuildCerts` | Regenerate CA/job certs when CA or cert config changed; write cert PEMs into KV. |
-| 9 | `BuildJobAllocationVariables` | Per-allocation keys (`*_allocation_index`, peers, `peer_ports`) after certs so cert sync does not delete them. |
+| 9 | `BuildJobAllocationVariables` | Per-allocation keys (`*_allocation_index`, `peer_workers`) after certs so cert sync does not delete them. |
 | 10 | `PurgeStaleVersions` | Trim old KV versions (keep 7 per key). |
 | 11 | `ValidateWorkerResources` | Ensure allocated jobs fit worker memory/CPU. |
 | 12 | `PersistToTransaction` | Write KV changes into `key_value` table. |

@@ -68,8 +68,7 @@ Under **`maand/job/<job>/worker/<ip>`**:
 |-----|---------|
 | `certs/*` | TLS material from manifest |
 | `<job>_allocation_index` | Index among job peers |
-| `is_primary` / `is_seed` | Placement hints |
-| `peer_workers` / `peer_ports` | Peer discovery |
+| `peer_workers` | Comma-separated peer worker IPs for this job |
 | `version` | Target version from build (`allocations.new_version`) |
 
 ---

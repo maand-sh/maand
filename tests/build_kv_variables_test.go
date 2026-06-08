@@ -53,11 +53,6 @@ func TestBuildKVJobAndAllocationVariables(t *testing.T) {
 
 	idx, _ := GetKey("maand/job/svc/worker/10.0.0.2", "svc_allocation_index")
 	assert.Equal(t, "0", idx)
-	isSeed, _ := GetKey("maand/job/svc/worker/10.0.0.2", "is_seed")
-	assert.Equal(t, "1", isSeed)
 	peers, _ := GetKey("maand/job/svc/worker/10.0.0.2", "peer_workers")
 	assert.Equal(t, "10.0.0.1", peers)
-	peerPorts, _ := GetKey("maand/job/svc/worker/10.0.0.2", "peer_ports")
-	assert.Contains(t, peerPorts, "10.0.0.1:svc_http_port:")
-	assert.Contains(t, peerPorts, "10.0.0.1:svc_cql_port:")
 }
