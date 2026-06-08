@@ -14,6 +14,9 @@ import (
 var maandCmd = &cobra.Command{
 	Use:   "maand",
 	Short: "Maand is a agent less workload orchestrator",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		return requireCurrentSchema(cmd)
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Usage()
 	},

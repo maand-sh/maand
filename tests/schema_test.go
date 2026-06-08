@@ -7,6 +7,7 @@ package tests
 import (
 	"testing"
 
+	"maand/bucket"
 	"maand/data"
 
 	"github.com/stretchr/testify/assert"
@@ -22,6 +23,7 @@ func TestMigrateSchemaCreatesCatalogViews(t *testing.T) {
 		"cat_job_commands",
 		"cat_kv",
 		"cat_workers",
+		"cat_hashes",
 	}
 	for _, viewName := range views {
 		assert.True(t, mustViewExists(t, viewName), "missing view %s", viewName)
@@ -48,6 +50,29 @@ func TestMigrateSchemaIdempotentInTransaction(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	assert.Equal(t, versionBefore, mustGetSchemaVersion(t))
+}
+
+func TestUpgradeBucketFromV1ToV2(t *testing.T) {
+	initFreshBucket(t)
+	requireLatestSchema(t)
+	require.True(t, mustViewExists(t, "cat_hashes"))
+
+	db, err := data.OpenDatabase(true)
+	require.NoError(t, err)
+	_, err = db.Exec(`UPDATE schema_version SET version = 1`)
+	require.NoError(t, err)
+	_, err = db.Exec(`DROP VIEW IF EXISTS cat_hashes`)
+	require.NoError(t, err)
+	require.NoError(t, db.Close())
+
+	err = data.CheckSchemaVersion()
+	require.ErrorIs(t, err, bucket.ErrSchemaUpgradeRequired)
+
+	upgradeBucket(t)
+
+	requireLatestSchema(t)
+	assert.True(t, mustViewExists(t, "cat_hashes"))
+	require.NoError(t, data.CheckSchemaVersion())
 }
 
 func TestCatJobsViewQueryableAfterUpgrade(t *testing.T) {
