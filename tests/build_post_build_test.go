@@ -22,7 +22,10 @@ func TestBuildFailsWhenPostBuildHooksFail(t *testing.T) {
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "hookjob")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_modules"), 0o755))
-	require.NoError(t, os.WriteFile(path.Join(jobDir, "_modules", "command_post.py"), []byte(""), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "_modules", "command_post.py"), []byte(`#!/usr/bin/env python3
+import sys
+sys.exit(1)
+`), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
 		"selectors": ["worker"],

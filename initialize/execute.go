@@ -86,10 +86,12 @@ func Execute() error {
 		return bucket.DatabaseError(err)
 	}
 
-	if isNewDatabase || !bucketInitialized {
-		fmt.Println("maand bucket initialized")
-	} else {
-		fmt.Printf("maand bucket upgraded (schema version %d)\n", data.LatestSchemaVersion)
+	if !bucket.QuietCLIOutput() {
+		if isNewDatabase || !bucketInitialized {
+			fmt.Println("maand bucket initialized")
+		} else {
+			fmt.Printf("maand bucket upgraded (schema version %d)\n", data.LatestSchemaVersion)
+		}
 	}
 	return nil
 }
@@ -179,7 +181,11 @@ func generateCA(secretsDir string, subject pkix.Name, ttlDays int) error {
 		BasicConstraintsValid: true,
 	}
 
-	privateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	keyBits := 4096
+	if bucket.TestMode() {
+		keyBits = 1024
+	}
+	privateKey, err := rsa.GenerateKey(rand.Reader, keyBits)
 	if err != nil {
 		return err
 	}

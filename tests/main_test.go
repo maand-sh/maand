@@ -8,9 +8,17 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	bucket.Location = "./test_project"
+	_ = os.Setenv("MAAND_TEST", "1")
+	_ = os.Setenv("MAAND_QUIET", "1")
+
+	dir, err := os.MkdirTemp("", "maand-tests-*")
+	if err != nil {
+		panic(err)
+	}
+	bucket.Location = dir
 	bucket.UpdatePath()
 
-	os.Exit(m.Run())
-	//_ = os.RemoveAll("./test_project")
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
 }
