@@ -110,10 +110,14 @@ Job definition — selectors, resources, commands, certs, health. Canonical refe
 
 ## Upgrading configuration after a maand binary upgrade
 
+After installing a newer maand binary, run **`maand init`** before any other command. The CLI checks schema version on every command (except **`init`**) and refuses to run when the database is behind the binary.
+
 ```bash
 maand init    # schema migrations; keeps bucket_id and CA
 maand build
 maand deploy
 ```
+
+If you skip **`init`**, commands such as **`build`** or **`deploy`** print an error like `database schema upgrade required … run maand init to upgrade`.
 
 See [tutorials/day-2-operations.md](./tutorials/day-2-operations.md#upgrade-maand-schema).

@@ -14,6 +14,8 @@ var (
 	ErrUnexpectedError                  = errors.New("unexpected error")
 	ErrKeyNotFound                      = errors.New("key not found")
 	ErrNotInitialized                   = errors.New("maand is not initialized")
+	ErrSchemaUpgradeRequired            = errors.New("database schema upgrade required")
+	ErrSchemaTooNew                     = errors.New("database schema is newer than this maand binary")
 	ErrDatabase                         = errors.New("database error")
 	ErrNotFound                         = errors.New("not found")
 	ErrPortCollision                    = errors.New("port collision")

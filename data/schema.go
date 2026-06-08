@@ -12,7 +12,54 @@ import (
 )
 
 // LatestSchemaVersion is the target schema version applied by MigrateSchema.
-const LatestSchemaVersion = 1
+const LatestSchemaVersion = 2
+
+// CheckSchemaVersion verifies maand.db exists and its schema version matches this binary.
+// Run maand init to create or upgrade the database.
+func CheckSchemaVersion() error {
+	if !DatabaseExists() {
+		return bucket.ErrNotInitialized
+	}
+
+	db, err := OpenDatabase(false)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = db.Close()
+	}()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	currentVersion, err := readSchemaVersion(tx)
+	if err != nil {
+		return err
+	}
+
+	if currentVersion < LatestSchemaVersion {
+		return fmt.Errorf(
+			"%w: database schema version %d, binary expects %d; run maand init to upgrade",
+			bucket.ErrSchemaUpgradeRequired,
+			currentVersion,
+			LatestSchemaVersion,
+		)
+	}
+	if currentVersion > LatestSchemaVersion {
+		return fmt.Errorf(
+			"%w: database schema version %d is newer than this binary supports (%d); upgrade the maand binary",
+			bucket.ErrSchemaTooNew,
+			currentVersion,
+			LatestSchemaVersion,
+		)
+	}
+	return nil
+}
 
 // MigrateSchema brings an existing or new database to LatestSchemaVersion.
 // It is idempotent and safe to run on every maand init.
@@ -76,6 +123,8 @@ func applySchemaMigration(tx *sql.Tx, version int) error {
 	switch version {
 	case 1:
 		return migrateToV1(tx)
+	case 2:
+		return migrateToV2(tx)
 	default:
 		return fmt.Errorf("unsupported schema version %d", version)
 	}
@@ -100,6 +149,26 @@ func migrateToV1(tx *sql.Tx) error {
 		return err
 	}
 	return recreateCatalogViews(tx)
+}
+
+func migrateToV2(tx *sql.Tx) error {
+	return ensureCatHashesView(tx)
+}
+
+func ensureCatHashesView(tx *sql.Tx) error {
+	return execStatements(tx, []string{
+		`DROP VIEW IF EXISTS cat_hashes`,
+		`CREATE VIEW cat_hashes (
+			alloc_id, worker_ip, job, disabled, removed,
+			current_hash, previous_hash, current_version, new_version
+		) AS
+			SELECT a.alloc_id, a.worker_ip, a.job, a.disabled, a.removed,
+			       ifnull(h.current_hash, ''), ifnull(h.previous_hash, ''),
+			       ifnull(h.current_version, ''), ifnull(a.new_version, '')
+			FROM allocations a
+			LEFT JOIN hash h ON h.namespace = (a.job || '_allocation') AND h.key = a.alloc_id
+			ORDER BY a.job, a.worker_ip`,
+	})
 }
 
 func ensureTableColumn(tx *sql.Tx, table, column, alterDDL string) error {

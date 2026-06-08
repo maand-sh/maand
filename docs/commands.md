@@ -79,6 +79,8 @@ Creates (first run) or upgrades (later runs):
 
 Does not contact workers. Re-running **`maand init`** on an existing bucket applies schema upgrades without changing **`bucket_id`** or the CA.
 
+Other commands check the database schema before running. If the binary is newer than **`maand.db`**, they fail with a hint to run **`maand init`**.
+
 ---
 
 ## `maand build`
