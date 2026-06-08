@@ -6,9 +6,11 @@ package build
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -21,8 +23,12 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-func BuildVariables(tx *sql.Tx, removedWorkers, removedJobs []string) error {
-	if err := buildWorkerVariables(tx, removedWorkers); err != nil {
+func BuildVariables(tx *sql.Tx, jobWorkspace workspace.Workspace, removedWorkers, removedJobs []string) error {
+	workerMeta, err := workerMetaByIP(jobWorkspace)
+	if err != nil {
+		return err
+	}
+	if err := buildWorkerVariables(tx, workerMeta, removedWorkers); err != nil {
 		return err
 	}
 	if err := buildJobVariables(tx, removedJobs); err != nil {
@@ -34,7 +40,19 @@ func BuildVariables(tx *sql.Tx, removedWorkers, removedJobs []string) error {
 	return buildBucketVariables(tx)
 }
 
-func buildWorkerVariables(tx *sql.Tx, removedWorkers []string) error {
+func workerMetaByIP(jobWorkspace workspace.Workspace) (map[string]workspace.Worker, error) {
+	workers, err := jobWorkspace.ListWorkers()
+	if err != nil {
+		return nil, err
+	}
+	meta := make(map[string]workspace.Worker, len(workers))
+	for _, worker := range workers {
+		meta[worker.Host] = worker
+	}
+	return meta, nil
+}
+
+func buildWorkerVariables(tx *sql.Tx, workerMeta map[string]workspace.Worker, removedWorkers []string) error {
 	workers, err := data.GetWorkers(tx, nil)
 	if err != nil {
 		return err
@@ -108,6 +126,15 @@ func buildWorkerVariables(tx *sql.Tx, removedWorkers []string) error {
 			return err
 		}
 		variables["jobs"] = strings.Join(allocatedJobNames, ",")
+
+		position, err := data.GetWorkerPosition(tx, workerIP)
+		if err != nil {
+			return err
+		}
+		variables["position"] = strconv.Itoa(position)
+		if worker, ok := workerMeta[workerIP]; ok && worker.Hostname != "" {
+			variables["hostname"] = worker.Hostname
+		}
 
 		workerNamespace := fmt.Sprintf("maand/worker/%s", workerIP)
 		err = syncKeyValues(tx, workerNamespace, variables)
@@ -208,35 +235,28 @@ func buildBucketVariables(tx *sql.Tx) error {
 		return err
 	}
 
-	jobPorts := make(map[string]string)
+	maandVariables := make(map[string]string)
 	for _, jobName := range jobNames {
-		rows, err := tx.Query("SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)", jobName)
+		portMap, err := data.GetJobPortMap(tx, jobName)
 		if err != nil {
-			return bucket.DatabaseError(err)
-		}
-
-		for rows.Next() {
-			var name, value string
-			err := rows.Scan(&name, &value)
-			if err != nil {
-				_ = rows.Close()
-				return bucket.DatabaseError(err)
-			}
-			jobPorts[name] = value
-		}
-		if err := rows.Close(); err != nil {
-			return bucket.DatabaseError(err)
-		}
-		if err := data.RowsErr(rows); err != nil {
 			return err
 		}
+		for name, port := range portMap {
+			maandVariables[name] = port
+		}
 	}
+	maandVariables["jobs"] = strings.Join(jobNames, ",")
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return err
+	}
+	maandVariables["bucket_id"] = bucketID
 
 	err = syncKeyValues(tx, "vars/bucket", bucketConfig)
 	if err != nil {
 		return err
 	}
-	err = syncKeyValues(tx, "maand", jobPorts)
+	err = syncKeyValues(tx, "maand", maandVariables)
 	if err != nil {
 		return err
 	}
@@ -339,6 +359,36 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string) error {
 			variables["max_cpu_mhz"] = variables["cpu"]
 		}
 
+		activeWorkers, err := data.GetActiveAllocationsOrdered(tx, jobName)
+		if err != nil {
+			return err
+		}
+		variables["workers"] = strings.Join(activeWorkers, ",")
+		variables["workers_length"] = strconv.Itoa(len(activeWorkers))
+		for idx, workerIP := range activeWorkers {
+			variables[fmt.Sprintf("worker_%d", idx)] = workerIP
+		}
+
+		portMap, err := data.GetJobPortMap(tx, jobName)
+		if err != nil {
+			return err
+		}
+		if len(portMap) > 0 {
+			portNames := make([]string, 0, len(portMap))
+			for name := range portMap {
+				portNames = append(portNames, name)
+			}
+			sort.Strings(portNames)
+			for _, name := range portNames {
+				variables[name] = portMap[name]
+			}
+			portsJSON, err := json.Marshal(portMap)
+			if err != nil {
+				return fmt.Errorf("%w: marshal ports_json for job %s: %w", bucket.ErrUnexpectedError, jobName, err)
+			}
+			variables["ports_json"] = string(portsJSON)
+		}
+
 		jobNamespace := fmt.Sprintf("maand/job/%s", jobName)
 		err = syncKeyValues(tx, jobNamespace, variables)
 		if err != nil {
@@ -348,6 +398,10 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string) error {
 		bucketJobNamespace := fmt.Sprintf("vars/bucket/job/%s", jobName)
 		err = syncKeyValues(tx, bucketJobNamespace, bucketJobSettings)
 		if err != nil {
+			return err
+		}
+
+		if err := mergeWorkspaceJobVars(jobName); err != nil {
 			return err
 		}
 	}
@@ -375,6 +429,30 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string) error {
 		}
 	}
 
+	return nil
+}
+
+// mergeWorkspaceJobVars applies jobs/<job>/vars.toml into vars/job/<job> without deleting
+// other keys (user/script-owned config survives rebuild).
+func mergeWorkspaceJobVars(jobName string) error {
+	varsPath := path.Join(bucket.WorkspaceLocation, "jobs", jobName, "vars.toml")
+	data, err := os.ReadFile(varsPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("%w: read %s: %w", bucket.ErrUnexpectedError, varsPath, err)
+	}
+
+	vars := make(map[string]string)
+	if err := toml.Unmarshal(data, &vars); err != nil {
+		return fmt.Errorf("%w: %s: %w", bucket.ErrInvalidJobVars, varsPath, err)
+	}
+
+	namespace := fmt.Sprintf("vars/job/%s", jobName)
+	for key, value := range vars {
+		kv.GetKVStore().Put(namespace, key, value, 0)
+	}
 	return nil
 }
 

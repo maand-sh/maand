@@ -50,7 +50,7 @@ func TestStoreReviveDeletedKey(t *testing.T) {
 	entry, err := store.Get("ns", "key")
 	require.NoError(t, err)
 	assert.Equal(t, "new", entry.Value)
-	assert.Equal(t, 1, entry.Version)
+	assert.Equal(t, 3, entry.Version)
 }
 
 func TestStoreTrimsWhitespace(t *testing.T) {

@@ -1,8 +1,13 @@
 # `maand health_check`
 
-**Health check** runs all job commands registered for the **`health_check`** event against **active allocations** of each selected job. It uses the same **jobcommand** machinery as deploy (CLI host, staged workspaces, Python/Bun scripts).
+**Health check** verifies workers are reachable, then checks each job using **built-in manifest probes** (TCP / HTTP) and/or **`health_check` job commands** on active allocations.
 
-Deploy also runs health checks automatically after **restart** / **job_control** when commands exist.
+Order when you run **`maand health_check`**:
+
+1. **Worker health** — TCP dial to each worker’s **SSH port** (`maand.conf` `ssh_port`, default **22**).
+2. **Job health** — manifest `health_check` probes, then custom `command_*` scripts.
+
+Deploy also runs **job** health automatically after **restart** / **job_control** (built-in probes + commands). Deploy does **not** re-run the worker SSH gate on every job (use `maand health_check` for that).
 
 ---
 
@@ -32,34 +37,94 @@ maand health_check --jobs api --wait --verbose
 
 1. **`maand build`** (allocations and `job_commands` in DB).
 2. **Host tools**: `python3`, `bun` (if needed), `bash`, `ssh`.
-3. Jobs must define at least one command with **`executed_on`** including **`health_check`** in `manifest.json`.
-4. Command scripts present: `workspace/jobs/<job>/_modules/command_<name>.py` (or `.ts` / `.js`).
+3. Jobs need either a **`health_check`** section in `manifest.json` **or** a command with **`executed_on`: `["health_check"]`** (or both).
 
-If a job has **no** `health_check` commands:
+If a job has **neither**:
 
 ```text
-health check skipped: <job> (no health_check commands)
+health check skipped: <job> (no health_check config or commands)
 ```
 
 That is **not** an error; exit code remains 0 for that job.
 
 ---
 
-## Manifest example
+## Built-in manifest health (recommended)
+
+Declare probes next to `resources.ports`. Port names reference manifest keys; maand resolves assigned numbers at check time and probes **each active allocation** (`worker_ip:port`).
+
+```json
+{
+  "selectors": ["cassandra"],
+  "resources": {
+    "ports": {
+      "cassandra_cql_port": {},
+      "cassandra_http_port": {}
+    }
+  },
+  "health_check": {
+    "checks": [
+      { "type": "tcp", "port": "cassandra_cql_port" },
+      { "type": "http", "port": "cassandra_http_port", "path": "/metrics", "expect_status": 200 }
+    ],
+    "timeout_seconds": 5,
+    "wait": { "attempts": 30, "interval_seconds": 1 }
+  }
+}
+```
+
+| Probe | Fields |
+|-------|--------|
+| **`tcp`** | `port` (required) |
+| **`http`** | `port`, `path` (default `/`), `expect_status` (default `200`), `scheme` (default `http`) |
+| **`ssh`** | `command` (required) — one shell line on the **worker** over SSH (no job workspace staging) |
+
+All checks must pass on **every** allocation (AND). Built-in probes need no Python/Bun script.
+
+Example **`ssh`** probe (systemd on the worker):
+
+```json
+{ "type": "ssh", "command": "systemctl is-active cassandra" }
+```
+
+---
+
+## Custom command health (escape hatch)
 
 ```json
 {
   "selectors": ["worker"],
   "commands": {
     "command_health": {
-      "executed_on": ["health_check"],
-      "demands": { "job": "", "command": "", "config": {} }
+      "executed_on": ["health_check"]
     }
   }
 }
 ```
 
-Command name must start with **`command_`**. Script file: `_modules/command_health.py`.
+Script: `_modules/command_health.py`. Runs **after** built-in probes when both are defined. Use for cluster readiness (`nodetool status`, etc.).
+
+**Health-fast workspace:** for `health_check` commands only, maand stages **`_modules/command_<name>.*`**, embedded `maand.py` / `maand.ts`, and certs — not the full job tree (Makefile, templates, etc.).
+
+---
+
+## Worker SSH health
+
+Before job checks, `maand health_check` dials **`worker_ip:ssh_port`** for every worker in `workers.json`.
+
+Configure in `maand.conf`:
+
+```toml
+ssh_port = 22
+```
+
+Output:
+
+```text
+worker health check passed
+```
+
+or retry/fail when `--wait` is set.
 
 ---
 
@@ -69,9 +134,11 @@ Command name must start with **`command_`**. Script file: `_modules/command_heal
 Open maand.db
 Begin transaction
 kv.Initialize + StartRuntimeAPI (localhost:8080 for scripts)
+CheckWorkers (SSH TCP on all workers)
 Resolve job list (--jobs filter or all jobs from DB)
 Run jobs in parallel (up to 4 jobs at a time)
   For each job:
+    Run manifest health_check probes (tcp/http per allocation)
     For each health_check command name (in DB order):
       jobcommand.JobCommand(..., event="health_check", concurrency=1)
 Commit transaction on success
@@ -79,7 +146,9 @@ Commit transaction on success
 
 ### Per-allocation execution
 
-For each **active** worker hosting the job:
+**Built-in probes** dial `worker_ip:assigned_port` from the maand host (no containers or scripts).
+
+**Custom commands** — for each **active** worker hosting the job:
 
 1. Stage job files under `tmp/workers/<ip>/jobs/<job>/` (from `job_files` + embedded `maand.py` / `maand.ts` + certs from KV).
 2. Run script on the CLI host with env:
@@ -94,7 +163,7 @@ Failures on one worker fail the job; multiple jobs can fail in one run (**batch 
 
 When **`--wait`** is set (deploy uses wait mode internally after restarts):
 
-- Run all `health_check` commands for the job.
+- Run built-in probes and `health_check` commands for the job.
 - On failure, sleep **1 second** and retry.
 - Up to **30 attempts** per job.
 - Success prints: `health check passed: <job>`

@@ -275,6 +275,46 @@ func IsAllocationRemoved(tx *sql.Tx, workerIP, job string) (int, error) {
 	return removed, nil
 }
 
+// GetActiveAllocationsOrdered returns active worker IPs for a job ordered by worker position.
+func GetActiveAllocationsOrdered(tx *sql.Tx, job string) ([]string, error) {
+	rows, err := tx.Query(`
+		SELECT a.worker_ip
+		FROM allocations a
+		INNER JOIN worker w ON w.worker_ip = a.worker_ip
+		WHERE a.job = ? AND a.removed = 0 AND a.disabled = 0
+		ORDER BY w.position, a.worker_ip`,
+		job,
+	)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	workers := make([]string, 0)
+	for rows.Next() {
+		var workerIP string
+		if err := rows.Scan(&workerIP); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		workers = append(workers, workerIP)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return workers, nil
+}
+
+func GetWorkerPosition(tx *sql.Tx, workerIP string) (int, error) {
+	var position int
+	err := tx.QueryRow(`SELECT position FROM worker WHERE worker_ip = ?`, workerIP).Scan(&position)
+	if err != nil {
+		return 0, bucket.DatabaseError(err)
+	}
+	return position, nil
+}
+
 func GetActiveAllocations(tx *sql.Tx, job string) ([]string, error) {
 	var activeWorkers []string
 	workers, err := GetAllocatedWorkers(tx, job)

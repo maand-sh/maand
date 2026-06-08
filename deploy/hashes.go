@@ -24,14 +24,22 @@ func updateAllocationHash(tx *sql.Tx, jobs []string) error {
 }
 
 func updateJobAllocationHashes(tx *sql.Tx, job string) error {
-	targetVersion, err := data.TargetJobVersion(tx, job)
+	allocatedWorkers, err := data.GetAllocatedWorkers(tx, job)
 	if err != nil {
 		return err
 	}
 
-	allocatedWorkers, err := data.GetAllocatedWorkers(tx, job)
+	activeWorkers, err := data.GetActiveAllocations(tx, job)
 	if err != nil {
 		return err
+	}
+
+	var targetVersion string
+	if len(activeWorkers) > 0 {
+		targetVersion, err = data.TargetJobVersion(tx, job)
+		if err != nil {
+			return err
+		}
 	}
 
 	namespace := fmt.Sprintf("%s_allocation", job)
@@ -111,6 +119,13 @@ func promoteAllocationHash(tx *sql.Tx, job string) error {
 			continue
 		}
 		if err := data.PromoteAllocationState(tx, namespace, allocID); err != nil {
+			return err
+		}
+		versions, err := data.GetAllocationVersions(tx, namespace, allocID)
+		if err != nil {
+			return err
+		}
+		if err := syncAllocationVersionKV(job, workerIP, versions); err != nil {
 			return err
 		}
 	}

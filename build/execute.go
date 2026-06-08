@@ -21,6 +21,10 @@ import (
 const postBuildEvent = "post_build"
 
 func runPostBuildHooks(tx *sql.Tx) error {
+	if err := kv.Initialize(tx); err != nil {
+		return fmt.Errorf("post_build: init kv: %w", err)
+	}
+
 	cancelJobCommandServer := jobcommand.StartRuntimeAPI(tx)
 	defer cancelJobCommandServer()
 
@@ -65,7 +69,14 @@ func runPostBuildHooks(tx *sql.Tx) error {
 		}
 	}
 
-	return errors.Join(hookErrors...)
+	if err := errors.Join(hookErrors...); err != nil {
+		return err
+	}
+
+	if err := kv.PersistToSessionTransaction(tx); err != nil {
+		return fmt.Errorf("post_build: persist kv: %w", err)
+	}
+	return nil
 }
 
 func Execute() error {
@@ -119,11 +130,15 @@ func Execute() error {
 		return err
 	}
 
-	if err := BuildVariables(buildTx, removedWorkers, removedJobs); err != nil {
+	if err := BuildVariables(buildTx, jobWorkspace, removedWorkers, removedJobs); err != nil {
 		return err
 	}
 
 	if err := BuildCerts(buildTx); err != nil {
+		return err
+	}
+
+	if err := BuildJobAllocationVariables(buildTx, removedJobs); err != nil {
 		return err
 	}
 

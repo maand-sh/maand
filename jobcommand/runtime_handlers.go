@@ -114,7 +114,7 @@ func handleStoreKeyGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 		return
 	}
 
-	if apiErr := validateStoreKeyPayload(payload, jobName, workerIP, false); apiErr != nil {
+	if apiErr := validateStoreKeyPayload(tx, payload, jobName, workerIP, false); apiErr != nil {
 		apiErr.write(w)
 		return
 	}
@@ -159,7 +159,7 @@ func handleStoreKeyPut(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 		return
 	}
 
-	if apiErr := validateStoreKeyPayload(payload, jobName, workerIP, true); apiErr != nil {
+	if apiErr := validateStoreKeyPayload(tx, payload, jobName, workerIP, true); apiErr != nil {
 		apiErr.write(w)
 		return
 	}
@@ -210,7 +210,7 @@ func handleStoreKeyDelete(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 		return
 	}
 
-	if apiErr := validateReadNamespace(payload.Namespace, jobName, workerIP); apiErr != nil {
+	if apiErr := validateReadNamespace(tx, payload.Namespace, jobName, workerIP); apiErr != nil {
 		apiErr.write(w)
 		return
 	}
@@ -252,7 +252,7 @@ func handleStoreKeysList(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 			runtimeAPIErrors.namespaceDenied.write(w)
 			return
 		}
-		if apiErr := validateReadNamespace(payload.Namespace, jobName, workerIP); apiErr != nil {
+		if apiErr := validateReadNamespace(tx, payload.Namespace, jobName, workerIP); apiErr != nil {
 			apiErr.write(w)
 			return
 		}

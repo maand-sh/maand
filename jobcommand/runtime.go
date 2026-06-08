@@ -82,17 +82,18 @@ func ResolveCommandScript(modulesDir, commandName string) (Runtime, string, erro
 // CommandExecLines returns shell commands to run scriptPath with runtime from moduleDir.
 // jobName selects a per-job virtualenv under workspace/jobs/<job>/_modules/.venv when present.
 func CommandExecLines(moduleDir, scriptPath string, runtime Runtime, jobName string) []string {
+	scriptName := path.Base(scriptPath)
 	switch runtime {
 	case RuntimeBun:
 		return []string{
 			fmt.Sprintf("cd %s", moduleDir),
-			"bun run " + scriptPath,
+			"bun run " + scriptName,
 		}
 	default:
 		python := ResolvePythonExecutable(jobName)
 		return []string{
 			fmt.Sprintf("cd %s", moduleDir),
-			python + " " + scriptPath,
+			python + " " + scriptName,
 		}
 	}
 }

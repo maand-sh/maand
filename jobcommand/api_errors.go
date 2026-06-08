@@ -27,6 +27,7 @@ var runtimeAPIErrors = struct {
 	writeDuringHealth  *apiResponseError
 	semaphoreTimeout   *apiResponseError
 	semaphoreConflict  *apiResponseError
+	internalError      *apiResponseError
 }{
 	invalidContentType: &apiResponseError{"Content-Type must be application/json", http.StatusUnsupportedMediaType},
 	missingAllocation:  &apiResponseError{"X-ALLOCATION-ID header is missing", http.StatusBadRequest},
@@ -39,4 +40,5 @@ var runtimeAPIErrors = struct {
 	writeDuringHealth:  &apiResponseError{"KV writes are not allowed during health_check", http.StatusBadRequest},
 	semaphoreTimeout:   &apiResponseError{"Timed out waiting for semaphore", http.StatusRequestTimeout},
 	semaphoreConflict:  &apiResponseError{"Semaphore acquire or release failed", http.StatusConflict},
+	internalError:      &apiResponseError{"Internal server error", http.StatusInternalServerError},
 }

@@ -112,6 +112,46 @@ func GetJobSelectors(tx *sql.Tx, jobName string) ([]string, error) {
 	return selectors, nil
 }
 
+// CopyJobCommandModule copies one command script (and parent dirs) for health-fast staging.
+func CopyJobCommandModule(tx *sql.Tx, jobName, commandName, outputPath string) error {
+	pattern := jobName + "/_modules/" + commandName + ".%"
+	rows, err := tx.Query(
+		`SELECT path, content FROM job_files
+		 WHERE job_id = (SELECT job_id FROM job WHERE name = ?)
+		   AND isdir = 0 AND path LIKE ?`,
+		jobName, pattern,
+	)
+	if err != nil {
+		return bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	var copied int
+	for rows.Next() {
+		var filePath, content string
+		if err := rows.Scan(&filePath, &content); err != nil {
+			return bucket.DatabaseError(err)
+		}
+		dest := path.Join(outputPath, filePath)
+		if err := os.MkdirAll(path.Dir(dest), 0o755); err != nil {
+			return bucket.DatabaseError(err)
+		}
+		if err := os.WriteFile(dest, []byte(content), 0o644); err != nil {
+			return bucket.DatabaseError(err)
+		}
+		copied++
+	}
+	if err := rowsErr(rows); err != nil {
+		return err
+	}
+	if copied == 0 {
+		return fmt.Errorf("%w: job %s command %s module not in job_files", bucket.ErrJobCommandFileNotFound, jobName, commandName)
+	}
+	return nil
+}
+
 func CopyJobFiles(tx *sql.Tx, jobName, outputPath string) error {
 	rows, err := tx.Query(
 		`SELECT path, content, isdir FROM job_files WHERE job_id = (SELECT job_id FROM job WHERE name = ?) ORDER BY isdir DESC`,
@@ -256,7 +296,13 @@ func GetUpdateParallelCount(tx *sql.Tx, job string) (int, error) {
 }
 
 func GetJobsByDeploymentSeq(tx *sql.Tx, deploymentSeq int) ([]string, error) {
-	rows, err := tx.Query(`SELECT DISTINCT job FROM allocations WHERE deployment_seq = ?`, deploymentSeq)
+	// Only jobs still in the catalog with active allocations. After a workspace job folder
+	// is removed, build deletes the job row and marks allocations removed=1 until gc runs.
+	rows, err := tx.Query(`
+		SELECT DISTINCT a.job
+		FROM allocations a
+		INNER JOIN job j ON j.name = a.job
+		WHERE a.deployment_seq = ? AND a.removed = 0`, deploymentSeq)
 	if err != nil {
 		return nil, bucket.DatabaseError(err)
 	}

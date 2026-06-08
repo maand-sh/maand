@@ -178,7 +178,7 @@ Body JSON:
 ```
 
 - **GET**: Read key (must be in **allowed namespaces** for that job/worker). Values under `secrets/job/<job>` are returned decrypted.
-- **PUT**: Write a non-secret key under `vars/job/<job>` (in-memory store; persisted when deploy checkpoints or build/CLI commits).
+- **PUT**: Write a non-secret key under `vars/job/<job>` (in-memory store; persisted when deploy checkpoints, at the end of **`post_build`**, or when **`maand jobcommand`** exits successfully).
 
 ### `PUT` `/kv/secret`
 

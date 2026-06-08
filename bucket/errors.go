@@ -8,6 +8,7 @@ import (
 var (
 	ErrInvalidWorkerJSON                = errors.New("invalid worker.json")
 	ErrInvalidManifest                  = errors.New("invalid manifest.json")
+	ErrInvalidJobVars                   = errors.New("invalid vars.toml")
 	ErrInvalidMaandConf                 = errors.New("invalid maand.conf")
 	ErrInvalidBucketConf                = errors.New("invalid bucket.conf")
 	ErrUnexpectedError                  = errors.New("unexpected error")

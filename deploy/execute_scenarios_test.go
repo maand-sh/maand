@@ -77,6 +77,21 @@ func TestExecute_threeJobsOrderedByDeploymentSequence(t *testing.T) {
 	assert.Equal(t, "seq0", order[0])
 }
 
+func TestExecute_removedJobWithoutGC(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	installNoopDeployHooks(t, env.bucketID)
+
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "removed", "10.0.0.1", 0)
+	_, err := tx.Exec(`DELETE FROM job WHERE name = 'removed'`)
+	require.NoError(t, err)
+	_, err = tx.Exec(`UPDATE allocations SET removed = 1 WHERE job = 'removed'`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	require.NoError(t, Execute(nil))
+}
+
 func indexJobFlag(cmd string) int {
 	const flag = "--jobs "
 	if i := indexSubstring(cmd, flag); i >= 0 {

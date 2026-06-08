@@ -91,3 +91,29 @@ func TestLoadReturnsLatestVersionOnly(t *testing.T) {
 	assert.Equal(t, "new", entry.Value)
 	assert.Equal(t, 2, entry.Version)
 }
+
+func TestLoadAfterReviveDeletedKeepsNewest(t *testing.T) {
+	db := openTestDB(t)
+	defer func() {
+		_ = db.Close()
+	}()
+
+	_, err := db.Exec(
+		`INSERT INTO key_value (key, value, namespace, version, ttl, created_date, deleted) VALUES
+		 ('k', 'old', 'ns', 1, 0, 1, 0),
+		 ('k', 'old', 'ns', 2, 0, 2, 1),
+		 ('k', 'new', 'ns', 3, 0, 3, 0)`,
+	)
+	require.NoError(t, err)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	store, err := LoadFromTransaction(tx)
+	require.NoError(t, err)
+	_ = tx.Rollback()
+
+	entry, err := store.Get("ns", "k")
+	require.NoError(t, err)
+	assert.Equal(t, "new", entry.Value)
+	assert.Equal(t, 3, entry.Version)
+}

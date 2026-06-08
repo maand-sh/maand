@@ -61,3 +61,20 @@ func newBatchHealthCheckError(failures []HealthCheckError) error {
 	}
 	return fmt.Errorf("%w", &BatchHealthCheckError{Failures: failures})
 }
+
+// WorkerHealthCheckError reports SSH reachability failure for workers.
+type WorkerHealthCheckError struct {
+	Err error
+}
+
+func (e *WorkerHealthCheckError) Error() string {
+	return fmt.Sprintf("worker health: %v", e.Err)
+}
+
+func (e *WorkerHealthCheckError) Unwrap() error {
+	return e.Err
+}
+
+func (e *WorkerHealthCheckError) Is(target error) bool {
+	return target == bucket.ErrHealthCheckFailed
+}

@@ -5,6 +5,7 @@
 package jobcommand
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -32,7 +33,7 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload any) {
 	}
 }
 
-func validateStoreKeyPayload(payload storeKeyPayload, jobName, workerIP string, isWrite bool) *apiResponseError {
+func validateStoreKeyPayload(tx *sql.Tx, payload storeKeyPayload, jobName, workerIP string, isWrite bool) *apiResponseError {
 	if payload.Namespace == "" || payload.Key == "" || (isWrite && payload.Value == "") {
 		return runtimeAPIErrors.missingKeyFields
 	}
@@ -45,7 +46,10 @@ func validateStoreKeyPayload(payload storeKeyPayload, jobName, workerIP string, 
 		return nil
 	}
 
-	allowedNamespaces := data.AllowedKVNamespaces(jobName, workerIP)
+	allowedNamespaces, err := data.AllowedKVNamespacesWithUpstream(tx, jobName, workerIP)
+	if err != nil {
+		return runtimeAPIErrors.internalError
+	}
 	if len(utils.Intersection(allowedNamespaces, []string{payload.Namespace})) == 0 {
 		return runtimeAPIErrors.namespaceDenied
 	}
@@ -79,8 +83,11 @@ func validateSecretNamespace(namespace, jobName, workerIP string) *apiResponseEr
 	return nil
 }
 
-func validateReadNamespace(namespace, jobName, workerIP string) *apiResponseError {
-	allowedNamespaces := data.AllowedKVNamespaces(jobName, workerIP)
+func validateReadNamespace(tx *sql.Tx, namespace, jobName, workerIP string) *apiResponseError {
+	allowedNamespaces, err := data.AllowedKVNamespacesWithUpstream(tx, jobName, workerIP)
+	if err != nil {
+		return runtimeAPIErrors.internalError
+	}
 	if len(utils.Intersection(allowedNamespaces, []string{namespace})) == 0 {
 		return runtimeAPIErrors.namespaceDenied
 	}

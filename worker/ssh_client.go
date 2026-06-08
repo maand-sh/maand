@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"maand/bucket"
 )
@@ -56,8 +57,18 @@ func RunRemoteScriptFile(rt *bucket.Runtime, workerIP, scriptPath string, _ bool
 	return RunRemoteScript(rt, workerIP, file, false)
 }
 
+// RemoteShellCommand runs a single remote shell command and returns an error on non-zero exit.
+func RemoteShellCommand(workerIP, command string, timeout time.Duration) error {
+	_, err := remoteShellOutput(workerIP, command, timeout)
+	return err
+}
+
 // RemoteShellOutput runs a single remote shell command and returns combined stdout/stderr.
 func RemoteShellOutput(workerIP, command string) (string, error) {
+	return remoteShellOutput(workerIP, command, remoteExecTimeout())
+}
+
+func remoteShellOutput(workerIP, command string, timeout time.Duration) (string, error) {
 	user, keyPath, useSudo, err := sshSettingsFromConf()
 	if err != nil {
 		return "", err
@@ -75,7 +86,10 @@ func RemoteShellOutput(workerIP, command string) (string, error) {
 	args := SSHClientArgs(keyPath, workerIP)
 	args = append(args, sshTarget(user, workerIP), remoteCommand)
 
-	ctx, cancel := context.WithTimeout(context.Background(), remoteExecTimeout())
+	if timeout <= 0 {
+		timeout = remoteExecTimeout()
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	out, err := exec.CommandContext(ctx, "ssh", args...).CombinedOutput()

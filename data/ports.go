@@ -6,6 +6,7 @@ package data
 
 import (
 	"database/sql"
+	"strconv"
 
 	"maand/bucket"
 )
@@ -43,4 +44,32 @@ func GetAllJobPortAssignments(tx *sql.Tx) (JobPortAssignments, error) {
 		return nil, err
 	}
 	return assignments, nil
+}
+
+// GetJobPortMap returns port name → number for one job.
+func GetJobPortMap(tx *sql.Tx, jobName string) (map[string]string, error) {
+	rows, err := tx.Query(
+		`SELECT name, port FROM job_ports WHERE job_id = (SELECT job_id FROM job WHERE name = ?)`,
+		jobName,
+	)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	ports := make(map[string]string)
+	for rows.Next() {
+		var name string
+		var port int
+		if err := rows.Scan(&name, &port); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		ports[name] = strconv.Itoa(port)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return ports, nil
 }

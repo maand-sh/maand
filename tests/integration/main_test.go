@@ -32,5 +32,7 @@ func TestMain(m *testing.M) {
 		wd = parent
 	}
 	bucket.UpdatePath()
-	os.Exit(m.Run())
+	code := m.Run()
+	cleanupIntegrationTestArtifacts()
+	os.Exit(code)
 }

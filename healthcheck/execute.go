@@ -2,7 +2,7 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-// Package healthcheck runs job commands registered for the health_check event.
+// Package healthcheck runs built-in manifest probes and health_check job commands.
 package healthcheck
 
 import (
@@ -34,19 +34,33 @@ func PrepareRuntime(tx *sql.Tx) (context.CancelFunc, error) {
 	return jobcommand.StartRuntimeAPI(tx), nil
 }
 
-// HealthCheck runs all health_check commands for a job on its active allocations.
+// HealthCheck runs manifest probes and health_check commands for a job.
 func HealthCheck(tx *sql.Tx, rt *bucket.Runtime, wait bool, job string, verbose bool) error {
+	spec, err := data.GetJobHealthCheck(tx, job)
+	if err != nil {
+		return err
+	}
+
 	commands, err := data.GetJobCommands(tx, job, "health_check")
 	if err != nil {
 		return err
 	}
 
-	if len(commands) == 0 {
-		fmt.Printf("health check skipped: %s (no health_check commands)\n", job)
+	hasProbes := spec != nil && len(spec.Checks) > 0
+	hasCommands := len(commands) > 0
+	if !hasProbes && !hasCommands {
+		fmt.Printf("health check skipped: %s (no health_check config or commands)\n", job)
 		return nil
 	}
 
-	runCommands := func() error {
+	attempts, interval := waitConfig(spec)
+
+	runChecks := func() error {
+		if hasProbes {
+			if err := runManifestHealthChecks(tx, job, spec); err != nil {
+				return err
+			}
+		}
 		for _, commandName := range commands {
 			if err := jobcommand.JobCommand(tx, rt, job, commandName, "health_check", 1, verbose, nil); err != nil {
 				return err
@@ -57,19 +71,19 @@ func HealthCheck(tx *sql.Tx, rt *bucket.Runtime, wait bool, job string, verbose 
 
 	if wait {
 		var lastErr error
-		for attempt := 1; attempt <= waitRetryAttempts; attempt++ {
-			lastErr = runCommands()
+		for attempt := 1; attempt <= attempts; attempt++ {
+			lastErr = runChecks()
 			if lastErr == nil {
 				fmt.Printf("health check passed: %s\n", job)
 				return nil
 			}
-			fmt.Printf("health check failed: %s (attempt %d/%d), retrying...\n", job, attempt, waitRetryAttempts)
-			time.Sleep(waitRetryInterval)
+			fmt.Printf("health check failed: %s (attempt %d/%d), retrying...\n", job, attempt, attempts)
+			time.Sleep(interval)
 		}
 		return &HealthCheckError{Job: job, Err: lastErr}
 	}
 
-	if err := runCommands(); err != nil {
+	if err := runChecks(); err != nil {
 		fmt.Printf("health check failed: %s\n", job)
 		return &HealthCheckError{Job: job, Err: err}
 	}
@@ -80,6 +94,10 @@ func HealthCheck(tx *sql.Tx, rt *bucket.Runtime, wait bool, job string, verbose 
 
 // RunJobs health-checks multiple jobs using the same transaction and runtime.
 func RunJobs(tx *sql.Tx, rt *bucket.Runtime, wait, verbose bool, jobNames []string) error {
+	if err := CheckWorkers(tx, wait); err != nil {
+		return err
+	}
+
 	jobNames = utils.Unique(jobNames)
 	if len(jobNames) == 0 {
 		return nil
@@ -165,7 +183,10 @@ func Execute(wait, verbose bool, jobsComma string) error {
 		jobNames = jobFilter
 	}
 
-	return RunJobs(tx, rt, wait, verbose, jobNames)
+	if err := RunJobs(tx, rt, wait, verbose, jobNames); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func parseJobFilter(jobsComma string) []string {

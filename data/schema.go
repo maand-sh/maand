@@ -12,7 +12,7 @@ import (
 )
 
 // LatestSchemaVersion is the target schema version applied by MigrateSchema.
-const LatestSchemaVersion = 2
+const LatestSchemaVersion = 3
 
 // MigrateSchema brings an existing or new database to LatestSchemaVersion.
 // It is idempotent and safe to run on every maand init.
@@ -78,6 +78,8 @@ func applySchemaMigration(tx *sql.Tx, version int) error {
 		return migrateToV1(tx)
 	case 2:
 		return migrateToV2(tx)
+	case 3:
+		return migrateToV3(tx)
 	default:
 		return fmt.Errorf("unsupported schema version %d", version)
 	}
@@ -93,6 +95,24 @@ func migrateToV1(tx *sql.Tx) error {
 		return err
 	}
 	return recreateCatalogViews(tx)
+}
+
+func migrateToV3(tx *sql.Tx) error {
+	var columnCount int
+	err := tx.QueryRow(
+		`SELECT count(*) FROM pragma_table_info('job') WHERE name = 'health_check'`,
+	).Scan(&columnCount)
+	if err != nil {
+		return bucket.DatabaseError(err)
+	}
+	if columnCount > 0 {
+		return nil
+	}
+	_, err = tx.Exec(`ALTER TABLE job ADD COLUMN health_check TEXT`)
+	if err != nil {
+		return bucket.DatabaseError(err)
+	}
+	return nil
 }
 
 func migrateToV2(tx *sql.Tx) error {

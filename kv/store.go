@@ -36,7 +36,7 @@ func (s *Store) namespaceMap(namespace string) map[string]*Entry {
 	return ns
 }
 
-// Put sets or updates a key. Deleted keys are revived with version 1.
+// Put sets or updates a key. Deleted keys are revived with a new higher version.
 func (s *Store) Put(namespace, key, value string, ttl int) {
 	s.putValue(namespace, key, value, ttl, true)
 }
@@ -51,7 +51,7 @@ func (s *Store) putValue(namespace, key, value string, ttl int, trimValue bool) 
 	ns := s.namespaceMap(namespace)
 
 	entry, exists := ns[key]
-	if !exists || entry.Deleted == 1 {
+	if !exists {
 		ns[key] = &Entry{
 			Value:   value,
 			Version: 1,
@@ -59,6 +59,14 @@ func (s *Store) putValue(namespace, key, value string, ttl int, trimValue bool) 
 			Deleted: 0,
 			Changed: true,
 		}
+		return
+	}
+	if entry.Deleted == 1 {
+		entry.Value = value
+		entry.TTL = ttl
+		entry.Deleted = 0
+		entry.Version++
+		entry.Changed = true
 		return
 	}
 

@@ -52,5 +52,6 @@ type Manifest struct {
 		One     bool        `json:"one"`
 		Subject CertSubject `json:"subject"`
 	} `json:"certs"`
-	UpdateParallelCount int `json:"update_parallel_count"`
+	HealthCheck         *ManifestHealthCheck `json:"health_check,omitempty"`
+	UpdateParallelCount int                  `json:"update_parallel_count"`
 }
