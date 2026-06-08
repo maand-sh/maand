@@ -118,4 +118,4 @@ Copy [assets/README.md](../assets/README.md) setup, then:
 go test -tags=integration ./tests/integration/... -v -timeout 25m
 ```
 
-Not run in CI.
+Not run in CI (GitHub Actions runs `make test-unit` and `make build` only).
