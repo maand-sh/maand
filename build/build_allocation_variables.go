@@ -146,7 +146,7 @@ func syncAllocationKeyValues(namespace string, keyValues map[string]string) erro
 		if strings.HasPrefix(key, "certs/") {
 			continue
 		}
-		if key == "current_version" || key == "new_version" {
+		if key == "version" {
 			continue
 		}
 		if err := kv.GetKVStore().Delete(namespace, key); err != nil {

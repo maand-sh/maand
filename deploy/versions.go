@@ -34,8 +34,12 @@ func syncAllocationVersionKV(job, workerIP string, versions data.AllocationVersi
 		return nil
 	}
 	namespace := fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP)
-	store.Put(namespace, "current_version", versions.CurrentVersion, 0)
-	store.Put(namespace, "new_version", versions.NewVersion, 0)
+	store.Put(namespace, "version", versions.NewVersion, 0)
+	for _, legacyKey := range []string{"current_version", "new_version"} {
+		if err := store.Delete(namespace, legacyKey); err != nil && err != kv.ErrNotFound {
+			return err
+		}
+	}
 	return nil
 }
 

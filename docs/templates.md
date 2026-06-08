@@ -29,8 +29,7 @@ During **`maand deploy`**, after job files are copied to `tmp/workers/<ip>/jobs/
 Equivalent KV:
 
 ```text
-{{ get "maand/job/api/worker/10.0.0.1" "current_version" }}
-{{ get "maand/job/api/worker/10.0.0.1" "new_version" }}
+{{ get "maand/job/api/worker/10.0.0.1" "version" }}
 ```
 
 ---
