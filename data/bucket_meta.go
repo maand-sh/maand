@@ -83,3 +83,48 @@ func AllowedKVNamespaces(job, workerIP string) []string {
 		fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP),
 	}
 }
+
+// UpstreamDemandKVNamespaces returns KV namespaces for jobs this job depends on via command demands.
+func UpstreamDemandKVNamespaces(tx *sql.Tx, job string) ([]string, error) {
+	rows, err := tx.Query(
+		`SELECT DISTINCT demand_job FROM job_commands
+		 WHERE job = ? AND ifnull(trim(demand_job), '') != ''`,
+		job,
+	)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	namespaces := make([]string, 0)
+	for rows.Next() {
+		var upstreamJob string
+		if err := rows.Scan(&upstreamJob); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		namespaces = append(namespaces,
+			fmt.Sprintf("maand/job/%s", upstreamJob),
+			fmt.Sprintf("vars/job/%s", upstreamJob),
+			fmt.Sprintf("secrets/job/%s", upstreamJob),
+		)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return namespaces, nil
+}
+
+// AllowedKVNamespacesWithUpstream includes read namespaces for upstream jobs referenced in demands.
+func AllowedKVNamespacesWithUpstream(tx *sql.Tx, job, workerIP string) ([]string, error) {
+	namespaces := AllowedKVNamespaces(job, workerIP)
+	if tx == nil {
+		return namespaces, nil
+	}
+	upstream, err := UpstreamDemandKVNamespaces(tx, job)
+	if err != nil {
+		return nil, err
+	}
+	return append(namespaces, upstream...), nil
+}

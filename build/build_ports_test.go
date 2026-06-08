@@ -16,15 +16,15 @@ func TestPortAllocatorStableAndReuse(t *testing.T) {
 	}
 	alloc := newPortAllocator(existing, bucket.PortRange{Min: 30000, Max: 30002})
 
-	port, err := alloc.assign("a", "web_port")
+	port, err := alloc.assignProvisioned("a", "web_port")
 	require.NoError(t, err)
 	assert.Equal(t, 30001, port)
 
-	port, err = alloc.assign("b", "api_port")
+	port, err = alloc.assignProvisioned("b", "api_port")
 	require.NoError(t, err)
 	assert.Equal(t, 30000, port)
 
-	port, err = alloc.assign("b", "api_port")
+	port, err = alloc.assignProvisioned("b", "api_port")
 	require.NoError(t, err)
 	assert.Equal(t, 30000, port)
 }
@@ -37,7 +37,7 @@ func TestPortAllocatorReleaseRemoved(t *testing.T) {
 
 	alloc.releaseRemoved("a", []string{"admin_port"})
 
-	port, err := alloc.assign("b", "other_port")
+	port, err := alloc.assignProvisioned("b", "other_port")
 	require.NoError(t, err)
 	assert.Equal(t, 30000, port)
 }
@@ -48,7 +48,65 @@ func TestPortAllocatorExhausted(t *testing.T) {
 	}
 	alloc := newPortAllocator(existing, bucket.PortRange{Min: 30000, Max: 30000})
 
-	_, err := alloc.assign("b", "p2")
+	_, err := alloc.assignProvisioned("b", "p2")
 	require.Error(t, err)
 	assert.ErrorIs(t, err, bucket.ErrPortRangeExhausted)
+}
+
+func TestPortAllocatorStableAcrossMultipleJobs(t *testing.T) {
+	existing := data.JobPortAssignments{
+		"api":      {"http_port": 30001},
+		"database": {"db_port": 30002},
+	}
+	alloc := newPortAllocator(existing, bucket.PortRange{Min: 30000, Max: 30005})
+
+	for _, tc := range []struct {
+		job, name string
+		want      int
+	}{
+		{"api", "http_port", 30001},
+		{"database", "db_port", 30002},
+		{"api", "http_port", 30001},
+		{"database", "db_port", 30002},
+	} {
+		port, err := alloc.assignProvisioned(tc.job, tc.name)
+		require.NoError(t, err, "%s/%s", tc.job, tc.name)
+		assert.Equal(t, tc.want, port)
+	}
+
+	port, err := alloc.assignProvisioned("worker", "metrics_port")
+	require.NoError(t, err)
+	assert.Equal(t, 30000, port)
+
+	port, err = alloc.assignProvisioned("api", "http_port")
+	require.NoError(t, err)
+	assert.Equal(t, 30001, port)
+}
+
+func TestPortAllocatorFixedPort(t *testing.T) {
+	alloc := newPortAllocator(nil, bucket.PortRange{Min: 30000, Max: 30005})
+
+	port, err := alloc.assignFixed("api", "http_port", 30001)
+	require.NoError(t, err)
+	assert.Equal(t, 30001, port)
+
+	port, err = alloc.assignFixed("api", "http_port", 30001)
+	require.NoError(t, err)
+	assert.Equal(t, 30001, port)
+
+	_, err = alloc.assignFixed("db", "db_port", 30001)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, bucket.ErrPortCollision)
+
+	port, err = alloc.assignProvisioned("worker", "metrics_port")
+	require.NoError(t, err)
+	assert.Equal(t, 30000, port)
+}
+
+func TestPortAllocatorFixedPortOutOfRange(t *testing.T) {
+	alloc := newPortAllocator(nil, bucket.PortRange{Min: 30000, Max: 30005})
+
+	_, err := alloc.assignFixed("api", "http_port", 29999)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, bucket.ErrInvalidPortRange)
 }

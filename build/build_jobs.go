@@ -130,10 +130,22 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			}
 		}
 
+		if err := workspace.ValidateHealthCheck(jobName, manifest); err != nil {
+			return nil, err
+		}
+		healthCheckJSON := ""
+		if manifest.HealthCheck != nil && len(manifest.HealthCheck.Checks) > 0 {
+			encoded, err := json.Marshal(manifest.HealthCheck)
+			if err != nil {
+				return nil, fmt.Errorf("%w: job %s health_check: %w", bucket.ErrInvalidManifest, jobName, err)
+			}
+			healthCheckJSON = string(encoded)
+		}
+
 		version := workspace.GetVersion(manifest)
 		upsertJobQuery := `
-			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count, health_check)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		_, err = tx.Exec(
 			upsertJobQuery, jobID, jobName, version,
@@ -144,6 +156,7 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			fmt.Sprintf("%v", maxCPUMHZ),
 			fmt.Sprintf("%v", requestedCPUMHz),
 			workspace.GetUpdateParallelCount(manifest),
+			healthCheckJSON,
 		)
 		if err != nil {
 			return nil, bucket.DatabaseError(err)
@@ -156,7 +169,7 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			}
 		}
 
-		if err := syncJobPorts(tx, jobID, jobName, manifest.Resources.Ports.Names(), portAllocator); err != nil {
+		if err := syncJobPorts(tx, jobID, jobName, manifest.Resources.Ports, portAllocator); err != nil {
 			return nil, err
 		}
 

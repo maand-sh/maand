@@ -50,7 +50,7 @@ func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 		return nil, err
 	}
 
-	var rawWorkers []Worker
+	var rawWorkers []workerJSON
 	if err = json.Unmarshal(data, &rawWorkers); err != nil {
 		return nil, fmt.Errorf("%w: %w", bucket.ErrInvalidWorkerJSON, err)
 	}
@@ -66,7 +66,15 @@ func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 			return nil, fmt.Errorf("%w: duplicate host %q", bucket.ErrInvalidWorkerJSON, host)
 		}
 		seenHosts[host] = struct{}{}
-		workers = append(workers, NewWorker(host, raw.Labels, raw.Memory, raw.CPU, raw.Tags, idx))
+		position := idx
+		if raw.Position != nil {
+			position = *raw.Position
+		}
+		w := NewWorker(host, raw.Labels, raw.Memory, raw.CPU, raw.Tags, position)
+		if hn := strings.TrimSpace(raw.Hostname); hn != "" {
+			w.Hostname = hn
+		}
+		workers = append(workers, w)
 	}
 	return workers, nil
 }

@@ -117,7 +117,7 @@ func TestEmptyBucketConf(t *testing.T) {
 	assert.Equal(t, "", key)
 
 	kvcount := GetRowCount("select count(1) from key_value")
-	assert.Equal(t, 1, kvcount)
+	assert.Equal(t, 3, kvcount)
 }
 
 func TestBucketConfAdded(t *testing.T) {

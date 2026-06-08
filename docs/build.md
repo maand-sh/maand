@@ -91,7 +91,7 @@ Workers removed from `workers.json` are marked **`removed`** on allocations (not
 | `selectors` | Worker **labels** required to place the job (all selectors must match worker labels). |
 | `update_parallel_count` | Rolling restart batch size during **deploy** (minimum 1). |
 | `resources.memory` / `cpu` | Limits; optional override via `bucket.jobs.conf`. |
-| `resources.ports` | Named ports (`"database_port": {}`); numbers assigned from `bucket.conf` range at build |
+| `resources.ports` | Named ports: `{}` (maand assigns) or integer (fixed); must be within `bucket.conf` range |
 | `commands` | Named commands (must be prefixed `command_`). |
 | `certs` | Per-job cert definitions → generated into KV per worker. |
 
@@ -181,18 +181,23 @@ port_min = "30000"
 port_max = "39999"
 ```
 
-Job manifests declare named ports as empty objects; **`maand build`** assigns the lowest free port in this inclusive range. Assigned numbers are stored in **`job_ports`** and exposed in KV (`maand/<port_name>`). A port keeps the same number across rebuilds until the job is removed or the port name is removed from the manifest.
+Job manifests declare named ports in two ways:
+
+- **`{}`** — maand assigns the lowest free port in the inclusive range at build time.
+- **An integer** — you pin the port number in the manifest (must be inside `port_min`–`port_max`).
+
+Assigned numbers are stored in **`job_ports`** and exposed in KV (`maand/<port_name>`). Maand-provisioned ports keep the same number across rebuilds until the job is removed or the port name is removed. Fixed ports always follow the manifest value.
 
 ```json
 "resources": {
   "ports": {
-    "database_port": {},
+    "database_port": 5432,
     "http_port": {}
   }
 }
 ```
 
-Port names must be lowercase identifiers (`database_port`, `http_port`). Hardcoded port numbers in manifests are rejected.
+Port names must be lowercase identifiers (`database_port`, `http_port`). The same port number cannot be used by two jobs or two port names in the bucket.
 
 Other keys in `bucket.conf` are copied to KV namespace **`vars/bucket`**.
 
@@ -223,13 +228,14 @@ All steps run in one **transaction** (except post-build hooks), then `VACUUM`:
 | 4 | `ValidateJobCommandDemands` | Verify demand job/command refs; parse **`version`**; check **`min_version`** / **`max_version`**. |
 | 5 | `BuildAllocations` | Label-match jobs to workers → `allocations` rows (`alloc_id`, `deployment_seq` initially 0). |
 | 6 | `BuildDeploymentSequence` | Compute `deployment_seq` from **command demands** (dependency order). |
-| 7 | `BuildVariables` | Populate KV namespaces (workers, jobs, per-allocation certs path, bucket vars). |
+| 7 | `BuildVariables` | Populate KV namespaces (workers, jobs, bucket vars, job/allocation metadata). |
 | 8 | `BuildCerts` | Regenerate CA/job certs when CA or cert config changed; write cert PEMs into KV. |
-| 9 | `PurgeStaleVersions` | Trim old KV versions (keep 7 per key). |
-| 10 | `ValidateWorkerResources` | Ensure allocated jobs fit worker memory/CPU. |
-| 11 | `PersistToTransaction` | Write KV changes into `key_value` table. |
-| 12 | **Commit** | Persist catalog. |
-| 13 | `runPostBuildHooks` | **Separate transaction**; failures **fail the build**. |
+| 9 | `BuildJobAllocationVariables` | Per-allocation keys (`*_allocation_index`, peers, `peer_ports`) after certs so cert sync does not delete them. |
+| 10 | `PurgeStaleVersions` | Trim old KV versions (keep 7 per key). |
+| 11 | `ValidateWorkerResources` | Ensure allocated jobs fit worker memory/CPU. |
+| 12 | `PersistToTransaction` | Write KV changes into `key_value` table. |
+| 13 | **Commit** | Persist catalog. |
+| 14 | `runPostBuildHooks` | **Separate transaction**; runs `post_build` commands, then **persists `vars/job` KV**; failures **fail the build**. |
 
 ### Deployment sequence (`deployment_seq`)
 
@@ -257,15 +263,34 @@ Examples written during build:
 
 | Namespace | Examples |
 |-----------|----------|
-| `maand/worker/<ip>` | `worker_ip`, `worker_id`, `labels`, `worker_memory_mb`, `jobs`, label peers |
+| `maand` | `<port_name>` (global), `jobs`, `bucket_id` |
+| `maand/worker/<ip>` | `worker_ip`, `worker_id`, `labels`, `position`, `hostname` (optional), `worker_memory_mb`, `jobs`, label peers |
 | `maand/worker/<ip>/tags/<key>` | Tag values |
-| `maand/job/<job>` | `name`, `version` (target), `selectors`, memory/cpu limits |
+| `maand/job/<job>` | `name`, `version` (target), `selectors`, memory/cpu limits, `workers`, `workers_length`, `worker_0`…, `ports_json` (+ per-port keys) |
 | `vars/bucket/job/<job>` | Entries from `bucket.jobs.conf` |
-| `vars/job/<job>` | Job-scoped vars for templates |
-| `maand/job/<job>/worker/<ip>` | `certs/*`, `current_version`, `new_version` (deploy) |
-| `maand/worker` | `certs/ca.crt` |
+| `vars/job/<job>` | Job-scoped vars for templates (not synced by build; survives rebuild). Seeded from `workspace/jobs/<job>/vars.toml` (merge-only) and from job commands via `kv_put` / `put_job_variable` (persisted at deploy checkpoint, `maand jobcommand`, and end of `post_build`). |
+| `maand/job/<job>/worker/<ip>` | `certs/*`, `<job>_allocation_index`, `is_primary`, `is_seed`, `peer_workers`, `peer_ports`, `current_version`, `new_version` (deploy) |
+| `maand/worker` | `certs/ca.crt`, label-wide `*_workers` keys |
 
 Templates (`.tpl`) and job commands read these via the runtime API or deploy transpile.
+
+#### `vars/job/<job>` (stable app config)
+
+Build **does not** run `syncKeyValues` on `vars/job/<job>` for active jobs, so keys you set are not wiped on rebuild.
+
+Two ways to populate:
+
+1. **`workspace/jobs/<job>/vars.toml`** — TOML string keys merged at build (put-only; keys not listed stay in KV).
+2. **Job commands** — `kv_put("key", "value")` in `post_build` / `pre_deploy` / `post_deploy`; persisted to `maand.db` at deploy checkpoint, after `post_build`, or when `maand jobcommand` finishes.
+
+Example `vars.toml`:
+
+```toml
+cluster_name = "prod"
+dc = "us-east"
+```
+
+Template: `{{ get "vars/job/cassandra" "cluster_name" }}`.
 
 ### Certificates
 

@@ -16,9 +16,22 @@ type MaandConf struct {
 	UseSUDO            bool   `toml:"use_sudo"`
 	SSHUser            string `toml:"ssh_user"`
 	SSHKeyFile         string `toml:"ssh_key"`
+	SSHPort            int    `toml:"ssh_port"`
 	CertsTTL           int    `toml:"certs_ttl"`
 	CertsRenewalBuffer int    `toml:"certs_renewal_buffer"`
 	JobConfigSelector  string `toml:"job_config_selector,omitempty"`
+}
+
+// SSHPort returns the SSH port from maand.conf (default 22).
+func SSHPort() (int, error) {
+	conf, err := GetMaandConf()
+	if err != nil {
+		return 22, err
+	}
+	if conf.SSHPort <= 0 {
+		return 22, nil
+	}
+	return conf.SSHPort, nil
 }
 
 func GetMaandConf() (MaandConf, error) {

@@ -53,7 +53,7 @@ func JobCommand(
 		return err
 	}
 
-	if err := prepareWorkerWorkspaces(tx, jobName, workerIPs); err != nil {
+	if err := prepareWorkerWorkspaces(tx, jobName, workerIPs, event, commandName); err != nil {
 		return err
 	}
 
@@ -187,6 +187,10 @@ func Execute(jobName, commandName, event string, concurrency int, verbose bool, 
 	}
 
 	if err := JobCommand(tx, rt, jobName, commandName, event, concurrency, verbose, extraEnv); err != nil {
+		return err
+	}
+
+	if err := kv.PersistToSessionTransaction(tx); err != nil {
 		return err
 	}
 

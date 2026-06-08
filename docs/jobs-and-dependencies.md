@@ -40,7 +40,7 @@ Example:
   "resources": {
     "memory": { "min": "256 mb", "max": "1 gb" },
     "cpu": { "min": "200 mhz", "max": "1000 mhz" },
-    "ports": { "database_port": {}, "http_port": {} }
+    "ports": { "database_port": 5432, "http_port": {} }
   },
   "commands": {
     "command_schema": {

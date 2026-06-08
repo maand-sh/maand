@@ -21,6 +21,9 @@ type portAllocator struct {
 }
 
 func newPortAllocator(existing data.JobPortAssignments, portRange bucket.PortRange) *portAllocator {
+	if existing == nil {
+		existing = make(data.JobPortAssignments)
+	}
 	used := make(map[int]struct{})
 	for _, ports := range existing {
 		for _, port := range ports {
@@ -34,16 +37,57 @@ func newPortAllocator(existing data.JobPortAssignments, portRange bucket.PortRan
 	}
 }
 
-func (a *portAllocator) assign(jobName string, portName string) (int, error) {
+func (a *portAllocator) validateInRange(jobName, portName string, port int) error {
+	if port < a.range_.Min || port > a.range_.Max {
+		return fmt.Errorf("%w: job %s port %q uses %d outside range %d-%d",
+			bucket.ErrInvalidPortRange, jobName, portName, port, a.range_.Min, a.range_.Max)
+	}
+	return nil
+}
+
+func (a *portAllocator) claimPort(jobName, portName string, port int) error {
+	if err := a.validateInRange(jobName, portName, port); err != nil {
+		return err
+	}
+
+	if prev, ok := a.existing[jobName][portName]; ok && prev == port {
+		a.usedNumbers[port] = struct{}{}
+		return nil
+	}
+
+	if _, taken := a.usedNumbers[port]; taken {
+		return fmt.Errorf("%w: port %d (job %s port %q)", bucket.ErrPortCollision, port, jobName, portName)
+	}
+
+	a.usedNumbers[port] = struct{}{}
+	if a.existing[jobName] == nil {
+		a.existing[jobName] = make(map[string]int)
+	}
+	a.existing[jobName][portName] = port
+	return nil
+}
+
+func (a *portAllocator) releaseAssignedNumber(jobName, portName string) {
+	prev, ok := a.existing[jobName][portName]
+	if !ok {
+		return
+	}
+	delete(a.usedNumbers, prev)
+}
+
+// assignProvisioned picks or reuses a port from the bucket pool for manifest entry {}.
+func (a *portAllocator) assignProvisioned(jobName string, portName string) (int, error) {
 	if err := workspace.ValidatePortKey(portName); err != nil {
 		return 0, err
 	}
 
+	// Reuse the number already stored in job_ports for this job/port name so rebuilds
+	// keep stable bindings until the job is removed or the port name leaves the manifest.
 	if prev, ok := a.existing[jobName][portName]; ok {
-		if prev < a.range_.Min || prev > a.range_.Max {
-			return 0, fmt.Errorf("%w: job %s port %q assigned %d outside range %d-%d",
-				bucket.ErrInvalidPortRange, jobName, portName, prev, a.range_.Min, a.range_.Max)
+		if err := a.validateInRange(jobName, portName, prev); err != nil {
+			return 0, err
 		}
+		a.usedNumbers[prev] = struct{}{}
 		return prev, nil
 	}
 
@@ -51,15 +95,33 @@ func (a *portAllocator) assign(jobName string, portName string) (int, error) {
 		if _, taken := a.usedNumbers[port]; taken {
 			continue
 		}
-		a.usedNumbers[port] = struct{}{}
-		if a.existing[jobName] == nil {
-			a.existing[jobName] = make(map[string]int)
+		if err := a.claimPort(jobName, portName, port); err != nil {
+			return 0, err
 		}
-		a.existing[jobName][portName] = port
 		return port, nil
 	}
 
 	return 0, fmt.Errorf("%w: no free ports in range %d-%d", bucket.ErrPortRangeExhausted, a.range_.Min, a.range_.Max)
+}
+
+func (a *portAllocator) assignFixed(jobName, portName string, port int) (int, error) {
+	if err := workspace.ValidatePortKey(portName); err != nil {
+		return 0, err
+	}
+	if prev, ok := a.existing[jobName][portName]; ok && prev != port {
+		a.releaseAssignedNumber(jobName, portName)
+	}
+	if err := a.claimPort(jobName, portName, port); err != nil {
+		return 0, err
+	}
+	return port, nil
+}
+
+func (a *portAllocator) resolve(jobName, portName string, binding workspace.ManifestPortBinding) (int, error) {
+	if binding.Provisioned() {
+		return a.assignProvisioned(jobName, portName)
+	}
+	return a.assignFixed(jobName, portName, *binding.Fixed)
 }
 
 func (a *portAllocator) releaseRemoved(jobName string, keepNames []string) {
@@ -83,9 +145,10 @@ func (a *portAllocator) releaseRemoved(jobName string, keepNames []string) {
 func syncJobPorts(
 	tx *sql.Tx,
 	jobID, jobName string,
-	portNames []string,
+	ports workspace.ManifestPorts,
 	allocator *portAllocator,
 ) error {
+	portNames := ports.Names()
 	allocator.releaseRemoved(jobName, portNames)
 
 	_, err := tx.Exec("DELETE FROM job_ports WHERE job_id = ?", jobID)
@@ -94,7 +157,7 @@ func syncJobPorts(
 	}
 
 	for _, portName := range portNames {
-		port, err := allocator.assign(jobName, portName)
+		port, err := allocator.resolve(jobName, portName, ports[portName])
 		if err != nil {
 			return err
 		}

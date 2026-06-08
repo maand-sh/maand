@@ -41,7 +41,10 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 		return nil
 	}
 
-	allowedNamespaces := data.AllowedKVNamespaces(job, workerIP)
+	allowedNamespaces, err := data.AllowedKVNamespacesWithUpstream(tx, job, workerIP)
+	if err != nil {
+		return err
+	}
 	funcMap := templateFuncMap(job, allowedNamespaces)
 
 	workerData, err := getWorkerData(tx, workerIP)

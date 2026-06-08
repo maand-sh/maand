@@ -93,21 +93,21 @@ func TestResolveCommandScriptMissing(t *testing.T) {
 
 func TestCommandExecLinesBun(t *testing.T) {
 	lines := CommandExecLines("/modules", "/modules/command_x.ts", RuntimeBun, "api")
-	if len(lines) != 2 || lines[1] != "bun run /modules/command_x.ts" {
+	if len(lines) != 2 || lines[1] != "bun run command_x.ts" {
 		t.Fatalf("lines: %#v", lines)
 	}
 }
 
 func TestCommandExecLinesPython(t *testing.T) {
 	lines := CommandExecLines("/modules", "/modules/command_x.py", RuntimePython, "api")
-	if len(lines) != 2 || lines[1] != "python3 /modules/command_x.py" {
+	if len(lines) != 2 || lines[1] != "python3 command_x.py" {
 		t.Fatalf("lines: %#v", lines)
 	}
 }
 
 func TestCommandExecLinesUnknownRuntimeDefaultsPython(t *testing.T) {
 	lines := CommandExecLines("/modules", "/modules/command_x.py", Runtime("ruby"), "api")
-	if lines[1] != "python3 /modules/command_x.py" {
+	if lines[1] != "python3 command_x.py" {
 		t.Fatalf("lines: %#v", lines)
 	}
 }

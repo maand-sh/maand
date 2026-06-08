@@ -16,11 +16,22 @@ import (
 
 var manifestPortKeyPattern = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 
-// ManifestPorts lists named ports declared in a job manifest.
-// Each value must be an empty object: "database_port": {}
-type ManifestPorts map[string]struct{}
+// ManifestPortBinding is one port entry in a job manifest.
+// Fixed is nil when maand should assign from the bucket port pool (manifest value {}).
+// Fixed is non-nil when the manifest sets an explicit port number.
+type ManifestPortBinding struct {
+	Fixed *int
+}
 
-// UnmarshalJSON accepts only empty JSON objects as port declarations.
+// Provisioned reports whether maand assigns the port number at build time.
+func (b ManifestPortBinding) Provisioned() bool {
+	return b.Fixed == nil
+}
+
+// ManifestPorts lists named ports declared in a job manifest.
+type ManifestPorts map[string]ManifestPortBinding
+
+// UnmarshalJSON accepts {} (maand-provisioned) or a JSON integer (fixed port).
 func (p *ManifestPorts) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		*p = nil
@@ -34,11 +45,21 @@ func (p *ManifestPorts) UnmarshalJSON(data []byte) error {
 
 	ports := make(ManifestPorts, len(raw))
 	for name, value := range raw {
-		trimmed := strings.TrimSpace(string(value))
-		if trimmed != "{}" {
-			return fmt.Errorf("%w: port %q must be {}, not %s", bucket.ErrInvalidManifestPort, name, trimmed)
+		if err := ValidatePortKey(name); err != nil {
+			return err
 		}
-		ports[name] = struct{}{}
+
+		trimmed := strings.TrimSpace(string(value))
+		if trimmed == "{}" {
+			ports[name] = ManifestPortBinding{}
+			continue
+		}
+
+		var port int
+		if err := json.Unmarshal(value, &port); err != nil {
+			return fmt.Errorf("%w: port %q must be {} or an integer, not %s", bucket.ErrInvalidManifestPort, name, trimmed)
+		}
+		ports[name] = ManifestPortBinding{Fixed: &port}
 	}
 	*p = ports
 	return nil
