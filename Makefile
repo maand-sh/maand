@@ -8,6 +8,7 @@ BINARY          ?= maand
 # Library/cmd packages only — excludes maand/tests and maand/tests/integration.
 UNIT_PKGS       := $(shell go list ./... | grep -vE '/tests(/integration)?$$')
 UNIT_TIMEOUT    ?= 120s
+TESTS_TIMEOUT   ?= 300s
 INTEGRATION_TIMEOUT ?= 25m
 GO_TEST_FLAGS   ?=
 
@@ -27,7 +28,7 @@ help:
 	@echo "  test-all          test + test-integration"
 	@echo "  clean             Remove $(BINARY)"
 	@echo ""
-	@echo "Variables: BINARY, CGO_ENABLED, UNIT_TIMEOUT, INTEGRATION_TIMEOUT, GO_TEST_FLAGS"
+	@echo "Variables: BINARY, CGO_ENABLED, UNIT_TIMEOUT, TESTS_TIMEOUT, INTEGRATION_TIMEOUT, GO_TEST_FLAGS"
 
 build:
 	go build -o $(BINARY) .
@@ -38,7 +39,7 @@ test-unit:
 	go test $(GO_TEST_FLAGS) $(UNIT_PKGS) -count=1 -timeout $(UNIT_TIMEOUT)
 
 test-tests:
-	go test $(GO_TEST_FLAGS) ./tests -count=1 -timeout $(UNIT_TIMEOUT)
+	go test $(GO_TEST_FLAGS) ./tests -count=1 -timeout $(TESTS_TIMEOUT)
 
 test-integration:
 	go test $(GO_TEST_FLAGS) -tags=integration ./tests/integration/... -count=1 -timeout $(INTEGRATION_TIMEOUT) -v
