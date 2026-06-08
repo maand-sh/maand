@@ -7,7 +7,6 @@ package build
 import (
 	"database/sql"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -51,11 +50,6 @@ func syncJobAllocationVariables(tx *sql.Tx, jobName string) error {
 		return err
 	}
 
-	portMap, err := data.GetJobPortMap(tx, jobName)
-	if err != nil {
-		return err
-	}
-
 	indexKey := jobName + "_allocation_index"
 	for idx, workerIP := range activeWorkers {
 		peers := make([]string, 0, len(activeWorkers)-1)
@@ -67,10 +61,7 @@ func syncJobAllocationVariables(tx *sql.Tx, jobName string) error {
 
 		vars := map[string]string{
 			indexKey:       strconv.Itoa(idx),
-			"is_primary":   boolString(idx == 0),
-			"is_seed":      boolString(idx == 0),
 			"peer_workers": strings.Join(peers, ","),
-			"peer_ports":   encodePeerPorts(peers, portMap),
 		}
 
 		namespace := fmt.Sprintf("maand/job/%s/worker/%s", jobName, workerIP)
@@ -79,32 +70,6 @@ func syncJobAllocationVariables(tx *sql.Tx, jobName string) error {
 		}
 	}
 	return purgeStaleJobAllocationVariables(tx, jobName, activeWorkers)
-}
-
-func boolString(v bool) string {
-	if v {
-		return "1"
-	}
-	return "0"
-}
-
-func encodePeerPorts(peerIPs []string, portMap map[string]string) string {
-	if len(peerIPs) == 0 || len(portMap) == 0 {
-		return ""
-	}
-	names := make([]string, 0, len(portMap))
-	for name := range portMap {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	parts := make([]string, 0, len(peerIPs)*len(names))
-	for _, peer := range peerIPs {
-		for _, name := range names {
-			parts = append(parts, peer+":"+name+":"+portMap[name])
-		}
-	}
-	return strings.Join(parts, ",")
 }
 
 func purgeStaleJobAllocationVariables(tx *sql.Tx, jobName string, activeWorkers []string) error {

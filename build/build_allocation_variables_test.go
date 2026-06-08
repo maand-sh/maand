@@ -13,22 +13,6 @@ import (
 	"maand/kv"
 )
 
-func TestBoolString(t *testing.T) {
-	assert.Equal(t, "1", boolString(true))
-	assert.Equal(t, "0", boolString(false))
-}
-
-func TestEncodePeerPorts(t *testing.T) {
-	portMap := map[string]string{
-		"cql_port":  "9042",
-		"http_port": "8080",
-	}
-	got := encodePeerPorts([]string{"10.0.0.2"}, portMap)
-	assert.Equal(t, "10.0.0.2:cql_port:9042,10.0.0.2:http_port:8080", got)
-	assert.Empty(t, encodePeerPorts(nil, portMap))
-	assert.Empty(t, encodePeerPorts([]string{"10.0.0.2"}, nil))
-}
-
 func TestSyncAllocationKeyValuesPreservesCertKeys(t *testing.T) {
 	t.Cleanup(kv.ResetStoreForTest)
 
@@ -74,7 +58,6 @@ func TestBuildJobAllocationVariables(t *testing.T) {
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
 			update_parallel_count, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
-		INSERT INTO job_ports (job_id, name, port) VALUES ('job-api', 'http_port', 8080);
 		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
 		VALUES ('a1', '10.0.0.1', 'api', 0, 0, 0, '0.0.0'),
 		       ('a2', '10.0.0.2', 'api', 0, 0, 0, '0.0.0');
@@ -88,28 +71,15 @@ func TestBuildJobAllocationVariables(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	primaryNS := "maand/job/api/worker/10.0.0.1"
-	secondaryNS := "maand/job/api/worker/10.0.0.2"
 	store := kv.GetKVStore()
 
 	idx, err := store.Get(primaryNS, "api_allocation_index")
 	require.NoError(t, err)
 	assert.Equal(t, "0", idx.Value)
 
-	primary, err := store.Get(primaryNS, "is_primary")
-	require.NoError(t, err)
-	assert.Equal(t, "1", primary.Value)
-
-	secondary, err := store.Get(secondaryNS, "is_primary")
-	require.NoError(t, err)
-	assert.Equal(t, "0", secondary.Value)
-
 	peers, err := store.Get(primaryNS, "peer_workers")
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.2", peers.Value)
-
-	peerPorts, err := store.Get(primaryNS, "peer_ports")
-	require.NoError(t, err)
-	assert.Contains(t, peerPorts.Value, "10.0.0.2:http_port:8080")
 }
 
 func TestBuildJobAllocationVariablesPurgeStaleWorker(t *testing.T) {
