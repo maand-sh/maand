@@ -36,13 +36,24 @@ Requires real workers and files under [`assets/`](../assets/) (not in git). See 
 21 integration tests cover init, build, deploy (dry-run, rollout, job filter, hooks), job control, health checks, job commands (CLI/KV/secrets), run_command, GC, and info/cat.
 
 ```bash
-go test -tags=integration ./tests/integration/... -v -timeout 25m
+make test-integration
 ```
 
 # How to build
 
-``` 
-export CGO_ENABLED=1 # maand uses sqlite3 for storage which needs cgo enabled.
-go build
-# add maand path to $PATH env variable access it. see you there in https://maand.sh/latest
+Maand uses SQLite via CGO (`CGO_ENABLED=1`).
+
+```bash
+make build          # produces ./maand
+make test           # unit + ./tests packages (same scope as CI)
+make test-integration   # real workers; see assets/README.md
 ```
+
+Or manually:
+
+```bash
+export CGO_ENABLED=1
+go build -o maand .
+```
+
+Add the binary to your `PATH`, then see [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md).
