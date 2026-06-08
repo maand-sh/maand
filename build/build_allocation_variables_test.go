@@ -42,6 +42,7 @@ func TestSyncAllocationKeyValuesPreservesCertKeys(t *testing.T) {
 	kv.GetKVStore().Put("maand/job/app/worker/10.0.0.1", "certs/tls.crt", "CRT", 0)
 	kv.GetKVStore().Put("maand/job/app/worker/10.0.0.1", "certs/tls.key", "KEY", 0)
 	kv.GetKVStore().Put("maand/job/app/worker/10.0.0.1", "stale_meta", "old", 0)
+	kv.GetKVStore().Put("maand/job/app/worker/10.0.0.1", "version", "1.0.0", 0)
 
 	require.NoError(t, syncAllocationKeyValues("maand/job/app/worker/10.0.0.1", map[string]string{
 		"app_allocation_index": "0",
@@ -52,6 +53,7 @@ func TestSyncAllocationKeyValuesPreservesCertKeys(t *testing.T) {
 	assert.Contains(t, keys, "certs/tls.crt")
 	assert.Contains(t, keys, "certs/tls.key")
 	assert.Contains(t, keys, "app_allocation_index")
+	assert.Contains(t, keys, "version")
 	assert.NotContains(t, keys, "stale_meta")
 }
 

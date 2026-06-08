@@ -35,8 +35,7 @@ func TestIntegrationDeployVersionFirstDeploy(t *testing.T) {
 
 	assert.Equal(t, "0.0.0", workerVersionData(t, ip, "current_version"))
 	assert.Equal(t, "1.0.0", workerVersionData(t, ip, "new_version"))
-	assert.Equal(t, "1.0.0", latestKVValue(t, "maand/job/"+integrationJobName+"/worker/"+ip, "current_version"))
-	assert.Equal(t, "1.0.0", latestKVValue(t, "maand/job/"+integrationJobName+"/worker/"+ip, "new_version"))
+	assert.Equal(t, "1.0.0", latestKVValue(t, "maand/job/"+integrationJobName+"/worker/"+ip, "version"))
 }
 
 func TestIntegrationDeployVersionOmittedDefaultsToZero(t *testing.T) {
@@ -77,6 +76,7 @@ func TestIntegrationDeployVersionUpgrade(t *testing.T) {
 
 	assert.Equal(t, "1.0.0", workerVersionData(t, ip, "current_version"))
 	assert.Equal(t, "2.0.0", workerVersionData(t, ip, "new_version"))
+	assert.Equal(t, "2.0.0", latestKVValue(t, "maand/job/"+integrationJobName+"/worker/"+ip, "version"))
 
 	result, err := deploy.DryRun(nil, false)
 	require.NoError(t, err)

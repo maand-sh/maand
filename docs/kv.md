@@ -24,7 +24,7 @@ Related: [job-command.md](./job-command.md) · [templates.md](./templates.md) ·
 | `maand/worker/<ip>` | build | yes | Worker metadata, labels, peers |
 | `maand/worker/<ip>/tags/<key>` | build | yes | From `workers.json` tags |
 | `maand/job/<job>` | build | yes (when job active) | Job metadata, `version`, ports |
-| `maand/job/<job>/worker/<ip>` | build + deploy | yes (when alloc active) | Certs, peers, `current_version`, `new_version` |
+| `maand/job/<job>/worker/<ip>` | build + deploy | yes (when alloc active) | Certs, peers, `version` |
 | `vars/bucket` | build | yes | From `bucket.conf` |
 | `vars/bucket/job/<job>` | build | yes (when job active) | From `bucket.jobs*.conf` |
 | `vars/job/<job>` | build (`vars.toml`) + job commands | **yes** | App config; not wiped on rebuild |
@@ -70,8 +70,7 @@ Under **`maand/job/<job>/worker/<ip>`**:
 | `<job>_allocation_index` | Index among job peers |
 | `is_primary` / `is_seed` | Placement hints |
 | `peer_workers` / `peer_ports` | Peer discovery |
-| `current_version` | Running version (post-promote) |
-| `new_version` | Target version from build |
+| `version` | Target version from build (`allocations.new_version`) |
 
 ---
 

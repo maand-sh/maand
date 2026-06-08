@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"maand/bucket"
+	"maand/data"
 	"maand/kv"
 
 	"github.com/stretchr/testify/assert"
@@ -40,6 +41,7 @@ func TestUpdateJobAllocationHashes_andPromote(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "0.0.0", currentVersion.String)
 	assert.Equal(t, "2.0.0", newVersion.String)
+	assertAllocationVersionKV(t, "app", "10.0.0.1", "2.0.0")
 
 	require.NoError(t, promoteAllocationHash(tx, "app"))
 	assert.True(t, env.allocationHashPromoted(t, tx, "app", "alloc-app-10.0.0.1"))
@@ -54,7 +56,41 @@ func TestUpdateJobAllocationHashes_andPromote(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "2.0.0", currentVersion.String)
 	assert.Equal(t, "2.0.0", newVersion.String)
+	assertAllocationVersionKV(t, "app", "10.0.0.1", "2.0.0")
 	require.NoError(t, tx.Rollback())
+}
+
+func assertAllocationVersionKV(t *testing.T, job, workerIP, wantVersion string) {
+	t.Helper()
+	namespace := "maand/job/" + job + "/worker/" + workerIP
+	store := kv.GetKVStore()
+	entry, err := store.Get(namespace, "version")
+	require.NoError(t, err)
+	assert.Equal(t, wantVersion, entry.Value)
+	for _, legacyKey := range []string{"current_version", "new_version"} {
+		_, err := store.Get(namespace, legacyKey)
+		assert.ErrorIs(t, err, kv.ErrNotFound, legacyKey)
+	}
+}
+
+func TestSyncAllocationVersionKV_removesLegacyKeys(t *testing.T) {
+	t.Cleanup(kv.ResetStoreForTest)
+
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, tx.Commit())
+
+	namespace := "maand/job/app/worker/10.0.0.1"
+	store := kv.GetKVStore()
+	store.Put(namespace, "current_version", "1.0.0", 0)
+	store.Put(namespace, "new_version", "2.0.0", 0)
+
+	require.NoError(t, syncAllocationVersionKV("app", "10.0.0.1", data.AllocationVersions{
+		CurrentVersion: "1.0.0",
+		NewVersion:     "2.0.0",
+	}))
+	assertAllocationVersionKV(t, "app", "10.0.0.1", "2.0.0")
 }
 
 func TestUpdateJobAllocationHashes_skipsRemovedAllocation(t *testing.T) {
