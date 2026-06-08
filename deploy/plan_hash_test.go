@@ -13,6 +13,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRefreshPlanHashesForJobs_noJobs(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	require.NoError(t, refreshPlanHashesForJobs(tx, nil))
+	require.NoError(t, tx.Rollback())
+}
+
 func TestRefreshPlanHashesForJobs_detectsContentChange(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)

@@ -10,20 +10,21 @@ import (
 	"path"
 
 	"maand/bucket"
+	"maand/worker"
 )
 
-func removeJobDirectoryFromWorker(
+func removeJobDeployArtifactsFromWorker(
 	rt *bucket.Runtime,
 	bucketID, workerIP, job string,
 	assumeDead bool,
 ) error {
-	remoteDir := fmt.Sprintf("/opt/worker/%s/jobs/%s", bucketID, job)
-	err := runWorkerCommand(
-		rt,
-		workerIP,
-		[]string{fmt.Sprintf("rm -rf %s", remoteDir)},
-		nil,
-	)
+	cmd := worker.JobDeployArtifactsCleanupCommand(bucketID, job)
+	var err error
+	if assumeDead {
+		runWorkerCommandOrAssumeDead(rt, workerIP, []string{cmd}, nil)
+	} else {
+		err = runWorkerCommand(rt, workerIP, []string{cmd}, nil)
+	}
 	if err = finishRemovedWorkerCommand(workerIP, err, assumeDead); err != nil {
 		return fmt.Errorf("worker %s job %s: %w", workerIP, job, err)
 	}

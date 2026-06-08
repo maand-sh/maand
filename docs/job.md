@@ -33,7 +33,7 @@ Before control commands run, maand verifies each worker’s `/opt/worker/<bucket
 | | `maand deploy` | `maand job *` |
 |--|----------------|---------------|
 | Purpose | Roll out changed jobs, hooks, hashes | Manual lifecycle / Makefile targets |
-| Sync check | No | Yes (`worker.py` validation) |
+| Sync check | No | Yes (`worker.json` / `update_seq`) |
 | Hash / skip logic | Yes | No |
 
 Jobs with **`job_control`** commands in the manifest use those instead of the default Makefile runner when present.

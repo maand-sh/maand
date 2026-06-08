@@ -23,7 +23,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-func BuildVariables(tx *sql.Tx, jobWorkspace workspace.Workspace, removedWorkers, removedJobs []string) error {
+func BuildVariables(tx *sql.Tx, jobWorkspace workspace.Workspace, removedWorkers, removedJobs []string, purgeJobCommandKV bool) error {
 	workerMeta, err := workerMetaByIP(jobWorkspace)
 	if err != nil {
 		return err
@@ -31,7 +31,7 @@ func BuildVariables(tx *sql.Tx, jobWorkspace workspace.Workspace, removedWorkers
 	if err := buildWorkerVariables(tx, workerMeta, removedWorkers); err != nil {
 		return err
 	}
-	if err := buildJobVariables(tx, removedJobs); err != nil {
+	if err := buildJobVariables(tx, removedJobs, purgeJobCommandKV); err != nil {
 		return err
 	}
 	if err := buildSharedWorkerVariables(tx); err != nil {
@@ -298,13 +298,60 @@ func loadJobBucketConfig(jobName string) (configFileName string, settings map[st
 	return configFileName, allJobSettings[jobName], nil
 }
 
-func buildJobVariables(tx *sql.Tx, removedJobs []string) error {
+// jobShouldPurgeBuildKV reports whether build-owned job KV should be cleared.
+// Jobs with no allocation rows, or with disabled-only rows, keep KV; jobs whose
+// allocations are all removed are purged.
+func jobShouldPurgeBuildKV(tx *sql.Tx, jobName string) (bool, error) {
+	var total, nonRemoved int
+	err := tx.QueryRow(`SELECT count(*) FROM allocations WHERE job = ?`, jobName).Scan(&total)
+	if err != nil {
+		return false, bucket.DatabaseError(err)
+	}
+	if total == 0 {
+		return false, nil
+	}
+	err = tx.QueryRow(`SELECT count(*) FROM allocations WHERE job = ? AND removed = 0`, jobName).Scan(&nonRemoved)
+	if err != nil {
+		return false, bucket.DatabaseError(err)
+	}
+	return nonRemoved == 0, nil
+}
+
+func buildJobVariables(tx *sql.Tx, removedJobs []string, purgeJobCommandKV bool) error {
 	jobNames, err := data.GetJobs(tx)
 	if err != nil {
 		return err
 	}
 
 	for _, jobName := range jobNames {
+		shouldPurge, err := jobShouldPurgeBuildKV(tx, jobName)
+		if err != nil {
+			return err
+		}
+		if shouldPurge {
+			if err := purgeBuildJobKVNamespaces(tx, jobName); err != nil {
+				return err
+			}
+			if purgeJobCommandKV {
+				if err := purgeJobCommandKVNamespaces(tx, jobName); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+
+		activeWorkers, err := data.GetActiveAllocationsOrdered(tx, jobName)
+		if err != nil {
+			return err
+		}
+		workersForVars := activeWorkers
+		if len(workersForVars) == 0 {
+			workersForVars, err = data.GetNonRemovedAllocations(tx, jobName)
+			if err != nil {
+				return err
+			}
+		}
+
 		variables := make(map[string]string)
 
 		variables["job_id"] = workspace.GetHashUUID(jobName)
@@ -359,13 +406,9 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string) error {
 			variables["max_cpu_mhz"] = variables["cpu"]
 		}
 
-		activeWorkers, err := data.GetActiveAllocationsOrdered(tx, jobName)
-		if err != nil {
-			return err
-		}
-		variables["workers"] = strings.Join(activeWorkers, ",")
-		variables["workers_length"] = strconv.Itoa(len(activeWorkers))
-		for idx, workerIP := range activeWorkers {
+		variables["workers"] = strings.Join(workersForVars, ",")
+		variables["workers_length"] = strconv.Itoa(len(workersForVars))
+		for idx, workerIP := range workersForVars {
 			variables[fmt.Sprintf("worker_%d", idx)] = workerIP
 		}
 
@@ -407,28 +450,42 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string) error {
 	}
 
 	for _, jobName := range removedJobs {
-		namespaces := []string{
-			fmt.Sprintf("maand/job/%s", jobName),
-			fmt.Sprintf("vars/job/%s", jobName),
-			fmt.Sprintf("vars/bucket/job/%s", jobName),
-		}
-		allocatedWorkerIPs, err := data.GetAllocatedWorkers(tx, jobName)
-		if err != nil {
+		if err := purgeBuildJobKVNamespaces(tx, jobName); err != nil {
 			return err
 		}
-
-		for _, workerIP := range allocatedWorkerIPs {
-			namespaces = append(namespaces, fmt.Sprintf("maand/job/%s/worker/%s", jobName, workerIP))
-		}
-
-		for _, namespace := range namespaces {
-			err := syncKeyValues(tx, namespace, make(map[string]string))
-			if err != nil {
+		if purgeJobCommandKV {
+			if err := purgeJobCommandKVNamespaces(tx, jobName); err != nil {
 				return err
 			}
 		}
 	}
 
+	return nil
+}
+
+func purgeJobCommandKVNamespaces(tx *sql.Tx, jobName string) error {
+	for _, namespace := range data.JobCommandKVNamespaces(jobName) {
+		if err := syncKeyValues(tx, namespace, map[string]string{}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func purgeBuildJobKVNamespaces(tx *sql.Tx, jobName string) error {
+	namespaces := data.BuildJobKVNamespaces(jobName)
+	allocatedWorkerIPs, err := data.GetAllocatedWorkers(tx, jobName)
+	if err != nil {
+		return err
+	}
+	for _, workerIP := range allocatedWorkerIPs {
+		namespaces = append(namespaces, fmt.Sprintf("maand/job/%s/worker/%s", jobName, workerIP))
+	}
+	for _, namespace := range namespaces {
+		if err := syncKeyValues(tx, namespace, map[string]string{}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

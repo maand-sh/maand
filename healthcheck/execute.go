@@ -35,75 +35,82 @@ func PrepareRuntime(tx *sql.Tx) (context.CancelFunc, error) {
 }
 
 // HealthCheck runs manifest probes and health_check commands for a job.
-func HealthCheck(tx *sql.Tx, rt *bucket.Runtime, wait bool, job string, verbose bool) error {
+// When updateHash is true, failed health_check commands mark allocations for redeploy.
+func HealthCheck(tx *sql.Tx, rt *bucket.Runtime, wait, updateHash bool, job string, verbose bool) (bool, error) {
 	spec, err := data.GetJobHealthCheck(tx, job)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	commands, err := data.GetJobCommands(tx, job, "health_check")
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	hasProbes := spec != nil && len(spec.Checks) > 0
 	hasCommands := len(commands) > 0
 	if !hasProbes && !hasCommands {
 		fmt.Printf("health check skipped: %s (no health_check config or commands)\n", job)
-		return nil
+		return false, nil
 	}
 
 	attempts, interval := waitConfig(spec)
 
-	runChecks := func() error {
+	runChecks := func() (bool, error) {
+		hashMarked := false
 		if hasProbes {
 			if err := runManifestHealthChecks(tx, job, spec); err != nil {
-				return err
+				return hashMarked, err
 			}
 		}
 		for _, commandName := range commands {
-			if err := jobcommand.JobCommand(tx, rt, job, commandName, "health_check", 1, verbose, nil); err != nil {
-				return err
+			marked, err := runHealthCheckCommand(tx, rt, job, commandName, verbose, updateHash)
+			hashMarked = hashMarked || marked
+			if err != nil {
+				return hashMarked, err
 			}
 		}
-		return nil
+		return hashMarked, nil
 	}
 
 	if wait {
 		var lastErr error
+		var hashMarked bool
 		for attempt := 1; attempt <= attempts; attempt++ {
-			lastErr = runChecks()
+			hashMarked, lastErr = runChecks()
 			if lastErr == nil {
 				fmt.Printf("health check passed: %s\n", job)
-				return nil
+				return hashMarked, nil
 			}
 			fmt.Printf("health check failed: %s (attempt %d/%d), retrying...\n", job, attempt, attempts)
 			time.Sleep(interval)
 		}
-		return &HealthCheckError{Job: job, Err: lastErr}
+		return hashMarked, &HealthCheckError{Job: job, Err: lastErr}
 	}
 
-	if err := runChecks(); err != nil {
+	hashMarked, err := runChecks()
+	if err != nil {
 		fmt.Printf("health check failed: %s\n", job)
-		return &HealthCheckError{Job: job, Err: err}
+		return hashMarked, &HealthCheckError{Job: job, Err: err}
 	}
 
 	fmt.Printf("health check passed: %s\n", job)
-	return nil
+	return hashMarked, nil
 }
 
 // RunJobs health-checks multiple jobs using the same transaction and runtime.
-func RunJobs(tx *sql.Tx, rt *bucket.Runtime, wait, verbose bool, jobNames []string) error {
+func RunJobs(tx *sql.Tx, rt *bucket.Runtime, wait, updateHash, verbose bool, jobNames []string) (bool, error) {
 	if err := CheckWorkers(tx, wait); err != nil {
-		return err
+		return false, err
 	}
 
 	jobNames = utils.Unique(jobNames)
 	if len(jobNames) == 0 {
-		return nil
+		return false, nil
 	}
 
 	failures := make([]HealthCheckError, 0)
+	hashMarked := false
 	var failureMu sync.Mutex
 	var waitGroup sync.WaitGroup
 	semaphore := make(chan struct{}, defaultJobParallelism)
@@ -116,12 +123,16 @@ func RunJobs(tx *sql.Tx, rt *bucket.Runtime, wait, verbose bool, jobNames []stri
 			defer waitGroup.Done()
 			defer func() { <-semaphore }()
 
-			if err := HealthCheck(tx, rt, wait, name, verbose); err != nil {
+			marked, err := HealthCheck(tx, rt, wait, updateHash, name, verbose)
+			if marked || err != nil {
 				failureMu.Lock()
-				if hcErr, ok := err.(*HealthCheckError); ok {
-					failures = append(failures, *hcErr)
-				} else {
-					failures = append(failures, HealthCheckError{Job: name, Err: err})
+				hashMarked = hashMarked || marked
+				if err != nil {
+					if hcErr, ok := err.(*HealthCheckError); ok {
+						failures = append(failures, *hcErr)
+					} else {
+						failures = append(failures, HealthCheckError{Job: name, Err: err})
+					}
 				}
 				failureMu.Unlock()
 			}
@@ -129,11 +140,11 @@ func RunJobs(tx *sql.Tx, rt *bucket.Runtime, wait, verbose bool, jobNames []stri
 	}
 
 	waitGroup.Wait()
-	return newBatchHealthCheckError(failures)
+	return hashMarked, newBatchHealthCheckError(failures)
 }
 
 // Execute runs health checks for jobs in the bucket (optionally filtered by name).
-func Execute(wait, verbose bool, jobsComma string) error {
+func Execute(wait, verbose bool, jobsComma string, updateHash bool) error {
 	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return bucket.DatabaseError(err)
@@ -146,8 +157,11 @@ func Execute(wait, verbose bool, jobsComma string) error {
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
+	committed := false
 	defer func() {
-		_ = tx.Rollback()
+		if !committed {
+			_ = tx.Rollback()
+		}
 	}()
 
 	cancel, err := PrepareRuntime(tx)
@@ -183,10 +197,24 @@ func Execute(wait, verbose bool, jobsComma string) error {
 		jobNames = jobFilter
 	}
 
-	if err := RunJobs(tx, rt, wait, verbose, jobNames); err != nil {
+	hashMarked, err := RunJobs(tx, rt, wait, updateHash, verbose, jobNames)
+	if hashMarked {
+		if err := tx.Commit(); err != nil {
+			return bucket.DatabaseError(err)
+		}
+		committed = true
+	}
+	if err != nil {
 		return err
 	}
-	return tx.Commit()
+	if committed {
+		return nil
+	}
+	if err := tx.Commit(); err != nil {
+		return bucket.DatabaseError(err)
+	}
+	committed = true
+	return nil
 }
 
 func parseJobFilter(jobsComma string) []string {

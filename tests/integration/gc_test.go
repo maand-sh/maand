@@ -19,7 +19,7 @@ import (
 
 func TestIntegrationGCAfterWorkerRemoval(t *testing.T) {
 	setupIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil))
+	require.NoError(t, deploy.Execute(nil, false))
 
 	ips := workerIPs(t)
 	require.GreaterOrEqual(t, len(ips), 2, "need at least two workers for removal GC test")
@@ -31,7 +31,7 @@ func TestIntegrationGCAfterWorkerRemoval(t *testing.T) {
 	assert.Equal(t, len(ips), countAllocations(t, false)+countAllocations(t, true))
 	assert.GreaterOrEqual(t, countAllocations(t, true), 1)
 
-	require.NoError(t, deploy.Execute(nil))
+	require.NoError(t, deploy.Execute(nil, false))
 	require.NoError(t, gc.Execute(0))
 	assert.Equal(t, 0, countAllocations(t, true))
 	assert.Equal(t, 1, countAllocations(t, false))
@@ -39,6 +39,6 @@ func TestIntegrationGCAfterWorkerRemoval(t *testing.T) {
 
 func TestIntegrationGCCollect(t *testing.T) {
 	setupIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil))
+	require.NoError(t, deploy.Execute(nil, false))
 	require.NoError(t, gc.Collect())
 }

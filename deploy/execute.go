@@ -61,7 +61,9 @@ func UpdateSeq(db *sql.DB) error {
 }
 
 // Execute deploys jobs to all workers, optionally filtered by job name.
-func Execute(jobsFilter []string) error {
+// When force is true, jobs already promoted on all allocations are staged and
+// restarted anyway.
+func Execute(jobsFilter []string, force bool) error {
 	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return err
@@ -154,13 +156,15 @@ func Execute(jobsFilter []string) error {
 
 		jobsToStage := make([]string, 0, len(jobs))
 		for _, job := range jobs {
-			needsRollout, err := JobNeedsRollout(tx, job)
-			if err != nil {
-				return err
-			}
-			if !needsRollout {
-				log.Printf("deploy: skip job %q (already promoted on all allocations)", job)
-				continue
+			if !force {
+				needsRollout, err := JobNeedsRollout(tx, job)
+				if err != nil {
+					return err
+				}
+				if !needsRollout {
+					log.Printf("deploy: skip job %q (already promoted on all allocations)", job)
+					continue
+				}
 			}
 
 			preErr := executePreJobCommandsForJob(tx, rt, job)
@@ -189,7 +193,7 @@ func Execute(jobsFilter []string) error {
 				return err
 			}
 
-			deployErr := deployJob(tx, rt, bucketID, job)
+			deployErr := deployJob(tx, rt, bucketID, job, force)
 			if persistErr := persistJobCommandKV(tx, job); persistErr != nil {
 				deployFailures = append(deployFailures, persistErr)
 			}

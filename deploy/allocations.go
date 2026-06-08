@@ -11,6 +11,7 @@ import (
 	"maand/bucket"
 	"maand/data"
 	"maand/healthcheck"
+	"maand/utils"
 )
 
 func activeWorkers(workers []string, tx *sql.Tx, job string) ([]string, error) {
@@ -52,11 +53,35 @@ func handleNewAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string) 
 		return fmt.Errorf("start new allocations: %w", err)
 	}
 
-	return healthcheck.HealthCheck(tx, rt, true, job, true)
+	_, err = healthcheck.HealthCheck(tx, rt, true, false, job, true)
+	return err
 }
 
-func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string) error {
-	updatedAllocations, err := data.GetUpdatedAllocations(tx, job)
+func allocationsNeedingRestart(tx *sql.Tx, job string, force bool) ([]string, error) {
+	if !force {
+		updated, err := data.GetUpdatedAllocations(tx, job)
+		if err != nil {
+			return nil, err
+		}
+		versionPending, err := data.GetVersionPendingAllocations(tx, job)
+		if err != nil {
+			return nil, err
+		}
+		return utils.Unique(append(updated, versionPending...)), nil
+	}
+	active, err := data.GetActiveAllocations(tx, job)
+	if err != nil {
+		return nil, err
+	}
+	newAllocations, err := data.GetNewAllocations(tx, job)
+	if err != nil {
+		return nil, err
+	}
+	return utils.Difference(active, newAllocations), nil
+}
+
+func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string, force bool) error {
+	updatedAllocations, err := allocationsNeedingRestart(tx, job, force)
 	if err != nil {
 		return err
 	}
@@ -85,7 +110,8 @@ func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job stri
 		return fmt.Errorf("restart updated allocations: %w", err)
 	}
 
-	return healthcheck.HealthCheck(tx, rt, true, job, true)
+	_, err = healthcheck.HealthCheck(tx, rt, true, false, job, true)
+	return err
 }
 
 func handleStoppedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID string, jobs []string) error {
@@ -135,19 +161,29 @@ func reconcileStoppedAllocation(
 		} else if err := runWorkerCommand(rt, alloc.WorkerIP, []string{stopCmd}, nil); err != nil {
 			return fmt.Errorf("worker %s job %s: %w", alloc.WorkerIP, alloc.Job, err)
 		}
-		if alloc.Removed || alloc.Disabled {
-			if err := removeJobDirectoryFromWorker(rt, bucketID, alloc.WorkerIP, alloc.Job, assumeDead); err != nil {
+		if alloc.Removed {
+			if err := removeJobDeployArtifactsFromWorker(rt, bucketID, alloc.WorkerIP, alloc.Job, assumeDead); err != nil {
 				return err
 			}
+		}
+	}
+
+	if alloc.Removed {
+		if err := data.RemoveAllocationHash(tx, alloc.Job, allocID); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-// reconcileRemovedAndDisabledAllocations stops removed/disabled allocations and removes
-// their job trees from workers. Workers dropped from workers.json also lose the entire
-// /opt/worker/<bucket_id>/ tree once all of their removed allocations are processed.
+// reconcileRemovedAndDisabledAllocations stops removed/disabled allocations. Removed
+// allocations also lose deployed job files (data/ and logs/ preserved until maand gc).
+// Disabled allocations are stopped only; deploy artifacts and hash state are kept for
+// re-enable. maand gc deletes the full jobs/<job>/ tree when purging removed rows.
+// Workers dropped
+// from workers.json also lose the entire /opt/worker/<bucket_id>/ tree once all of their
+// removed allocations are processed.
 func reconcileRemovedAndDisabledAllocations(
 	tx *sql.Tx,
 	rt *bucket.Runtime,
@@ -193,7 +229,7 @@ func reconcileRemovedAndDisabledAllocations(
 			return err
 		}
 		if activeCount > 1 {
-			if err := healthcheck.HealthCheck(tx, rt, true, job, true); err != nil {
+			if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
 				return err
 			}
 		}
@@ -205,7 +241,7 @@ func reconcileRemovedAndDisabledAllocations(
 		}
 	}
 
-	return nil
+	return purgeJobCommandKVForInactiveJobs(tx, stopped)
 }
 
 func allocationWasDeployed(tx *sql.Tx, workerIP, job string) (bool, error) {

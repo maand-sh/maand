@@ -71,6 +71,48 @@ func TestValidateWorkerResources_requiresWorkerCPUWhenJobNeedsCPU(t *testing.T) 
 	assert.Contains(t, err.Error(), "must specify cpu")
 }
 
+func TestValidateWorkerResources_insufficientMemory(t *testing.T) {
+	db := openValidateTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := db.Exec(`
+		INSERT INTO worker (worker_ip, available_memory_mb, available_cpu_mhz) VALUES ('10.0.0.1', 256, 1000);
+		INSERT INTO job (name, current_memory_mb, current_cpu_mhz) VALUES ('app', 512, 0);
+		INSERT INTO allocations (job, worker_ip, removed, disabled) VALUES ('app', '10.0.0.1', 0, 0);
+	`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+
+	err = ValidateWorkerResources(tx)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
+	assert.Contains(t, err.Error(), "available memory")
+}
+
+func TestValidateWorkerResources_insufficientCPU(t *testing.T) {
+	db := openValidateTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := db.Exec(`
+		INSERT INTO worker (worker_ip, available_memory_mb, available_cpu_mhz) VALUES ('10.0.0.1', 1024, 500);
+		INSERT INTO job (name, current_memory_mb, current_cpu_mhz) VALUES ('app', 0, 2000);
+		INSERT INTO allocations (job, worker_ip, removed, disabled) VALUES ('app', '10.0.0.1', 0, 0);
+	`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+
+	err = ValidateWorkerResources(tx)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
+	assert.Contains(t, err.Error(), "available cpu")
+}
+
 func TestValidateWorkerResources_skipsWhenJobHasNoRequirements(t *testing.T) {
 	db := openValidateTestDB(t)
 	defer func() { _ = db.Close() }()

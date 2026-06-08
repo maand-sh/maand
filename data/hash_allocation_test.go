@@ -1,6 +1,7 @@
 package data
 
 import (
+	"database/sql"
 	"os"
 	"path"
 	"testing"
@@ -15,6 +16,14 @@ func TestNormalizeDeployVersion(t *testing.T) {
 	assert.Equal(t, "0.0.0", NormalizeDeployVersion(""))
 	assert.Equal(t, "0.0.0", NormalizeDeployVersion("unknown"))
 	assert.Equal(t, "1.2.3", NormalizeDeployVersion("1.2.3"))
+}
+
+func seedAllocationVersionTestRow(t *testing.T, tx *sql.Tx, allocID, newVersion string) {
+	t.Helper()
+	_, err := tx.Exec(`
+		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
+		VALUES (?, '10.0.0.1', 'api', 0, 0, 0, ?)`, allocID, newVersion)
+	require.NoError(t, err)
 }
 
 func TestAllocationVersionLifecycle(t *testing.T) {
@@ -48,12 +57,15 @@ func TestAllocationVersionLifecycle(t *testing.T) {
 	const namespace = "api_allocation"
 	const allocID = "alloc-1"
 
+	seedAllocationVersionTestRow(t, tx, allocID, "0.0.0")
+
 	versions, err := GetAllocationVersions(tx, namespace, allocID)
 	require.NoError(t, err)
 	assert.Equal(t, "0.0.0", versions.CurrentVersion)
 	assert.Equal(t, "0.0.0", versions.NewVersion)
 
-	require.NoError(t, UpdateAllocationPlan(tx, namespace, allocID, "hash-a", "2.0.0"))
+	require.NoError(t, SetAllocationNewVersion(tx, allocID, "2.0.0"))
+	require.NoError(t, UpdateAllocationPlan(tx, namespace, allocID, "hash-a"))
 	versions, err = GetAllocationVersions(tx, namespace, allocID)
 	require.NoError(t, err)
 	assert.Equal(t, "0.0.0", versions.CurrentVersion)
@@ -65,7 +77,8 @@ func TestAllocationVersionLifecycle(t *testing.T) {
 	assert.Equal(t, "2.0.0", versions.CurrentVersion)
 	assert.Equal(t, "2.0.0", versions.NewVersion)
 
-	require.NoError(t, UpdateAllocationPlan(tx, namespace, allocID, "hash-b", "2.1.0"))
+	require.NoError(t, SetAllocationNewVersion(tx, allocID, "2.1.0"))
+	require.NoError(t, UpdateAllocationPlan(tx, namespace, allocID, "hash-b"))
 	versions, err = GetAllocationVersions(tx, namespace, allocID)
 	require.NoError(t, err)
 	assert.Equal(t, "2.0.0", versions.CurrentVersion)
@@ -75,4 +88,5 @@ func TestAllocationVersionLifecycle(t *testing.T) {
 	versions, err = GetAllocationVersions(tx, namespace, allocID)
 	require.NoError(t, err)
 	assert.Equal(t, "0.0.0", versions.CurrentVersion)
+	assert.Equal(t, "2.1.0", versions.NewVersion)
 }

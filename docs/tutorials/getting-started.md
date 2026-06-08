@@ -6,7 +6,7 @@ This walkthrough creates a maand bucket, registers two workers, adds a simple jo
 - **Workers:** Linux hosts with SSH access, `python3`, `make`, `rsync`, `bash`, `timeout` on `PATH`
 - **SSH key:** private key in `secrets/` authorized for `ssh_user` on each worker
 
-Concepts: [concepts.md](../concepts.md) · Command list: [commands.md](../commands.md)
+Concepts: [concepts.md](../concepts.md) · Commands: [commands.md](../commands.md) · Config: [configuration.md](../configuration.md)
 
 ---
 

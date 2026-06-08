@@ -2,14 +2,16 @@
 
 Run `maand` from the **bucket root** (the directory created by `maand init`). Use `maand <command> --help` for flags.
 
+Configuration files: [configuration.md](./configuration.md) · KV: [kv.md](./kv.md) · Templates: [templates.md](./templates.md)
+
 ## Workflow commands
 
 | Command | Summary | Details |
 |---------|---------|---------|
 | `maand init` | Create or upgrade bucket (DB, workspace layout, CA, secrets) | — |
 | `maand build` | Read workspace → update `maand.db`, KV, certs; run `post_build` hooks | [build.md](./build.md) |
-| `maand deploy` | Push jobs to workers, roll out, run deploy hooks | [deploy.md](./deploy.md) |
-| `maand health_check` | Run `health_check` job commands on active allocations | [health-check.md](./health-check.md) |
+| `maand deploy` | Push jobs to workers, roll out, run deploy hooks | [deploy.md](./deploy.md) · [rolling-upgrade.md](./rolling-upgrade.md) · [deploy-debugging.md](./deploy-debugging.md) |
+| `maand health_check` | Worker SSH gate + per-job health (manifest probes or commands) | [health-check.md](./health-check.md) |
 | `maand gc` | Purge removed allocations, worker data, old KV history | [gc.md](./gc.md) |
 
 ## Inspect commands
@@ -20,9 +22,10 @@ Run `maand` from the **bucket root** (the directory created by `maand init`). Us
 | `maand cat workers` | Worker catalog |
 | `maand cat jobs` | Job catalog (includes **`deployment_seq`**) |
 | `maand cat allocations` | Job × worker rows (`--jobs`, `--workers` filters) |
+| `maand cat hashes` | Allocation `current_hash` / `previous_hash` and rollout state (`--jobs`, `--workers`) |
 | `maand cat job_commands` | Commands from manifests |
 | `maand cat job_ports` | Declared ports per job |
-| `maand cat kv` | List KV keys (or `maand cat kv get <ns> <key>`) |
+| `maand cat kv` | List KV keys (`--jobs`, `--active`, `--deleted`; or `maand cat kv get <ns> <key> [--reveal]`) |
 
 ## Job control
 
@@ -67,21 +70,26 @@ maand init
 
 Creates (first run) or upgrades (later runs):
 
-- `data/maand.db` with schema
-- `workspace/workers.json` (empty `[]`), `workspace/jobs/`
-- `maand.conf` defaults (`ssh_user`, `ssh_key`, `use_sudo`, cert TTL)
+- `data/maand.db` with schema migrations
+- `workspace/workers.json` (empty `[]`), `workspace/jobs/`, `workspace/bucket.conf`
+- `maand.conf` defaults — see [configuration.md](./configuration.md#maandconf-bucket-root)
 - Bucket CA in `secrets/ca.crt` / `ca.key`
-- KV encryption key
+- KV encryption key `secrets/kv.key`
+- `tmp/` and `logs/` directories
 
-Does not contact workers.
+Does not contact workers. Re-running **`maand init`** on an existing bucket applies schema upgrades without changing **`bucket_id`** or the CA.
 
 ---
 
 ## `maand build`
 
 ```bash
-maand build
+maand build [--purge-job-kv]
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--purge-job-kv` | Mark `vars/job/<job>` and `secrets/job/<job>` deleted when a job has no active allocations |
 
 Reconciles the entire workspace. No filters. Validates job **demands** and **version** constraints. See [build.md](./build.md#job-version).
 
@@ -92,7 +100,7 @@ Reconciles the entire workspace. No filters. Validates job **demands** and **ver
 ## `maand deploy`
 
 ```bash
-maand deploy [--build] [--jobs j1,j2] [--dry-run]
+maand deploy [--build] [--jobs j1,j2] [--dry-run] [--force]
 ```
 
 | Flag | Description |
@@ -100,6 +108,7 @@ maand deploy [--build] [--jobs j1,j2] [--dry-run]
 | `-b`, `--build` | Run `maand build` first |
 | `--jobs` | Limit to named jobs (still respects deployment sequence) |
 | `-n`, `--dry-run` | Compare allocation hashes; no worker changes |
+| `--force` | Redeploy even when all allocations are already promoted |
 
 **Host prerequisites:** `bash`, `ssh`, `rsync`, `python3`, optional `bun`.  
 **Worker prerequisites:** `python3`, `make`, `rsync`, `bash`, `timeout`, optional `sudo`.
@@ -137,8 +146,15 @@ See [job-command.md](./job-command.md).
 ## `maand health_check`
 
 ```bash
-maand health_check [--jobs j1,j2] [--wait] [--verbose]
+maand health_check [--jobs j1,j2] [--wait] [--verbose] [--update-hash]
 ```
+
+| Flag | Description |
+|------|-------------|
+| `--jobs` | Limit to named jobs |
+| `--wait` | Retry until pass (up to 30 attempts per job) |
+| `--verbose` | Stream command output |
+| `--update-hash` | Mark failed allocations for redeploy (command-based health only) |
 
 See [health-check.md](./health-check.md).
 
@@ -174,13 +190,46 @@ maand info
 maand cat workers
 maand cat jobs
 maand cat allocations [--jobs api] [--workers 10.0.0.1]
+maand cat hashes [--jobs vault] [--workers 10.0.0.1]
 maand cat job_commands
 maand cat job_ports
 maand cat kv
+maand cat kv --jobs vault
+maand cat kv --jobs vault --active
+maand cat kv --deleted
 maand cat kv get maand/job/api name
+maand cat kv get --reveal secrets/job/vault root_token
 ```
 
 See [info.md](./info.md).
+
+### `maand cat hashes`
+
+```bash
+maand cat hashes [--jobs j1,j2] [--workers ip,...] [--active]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--jobs` | Comma-separated job names |
+| `--workers` | Comma-separated worker IPs |
+| `--active` | Only active allocations (`removed=0`, `disabled=0`) |
+
+Shows `current_hash`, `previous_hash`, versions, and rollout state per allocation. **Rollout** is `removed`, `disabled`, or `disabled_restart` when the allocation flag applies; otherwise hash/version state (`new`, `restart`, `promoted`, `health_failed`). **`deploy`** clears hash rows for removed allocations. See [deploy.md](./deploy.md#inspect-state) and [deploy-debugging.md](./deploy-debugging.md).
+
+### `maand cat kv`
+
+```bash
+maand cat kv [--jobs j1,j2] [--active] [--deleted]
+```
+
+| Flag | Description |
+|------|-------------|
+| `--jobs` | Comma-separated job names; limits output to KV namespaces accessible to that job (same as job commands/templates: `maand`, `vars/bucket`, worker/allocation namespaces, upstream demand jobs) |
+| `--active` | Only keys with `deleted=0` |
+| `--deleted` | Only keys with `deleted=1` |
+
+With **`--jobs`**, lists every KV namespace the job can read: shared `maand` and `vars/bucket`, each allocated worker's `maand/worker/<ip>` and tags, job/allocation namespaces, and upstream jobs referenced in command **demands**.
 
 ---
 
@@ -194,5 +243,7 @@ maand deploy              # or: maand deploy -b
 maand health_check        # optional
 # day-2: maand job *, maand job_command, maand run_command, maand gc
 ```
+
+Operations: [disabled.md](./disabled.md), [rolling-upgrade.md](./rolling-upgrade.md), [deploy-debugging.md](./deploy-debugging.md).
 
 Tutorials: [getting-started.md](./tutorials/getting-started.md), [day-2-operations.md](./tutorials/day-2-operations.md).

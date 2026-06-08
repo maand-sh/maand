@@ -2,7 +2,7 @@
 
 This reference describes how **jobs** are defined in maand, how **command demands** express dependencies between jobs, and how **`deployment_seq`** orders deploy and `post_build` waves.
 
-Related: [concepts.md](./concepts.md) (job vs allocation) · [job-command.md](./job-command.md) (scripts and runtime API) · [build.md](./build.md) · [deploy.md](./deploy.md)
+Related: [concepts.md](./concepts.md) · [configuration.md](./configuration.md) · [job-command.md](./job-command.md) · [kv.md](./kv.md) · [templates.md](./templates.md) · [build.md](./build.md) · [deploy.md](./deploy.md)
 
 ---
 
@@ -76,7 +76,7 @@ Jobs are sorted by `deployment_seq`, then name.
 | Layer | When | Where | Meaning |
 |-------|------|-------|---------|
 | **Target** | `maand build` | `job.version`, `maand/job/<job>/version` | Version from manifest (normalized to **`0.0.0`** when omitted) |
-| **Running / target per allocation** | `maand deploy` | `hash` row: `current_version`, `new_version` | Running vs staged target for that worker allocation |
+| **Running / target per allocation** | `maand build` / `maand deploy` | `hash.current_version`, `allocations.new_version` | Running vs build target for that worker allocation |
 | **Per-allocation KV** | deploy plan | `maand/job/<job>/worker/<ip>/current_version`, `new_version` | Same values for templates and `maand cat kv` |
 
 After a successful deploy **promote**, `current_version` becomes `new_version` for that allocation. First deploy starts with **`current_version = 0.0.0`**.
@@ -123,7 +123,7 @@ Commands live in **`manifest.json`** → **`commands`** and as scripts under **`
 |------|--------|
 | Name | Must start with **`command_`** |
 | Script | Exactly one of `command_<name>.py`, `.ts`, or `.js` |
-| `executed_on` | One or more of: `post_build`, `pre_deploy`, `post_deploy`, `job_control`, `health_check`, `cli` |
+| `executed_on` | One or more of: `post_build`, `pre_deploy`, `post_deploy`, `job_control`, `health_check`, `cli` (a job cannot also define manifest **`health_check`** probes — see [health-check.md](./health-check.md)) |
 | `demands` | Optional dependency on another job’s command (see below) |
 
 Each `(command, executed_on)` pair becomes one row in **`job_commands`**. Inspect:
@@ -302,7 +302,7 @@ Within one sequence value:
 
 - All matching jobs are eligible in the **same wave**.
 - They share worker staging under `tmp/workers/<ip>/` but roll out independently.
-- **`update_parallel_count`** applies per job when restarting allocations (rolling batches on each worker set).
+- **`update_parallel_count`** applies per job when restarting allocations (rolling batches on each worker set). See [rolling-upgrade.md](./rolling-upgrade.md).
 
 Deploy **never** runs a higher sequence before a lower one completes its wave processing.
 

@@ -92,7 +92,27 @@ func TestManifestTCPHealthCheck(t *testing.T) {
 	tx, rt, cleanup := openHealthCheckSession(t)
 	defer cleanup()
 
-	require.NoError(t, healthcheck.HealthCheck(tx, rt, false, "app", false))
+	_, err = healthcheck.HealthCheck(tx, rt, false, false, "app", false)
+	require.NoError(t, err)
+}
+
+func TestBuildRejectsManifestAndCommandHealthCheck(t *testing.T) {
+	initFreshBucket(t)
+	writeWorkersJSON(t, `[{"host":"10.0.0.1","labels":["app"]}]`)
+
+	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "app")
+	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_modules"), 0o755))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "_modules", "command_health.py"), []byte(""), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
+		"selectors": ["app"],
+		"resources": {"ports": {"api_port": 30010}},
+		"health_check": {"checks": [{"type": "tcp", "port": "api_port"}]},
+		"commands": {"command_health": {"executed_on": ["health_check"]}}
+	}`), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
+
+	err := build.Execute()
+	assert.ErrorIs(t, err, bucket.ErrInvalidManifest)
 }
 
 func TestBuildRejectsSSHHealthCheckWithoutCommand(t *testing.T) {
@@ -168,7 +188,8 @@ func TestManifestHTTPHealthCheck(t *testing.T) {
 	tx, rt, cleanup := openHealthCheckSession(t)
 	defer cleanup()
 
-	require.NoError(t, healthcheck.HealthCheck(tx, rt, false, "app", false))
+	_, err = healthcheck.HealthCheck(tx, rt, false, false, "app", false)
+	require.NoError(t, err)
 }
 
 func TestHealthCheckSkipsJobWithNoManifestOrCommands(t *testing.T) {
@@ -180,7 +201,8 @@ func TestHealthCheckSkipsJobWithNoManifestOrCommands(t *testing.T) {
 	tx, rt, cleanup := openHealthCheckSession(t)
 	defer cleanup()
 
-	require.NoError(t, healthcheck.HealthCheck(tx, rt, false, "plain", false))
+	_, err := healthcheck.HealthCheck(tx, rt, false, false, "plain", false)
+	require.NoError(t, err)
 }
 
 func TestCheckWorkersUsesConfiguredSSHPort(t *testing.T) {

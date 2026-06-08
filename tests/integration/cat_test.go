@@ -25,11 +25,11 @@ func TestIntegrationInfoAndCat(t *testing.T) {
 	require.NoError(t, cat.Allocations("", ""))
 	require.NoError(t, cat.JobCommands())
 	require.NoError(t, cat.JobPorts())
-	require.NoError(t, cat.KV())
+	require.NoError(t, cat.KV("", false, false))
 
 	worker := workerIPs(t)[0]
 	namespace := fmt.Sprintf("maand/worker/%s", worker)
-	require.NoError(t, cat.KVGet(namespace, "worker_ip"))
+	require.NoError(t, cat.KVGet(namespace, "worker_ip", false))
 
 	db, err := data.OpenDatabase(true)
 	require.NoError(t, err)

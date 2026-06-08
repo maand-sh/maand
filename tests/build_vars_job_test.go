@@ -99,3 +99,43 @@ func TestVarsJobWorkspaceMergeDoesNotDeleteScriptKeys(t *testing.T) {
 	assert.Equal(t, "yes", mustGetPersistedKV(t, "vars/job/app", "tracked"))
 	assert.Equal(t, "keep-me", mustGetPersistedKV(t, "vars/job/app", "runtime_only"))
 }
+
+func TestBuildPurgesJobCommandKVWhenFlagSetAndNoActiveAllocations(t *testing.T) {
+	initFreshBucket(t)
+	writeWorkersJSON(t, `[{"host":"10.0.0.1","labels":["vault"]}]`)
+	writeMinimalJob(t, "vault", `{"selectors":["vault"],"version":"1.0.0"}`)
+	require.NoError(t, build.Execute())
+
+	seedVarsJobKey(t, "vault", "cluster_initialized", "true")
+	seedJobKV(t, "vault", "secrets/job/vault", "root_token", "enc:v1:token")
+
+	require.NoError(t, os.WriteFile(
+		path.Join(bucket.WorkspaceLocation, "jobs", "vault", "manifest.json"),
+		[]byte(`{"selectors":["nomatch"],"version":"1.0.0"}`),
+		0o644,
+	))
+	require.NoError(t, build.Execute(build.Options{PurgeJobCommandKV: true}))
+
+	assertKVNamespaceDeleted(t, "vars/job/vault", "cluster_initialized")
+	assertKVNamespaceDeleted(t, "secrets/job/vault", "root_token")
+}
+
+func TestBuildDoesNotPurgeJobCommandKVWhenNoActiveAllocations(t *testing.T) {
+	initFreshBucket(t)
+	writeWorkersJSON(t, `[{"host":"10.0.0.1","labels":["vault"]}]`)
+	writeMinimalJob(t, "vault", `{"selectors":["vault"],"version":"1.0.0"}`)
+	require.NoError(t, build.Execute())
+
+	seedVarsJobKey(t, "vault", "cluster_initialized", "true")
+	seedJobKV(t, "vault", "secrets/job/vault", "root_token", "enc:v1:token")
+
+	require.NoError(t, os.WriteFile(
+		path.Join(bucket.WorkspaceLocation, "jobs", "vault", "manifest.json"),
+		[]byte(`{"selectors":["nomatch"],"version":"1.0.0"}`),
+		0o644,
+	))
+	require.NoError(t, build.Execute())
+
+	assert.Equal(t, "true", mustGetPersistedKV(t, "vars/job/vault", "cluster_initialized"))
+	assert.Equal(t, "enc:v1:token", mustGetPersistedKV(t, "secrets/job/vault", "root_token"))
+}

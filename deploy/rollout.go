@@ -18,12 +18,12 @@ import (
 // so a re-run of maand deploy skips that job and continues with jobs that failed
 // or have pending hash changes.
 func JobNeedsRollout(tx *sql.Tx, job string) (bool, error) {
-	activeWorkers, err := data.GetActiveAllocations(tx, job)
+	workers, err := data.GetNonRemovedAllocations(tx, job)
 	if err != nil {
 		return false, err
 	}
 	namespace := fmt.Sprintf("%s_allocation", job)
-	for _, workerIP := range activeWorkers {
+	for _, workerIP := range workers {
 		allocID, err := data.GetAllocationID(tx, workerIP, job)
 		if err != nil {
 			return false, err
@@ -48,9 +48,17 @@ func JobNeedsRollout(tx *sql.Tx, job string) (bool, error) {
 	if len(newAllocations) > 0 {
 		return true, nil
 	}
-	updatedAllocations, err := data.GetUpdatedAllocations(tx, job)
+	updatedAllocations, err := data.GetUpdatedNonRemovedAllocations(tx, job)
 	if err != nil {
 		return false, err
 	}
-	return len(updatedAllocations) > 0, nil
+	if len(updatedAllocations) > 0 {
+		return true, nil
+	}
+
+	versionPending, err := data.GetVersionPendingNonRemovedAllocations(tx, job)
+	if err != nil {
+		return false, err
+	}
+	return len(versionPending) > 0, nil
 }

@@ -20,6 +20,13 @@ import (
 
 const postBuildEvent = "post_build"
 
+// Options configures optional build behavior.
+type Options struct {
+	// PurgeJobCommandKV marks vars/job/<job> and secrets/job/<job> deleted when a job
+	// has no active allocations (or is removed from the workspace).
+	PurgeJobCommandKV bool
+}
+
 func runPostBuildHooks(tx *sql.Tx) error {
 	if err := kv.Initialize(tx); err != nil {
 		return fmt.Errorf("post_build: init kv: %w", err)
@@ -79,7 +86,12 @@ func runPostBuildHooks(tx *sql.Tx) error {
 	return nil
 }
 
-func Execute() error {
+func Execute(opts ...Options) error {
+	var options Options
+	if len(opts) > 0 {
+		options = opts[0]
+	}
+
 	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return err
@@ -130,7 +142,7 @@ func Execute() error {
 		return err
 	}
 
-	if err := BuildVariables(buildTx, jobWorkspace, removedWorkers, removedJobs); err != nil {
+	if err := BuildVariables(buildTx, jobWorkspace, removedWorkers, removedJobs, options.PurgeJobCommandKV); err != nil {
 		return err
 	}
 

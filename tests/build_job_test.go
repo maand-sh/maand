@@ -261,7 +261,7 @@ func TestJobDisabled(t *testing.T) {
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE disabled = 0")
 	assert.Equal(t, 0, count)
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 29, count)
+	assert.Equal(t, 30, count)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{}}`), os.ModePerm)
 
@@ -296,7 +296,7 @@ func TestAllocationDisabled(t *testing.T) {
 	assert.Equal(t, 0, count)
 
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 29, count)
+	assert.Equal(t, 30, count)
 
 	// jobs is still disabled
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{"a":{"workers":[]}}}`), os.ModePerm)
@@ -305,7 +305,7 @@ func TestAllocationDisabled(t *testing.T) {
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE disabled = 0")
 	assert.Equal(t, 0, count)
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 29, count)
+	assert.Equal(t, 30, count)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{}}`), os.ModePerm)
 	err = build.Execute()
@@ -426,7 +426,7 @@ func TestJobMaxMemoryAsDefaultIfNotInJobConf(t *testing.T) {
 	value, _ = GetKey("maand/job/a", "memory")
 	assert.Equal(t, "12", value)
 
-	err = cat.KV()
+	err = cat.KV("", false, false)
 	assert.NoError(t, err)
 }
 
@@ -671,7 +671,7 @@ func TestJobKVCountWorkerJSONRemovedLater(t *testing.T) {
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
 	assert.Equal(t, 5, count)
 
-	err = cat.KV()
+	err = cat.KV("", false, false)
 	assert.NoError(t, err)
 }
 
@@ -699,7 +699,7 @@ func TestCountKVWorkerJSONAndJobRemoved(t *testing.T) {
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 17, count)
+	assert.Equal(t, 5, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "jobs", "a"))
 	err = build.Execute()
@@ -756,7 +756,7 @@ cpu="112"
 	value, _ = GetKey("vars/bucket/job/a", "cpu")
 	assert.Equal(t, "112", value)
 
-	err = cat.KV()
+	err = cat.KV("", false, false)
 	assert.NoError(t, err)
 }
 
@@ -787,7 +787,7 @@ func TestJobKVMaxMemoryAsDefaultIfNotInJobConf(t *testing.T) {
 	value, _ = GetKey("maand/job/a", "memory")
 	assert.Equal(t, "12", value)
 
-	err = cat.KV()
+	err = cat.KV("", false, false)
 	assert.NoError(t, err)
 }
 

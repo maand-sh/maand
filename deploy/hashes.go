@@ -24,50 +24,14 @@ func updateAllocationHash(tx *sql.Tx, jobs []string) error {
 }
 
 func updateJobAllocationHashes(tx *sql.Tx, job string) error {
-	allocatedWorkers, err := data.GetAllocatedWorkers(tx, job)
+	workers, err := data.GetNonRemovedAllocations(tx, job)
 	if err != nil {
 		return err
-	}
-
-	activeWorkers, err := data.GetActiveAllocations(tx, job)
-	if err != nil {
-		return err
-	}
-
-	var targetVersion string
-	if len(activeWorkers) > 0 {
-		targetVersion, err = data.TargetJobVersion(tx, job)
-		if err != nil {
-			return err
-		}
 	}
 
 	namespace := fmt.Sprintf("%s_allocation", job)
 
-	for _, workerIP := range allocatedWorkers {
-		removed, err := data.IsAllocationRemoved(tx, workerIP, job)
-		if err != nil {
-			return err
-		}
-		if removed == 1 {
-			allocID, err := data.GetAllocationID(tx, workerIP, job)
-			if err != nil {
-				return err
-			}
-			if err := data.RemoveHash(tx, namespace, allocID); err != nil {
-				return err
-			}
-			continue
-		}
-
-		disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
-		if err != nil {
-			return err
-		}
-		if disabled == 1 {
-			continue
-		}
-
+	for _, workerIP := range workers {
 		workerDirPath := bucket.GetTempWorkerPath(workerIP)
 		jobDir := path.Join(workerDirPath, "jobs", job)
 
@@ -80,7 +44,7 @@ func updateJobAllocationHashes(tx *sql.Tx, job string) error {
 		if err != nil {
 			return err
 		}
-		if err := data.UpdateAllocationPlan(tx, namespace, allocID, md5, targetVersion); err != nil {
+		if err := data.UpdateAllocationPlan(tx, namespace, allocID, md5); err != nil {
 			return err
 		}
 
@@ -96,28 +60,18 @@ func updateJobAllocationHashes(tx *sql.Tx, job string) error {
 }
 
 func promoteAllocationHash(tx *sql.Tx, job string) error {
-	allocatedWorkers, err := data.GetAllocatedWorkers(tx, job)
+	workers, err := data.GetNonRemovedAllocations(tx, job)
 	if err != nil {
 		return err
 	}
 
 	namespace := fmt.Sprintf("%s_allocation", job)
-	for _, workerIP := range allocatedWorkers {
+	for _, workerIP := range workers {
 		allocID, err := data.GetAllocationID(tx, workerIP, job)
 		if err != nil {
 			return err
 		}
 
-		disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
-		if err != nil {
-			return err
-		}
-		if disabled == 1 {
-			if err := data.ClearAllocationLiveState(tx, namespace, allocID); err != nil {
-				return err
-			}
-			continue
-		}
 		if err := data.PromoteAllocationState(tx, namespace, allocID); err != nil {
 			return err
 		}

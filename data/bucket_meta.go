@@ -69,6 +69,28 @@ func GetMaxDeploymentSeq(tx *sql.Tx) (int, error) {
 	return maxSeq, nil
 }
 
+// BuildJobKVNamespaces returns job KV namespaces owned by maand build (catalog sync).
+func BuildJobKVNamespaces(job string) []string {
+	return []string{
+		fmt.Sprintf("maand/job/%s", job),
+		fmt.Sprintf("vars/bucket/job/%s", job),
+	}
+}
+
+// JobCommandKVNamespaces returns job KV namespaces written by deploy/job commands.
+func JobCommandKVNamespaces(job string) []string {
+	return []string{
+		fmt.Sprintf("vars/job/%s", job),
+		fmt.Sprintf("secrets/job/%s", job),
+	}
+}
+
+// JobKVNamespaces returns all job-scoped KV namespaces purged by GC when a job has no active allocations.
+func JobKVNamespaces(job string) []string {
+	namespaces := BuildJobKVNamespaces(job)
+	return append(namespaces, JobCommandKVNamespaces(job)...)
+}
+
 func AllowedKVNamespaces(job, workerIP string) []string {
 	return []string{
 		"maand",
@@ -127,4 +149,34 @@ func AllowedKVNamespacesWithUpstream(tx *sql.Tx, job, workerIP string) ([]string
 		return nil, err
 	}
 	return append(namespaces, upstream...), nil
+}
+
+// AccessibleKVNamespacesForJob returns the union of KV namespaces readable by job commands
+// or templates on any allocation row for the job (including upstream demand jobs).
+func AccessibleKVNamespacesForJob(tx *sql.Tx, job string) ([]string, error) {
+	workerIPs, err := GetNonRemovedAllocations(tx, job)
+	if err != nil {
+		return nil, err
+	}
+
+	seen := make(map[string]struct{})
+	namespaces := make([]string, 0)
+	add := func(items ...string) {
+		for _, ns := range items {
+			if _, ok := seen[ns]; ok {
+				continue
+			}
+			seen[ns] = struct{}{}
+			namespaces = append(namespaces, ns)
+		}
+	}
+
+	for _, workerIP := range workerIPs {
+		allowed, err := AllowedKVNamespacesWithUpstream(tx, job, workerIP)
+		if err != nil {
+			return nil, err
+		}
+		add(allowed...)
+	}
+	return namespaces, nil
 }

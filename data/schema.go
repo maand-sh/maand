@@ -12,7 +12,7 @@ import (
 )
 
 // LatestSchemaVersion is the target schema version applied by MigrateSchema.
-const LatestSchemaVersion = 3
+const LatestSchemaVersion = 1
 
 // MigrateSchema brings an existing or new database to LatestSchemaVersion.
 // It is idempotent and safe to run on every maand init.
@@ -76,10 +76,6 @@ func applySchemaMigration(tx *sql.Tx, version int) error {
 	switch version {
 	case 1:
 		return migrateToV1(tx)
-	case 2:
-		return migrateToV2(tx)
-	case 3:
-		return migrateToV3(tx)
 	default:
 		return fmt.Errorf("unsupported schema version %d", version)
 	}
@@ -94,13 +90,23 @@ func migrateToV1(tx *sql.Tx) error {
 	}); err != nil {
 		return err
 	}
+	if err := ensureTableColumn(tx, "allocations", "new_version", `ALTER TABLE allocations ADD COLUMN new_version TEXT`); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "hash", "current_version", `ALTER TABLE hash ADD COLUMN current_version TEXT`); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "job", "health_check", `ALTER TABLE job ADD COLUMN health_check TEXT`); err != nil {
+		return err
+	}
 	return recreateCatalogViews(tx)
 }
 
-func migrateToV3(tx *sql.Tx) error {
+func ensureTableColumn(tx *sql.Tx, table, column, alterDDL string) error {
 	var columnCount int
 	err := tx.QueryRow(
-		`SELECT count(*) FROM pragma_table_info('job') WHERE name = 'health_check'`,
+		`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`,
+		table, column,
 	).Scan(&columnCount)
 	if err != nil {
 		return bucket.DatabaseError(err)
@@ -108,28 +114,11 @@ func migrateToV3(tx *sql.Tx) error {
 	if columnCount > 0 {
 		return nil
 	}
-	_, err = tx.Exec(`ALTER TABLE job ADD COLUMN health_check TEXT`)
+	_, err = tx.Exec(alterDDL)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
 	return nil
-}
-
-func migrateToV2(tx *sql.Tx) error {
-	var columnCount int
-	err := tx.QueryRow(
-		`SELECT count(*) FROM pragma_table_info('hash') WHERE name = 'current_version'`,
-	).Scan(&columnCount)
-	if err != nil {
-		return bucket.DatabaseError(err)
-	}
-	if columnCount > 0 {
-		return nil
-	}
-	return execStatements(tx, []string{
-		`ALTER TABLE hash ADD COLUMN current_version TEXT`,
-		`ALTER TABLE hash ADD COLUMN new_version TEXT`,
-	})
 }
 
 func baseTableDDL() []string {
@@ -152,6 +141,7 @@ func baseTableDDL() []string {
 			disabled INT,
 			removed INT,
 			deployment_seq INT,
+			new_version TEXT,
 			PRIMARY KEY(worker_ip, job)
 		)`,
 		`CREATE TABLE IF NOT EXISTS job (
@@ -165,6 +155,7 @@ func baseTableDDL() []string {
 			max_cpu_mhz TEXT,
 			current_cpu_mhz TEXT,
 			update_parallel_count INT,
+			health_check TEXT,
 			PRIMARY KEY(name)
 		)`,
 		`CREATE TABLE IF NOT EXISTS job_selectors (job_id TEXT, selector TEXT)`,
@@ -195,7 +186,6 @@ func baseTableDDL() []string {
 			current_hash TEXT,
 			previous_hash TEXT,
 			current_version TEXT,
-			new_version TEXT,
 			PRIMARY KEY(namespace, key)
 		)`,
 	}
@@ -208,8 +198,8 @@ func recreateCatalogViews(tx *sql.Tx) error {
 		`DROP VIEW IF EXISTS cat_job_commands`,
 		`DROP VIEW IF EXISTS cat_kv`,
 		`DROP VIEW IF EXISTS cat_workers`,
-		`CREATE VIEW cat_allocations (alloc_id, worker_ip, job, disabled, removed) AS
-			SELECT alloc_id, worker_ip, job, disabled, removed FROM allocations ORDER BY job`,
+		`CREATE VIEW cat_allocations (alloc_id, worker_ip, job, disabled, removed, new_version) AS
+			SELECT alloc_id, worker_ip, job, disabled, removed, new_version FROM allocations ORDER BY job`,
 		`CREATE VIEW cat_jobs (job_id, name, version, disabled, deployment_seq, selectors) AS
 			SELECT DISTINCT job_id, name, version,
 				(CASE WHEN (SELECT COUNT(1) FROM allocations wj WHERE j.name = wj.job AND wj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled,

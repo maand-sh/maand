@@ -17,6 +17,7 @@ maand deploy [flags]
 | `--jobs` | | Comma-separated job names. Default: all jobs (per deployment sequence). |
 | `--build` | `-b` | Run `maand build` before deploy. |
 | `--dry-run` | `-n` | Stage locally and compare allocation hashes; report whether deploy is required without changing workers or persisting hash updates. |
+| `--force` | | Redeploy jobs even when all allocations are already promoted (restart active allocations). |
 
 Examples:
 
@@ -26,6 +27,7 @@ maand deploy -b
 maand deploy --jobs api,worker
 maand deploy --dry-run
 maand deploy -b -n
+maand deploy --force --jobs vault
 ```
 
 ---
@@ -47,7 +49,7 @@ maand deploy -b -n
 UpdateSeq (+1, committed)
 Open DB transaction + kv.Initialize
 Start job-command HTTP API on host
-Stop removed/disabled allocations; remove job trees from workers (full bucket tree when the worker left workers.json)
+Stop removed/disabled allocations; remove deployed job files from **removed** workers only (preserve data/logs; disabled keeps artifacts; full bucket tree when the worker left workers.json)
 For deployment_seq = 0 .. max:
   Prepare worker.json / jobs.json / bin/ for all workers
   Refresh plan hashes for jobs in this sequence
@@ -87,8 +89,9 @@ A job is considered only if it appears in the sequence and passes the **`--jobs`
 | Active allocation has **no hash row** yet | Rollout (first deploy). |
 | `previous_hash != current_hash` on an allocation | Rollout (updated content). |
 | `previous_hash == current_hash` (promoted after success) | **Skipped** — log: `deploy: skip job "..." (already promoted on all allocations)`. |
+| **`--force`** | Stage and **restart** all active allocations (except new ones, which still **start**). |
 
-After a successful deploy, **`promoteAllocationHash`** sets `previous_hash = current_hash` and **`current_version = new_version`**. A re-run of `maand deploy` therefore **continues from failed jobs only** (partial deploy resume).
+After a successful deploy, **`promoteAllocationHash`** sets `previous_hash = current_hash` and **`hash.current_version = allocations.new_version`**. A re-run of `maand deploy` therefore **continues from failed jobs only** (partial deploy resume). Use **`--force`** to roll the same content again without a workspace change (for example after **`maand health_check --update-hash`**).
 
 ---
 
@@ -98,8 +101,8 @@ Each active allocation tracks **running** vs **target** version alongside conten
 
 | Field | Meaning |
 |-------|---------|
-| **`current_version`** | Last **promoted** (running) version on that allocation |
-| **`new_version`** | Target version from the current build/deploy plan (`manifest.json` → `job.version`) |
+| **`current_version`** (`hash` table) | Last **promoted** (running) version on that allocation |
+| **`new_version`** (`allocations` table) | Target version from **`maand build`** (`manifest.json` → `job.version`) |
 
 **Defaults:** If `manifest.json` omits **`version`**, maand uses **`0.0.0`** for KV and allocation version fields (build-time dependency rules still require an explicit version when the job participates in the demand graph).
 
@@ -113,7 +116,9 @@ First deploy:     current_version=0.0.0   new_version=2.0.0
 Upgrade:          current_version=2.0.0   new_version=2.1.0
                   → restart → promote → current_version=2.1.0
 
-Same version, unchanged tree: hash unchanged → job skipped (no restart)
+Same version, unchanged tree: hash unchanged and `current_version = new_version` → job skipped (no restart)
+
+Version-only bump: **`build`** updates `allocations.new_version`; **`deploy`** restarts when `hash.current_version != allocations.new_version` even if the content hash is unchanged
 ```
 
 During a **rolling deploy**, allocations on different workers can briefly differ (`current_version` updated per allocation as each wave promotes).
@@ -149,6 +154,7 @@ Use **`maand deploy --dry-run`** to see whether a real deploy would run, without
 ```bash
 maand deploy --dry-run
 maand deploy -b -n --jobs api
+maand deploy --dry-run --force    # preview forced redeploy
 ```
 
 Example output when content changed since last promote:
@@ -189,7 +195,7 @@ If the job has **no** `job_control` commands:
    `python3 /opt/worker/<bucket_id>/bin/runner.py <bucket_id> start --jobs <job>`
 2. **`handleUpdatedAllocations`**: Workers where hash changed →  
    `runner.py ... restart --jobs <job>` in batches of **`update_parallel_count`**.
-3. **`health_check`**: If the job has `health_check` commands, run them with **wait/retry** (same as deploy-internal health check).
+3. **`health_check`**: If the job defines manifest probes or `health_check` commands, run them with **wait/retry**.
 4. **`post_deploy`**: Job commands with event `post_deploy`.
 5. **`promoteAllocationHash`**: Mark current tree and **`current_version`** as the new baseline.
 
@@ -233,15 +239,13 @@ You implement rollout logic inside your scripts.
 
 ### Rsync
 
-- From bucket container to **`agent@<worker>:/opt/worker/<bucket_id>/`** (user from `maand.conf`).
+- From the bucket directory on the CLI host to **`agent@<worker>:/opt/worker/<bucket_id>/`** (user from `maand.conf`).
 - **Staging rsync**: filter includes only jobs in **`jobsToStage`** (`+ jobs/<job>/`, `- jobs/*`).
 - **Final rsync**: one pass **per successfully deployed job**, only to workers with an **active** allocation for that job; same per-job filter so other jobs on the host are not touched.
 
 ### Templates (`.tpl`)
 
-Files under `jobs/<job>/` ending in **`.tpl`** are rendered with Go templates. Functions: `get`, `getSecret`, `keys`, `split`, `join`, etc. Use **`getSecret "key"`** for values written with **`put_job_secret`** under `secrets/job/<job>`.
-
-Allocation template fields include **`CurrentVersion`** (running) and **`NewVersion`** (deploy target). Equivalent KV keys: `get "maand/job/<job>/worker/<ip>" "current_version"` and `"new_version"`.
+Files under `jobs/<job>/` ending in **`.tpl`** are rendered at staging time. Full reference: [templates.md](./templates.md).
 
 ---
 
@@ -249,15 +253,19 @@ Allocation template fields include **`CurrentVersion`** (running) and **`NewVers
 
 | State | Behavior |
 |-------|----------|
-| **`removed=1`** (worker/job dropped at build) | If previously deployed: **stop**, then **`rm -rf`** `jobs/<job>/` on the worker (and local staging). Workers removed from **`workers.json`**: after all their removed allocations are processed, **`rm -rf /opt/worker/<bucket_id>/`**. Unreachable removed workers are assumed dead (logged, deploy continues). |
-| **`disabled=1`** | Excluded from start/restart/rsync targets; stop if was running; remove job dir; promote clears `previous_hash` and **`current_version`** for disabled row. |
+| **`removed=1`** (worker/job dropped at build) | If previously deployed: **stop**, then remove deployed job files on the worker (**`data/`** and **`logs/`** are left in place for redeploy). Local staging under `tmp/workers/<ip>/jobs/<job>/` is removed. Workers removed from **`workers.json`**: after all their removed allocations are processed, **`rm -rf /opt/worker/<bucket_id>/`**. Unreachable removed workers are assumed dead (logged, deploy continues). |
+| **`disabled=1`** | Excluded from start/restart/rsync targets; stop if was running; **keep** deployed job files, KV, and hash/version state. Content and version changes are still **staged, hashed, and promoted** on deploy (rollout shows `disabled` or `disabled_restart` in `maand cat hashes`). After re-enable (`maand build` clears `disabled.json`), deploy **starts** the allocation via `GetNewAllocations`. |
+
+Redeploying the same job on the same worker reuses existing **`data/`** and **`logs/`** (rsync excludes those paths). **`deploy`** deletes the allocation **hash row** when reconciling **`removed=1`** allocations (even if the job is skipped from rollout), so a later redeploy treats it as a **new** rollout (`make start`) while worker **`data/`** and **`logs/`** remain. After **`build`** only, hashes still show the last promoted state until **`deploy`** runs.
+
+When reconcile finishes and a job has **no non-removed allocations** (every row `removed=1`), deploy purges all job-scoped KV namespaces. Jobs with **disabled-only** allocations retain KV. **`maand build`** also clears build-owned namespaces when the job is inactive. Run **`maand gc`** to delete worker **`jobs/<job>/`** trees and purge removed allocation rows from the catalog.
 
 ---
 
 ## `pre_deploy` and `post_deploy`
 
 - Registered in manifest with `executed_on`: `pre_deploy` / `post_deploy`.
-- Run via **`jobcommand`** inside the maand container (Python or Bun).
+- Run via **`jobcommand`** on the CLI host (Python or Bun).
 - **`pre_deploy` failure**: job is not added to `jobsToStage` for this deploy; other jobs continue.
 - **`post_deploy` failure**: fails that job’s deploy; earlier jobs in the same run may already be promoted.
 
@@ -278,6 +286,8 @@ Those writes commit when deploy commits (including **partial deploy** — succes
    - Job A: **skipped** (already promoted).
    - Job B: staged and deployed again.
 
+Use **`maand deploy --force`** to redeploy promoted jobs without a workspace change (pairs with **`maand health_check --update-hash`** for command-based health).
+
 ---
 
 ## `update_seq`
@@ -288,9 +298,9 @@ At deploy start, **`bucket.update_seq`** increments in its own committed transac
 
 ## Configuration
 
-Uses **`workspace/maand.conf`** (SSH user, key file name under `secrets/`, sudo for remote rsync).
+Uses **`maand.conf`** at the bucket root (SSH user, key file under `secrets/`, sudo for remote rsync). See [configuration.md](./configuration.md).
 
-Worker key path inside container: `/bucket/secrets/<ssh_key>`.
+Worker key path: **`secrets/<ssh_key>`** relative to the bucket root.
 
 ---
 
@@ -298,11 +308,12 @@ Worker key path inside container: `/bucket/secrets/<ssh_key>`.
 
 ```bash
 maand cat allocations
+maand cat hashes
 maand cat jobs
 maand info
 ```
 
-Hash state lives in table **`hash`** with namespace `<job>_allocation` and key `alloc_id`.
+Hash state lives in table **`hash`** with namespace `<job>_allocation` and key `alloc_id`. **`maand cat hashes`** shows **`current_hash`**, **`previous_hash`**, versions, and rollout (`removed`, `disabled`, or hash-derived `new` / `restart` / `promoted` / `health_failed`). Use **`--active`** to see only allocations deploy would target.
 
 ---
 
@@ -316,14 +327,19 @@ Hash state lives in table **`hash`** with namespace `<job>_allocation` and key `
 | Job not staging | `pre_deploy` failed or `JobNeedsRollout` false |
 | Template panic | KV key missing; namespace not allowed in `.tpl` |
 | `health check failed` | `health_check` command returned non-zero |
-| Stale files on worker | Removed job dirs should be pruned; final rsync is per-job only |
+| Stale files on worker | Deploy removes deployed job files on dealloc (keeps `data/`/`logs/`); GC deletes runtime dirs; final rsync is per-job only |
 
 ---
 
-## Related commands
+## Related
 
-- [`build.md`](./build.md) — catalog and sequences.
-- [`job-command.md`](./job-command.md) — writing `command_*` scripts.
-- [`health-check.md`](./health-check.md) — standalone health checks.
-- `maand job start|stop|restart|run|status` — manual job control ([job.md](./job.md)).
-- `maand gc` — purge removed allocations and worker runtime dirs ([gc.md](./gc.md)).
+- [build.md](./build.md) — catalog and sequences
+- [templates.md](./templates.md) — `.tpl` rendering
+- [kv.md](./kv.md) — namespaces written by hooks
+- [job-command.md](./job-command.md) — writing `command_*` scripts
+- [disabled.md](./disabled.md) — disable/re-enable
+- [rolling-upgrade.md](./rolling-upgrade.md) — `update_parallel_count`, version upgrades
+- [deploy-debugging.md](./deploy-debugging.md) — dry-run, `cat hashes`, failures
+- [health-check.md](./health-check.md) — standalone health checks
+- [job.md](./job.md) — manual start/stop/restart
+- [gc.md](./gc.md) — purge removed allocations

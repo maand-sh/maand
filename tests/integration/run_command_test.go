@@ -25,7 +25,7 @@ func TestIntegrationRunCommandEcho(t *testing.T) {
 func TestIntegrationRunCommandAfterDeploy(t *testing.T) {
 	setupIntegrationBucket(t)
 
-	require.NoError(t, deploy.Execute(nil))
+	require.NoError(t, deploy.Execute(nil, false))
 
 	err := runcommand.Execute("", "", 1, "echo post-deploy-ok", false)
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestIntegrationRunCommandLabelFilter(t *testing.T) {
 
 func TestIntegrationRunCommandWithHealthCheck(t *testing.T) {
 	setupFullIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil))
+	require.NoError(t, deploy.Execute(nil, false))
 
 	err := runcommand.Execute("", "", 1, "echo hc-batch-ok", true)
 	require.NoError(t, err)

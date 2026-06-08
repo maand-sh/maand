@@ -230,6 +230,37 @@ func GetNewAllocations(tx *sql.Tx, jobName string) ([]string, error) {
 	return workerIPs, nil
 }
 
+// GetUpdatedNonRemovedAllocations returns workers (active or disabled) whose staged content
+// differs from the last promoted hash.
+func GetUpdatedNonRemovedAllocations(tx *sql.Tx, jobName string) ([]string, error) {
+	rows, err := tx.Query(
+		`SELECT a.worker_ip FROM hash h
+		 JOIN allocations a ON h.namespace = ? AND h.key = a.alloc_id
+		   AND h.previous_hash IS NOT NULL AND h.previous_hash != h.current_hash
+		 WHERE a.job = ? AND a.removed = 0`,
+		fmt.Sprintf("%s_allocation", jobName), jobName,
+	)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	workerIPs := make([]string, 0)
+	for rows.Next() {
+		var workerIP string
+		if err := rows.Scan(&workerIP); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		workerIPs = append(workerIPs, workerIP)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return workerIPs, nil
+}
+
 // GetUpdatedAllocations returns workers with promoted content that differs from the staged plan.
 func GetUpdatedAllocations(tx *sql.Tx, jobName string) ([]string, error) {
 	rows, err := tx.Query(

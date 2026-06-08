@@ -139,6 +139,29 @@ func GetWorkerTags(tx *sql.Tx, workerID string) (map[string]string, error) {
 	return tags, nil
 }
 
+func GetAllocatedWorkerIPs(tx *sql.Tx) ([]string, error) {
+	rows, err := tx.Query(`SELECT DISTINCT worker_ip FROM allocations ORDER BY worker_ip`)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	workers := make([]string, 0)
+	for rows.Next() {
+		var workerIP string
+		if err := rows.Scan(&workerIP); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		workers = append(workers, workerIP)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return workers, nil
+}
+
 func GetAllWorkers(tx *sql.Tx) ([]string, error) {
 	var workers []string
 	rows, err := tx.Query("SELECT worker_ip FROM worker")
@@ -339,4 +362,49 @@ func GetActiveAllocations(tx *sql.Tx, job string) ([]string, error) {
 		activeWorkers = append(activeWorkers, workerIP)
 	}
 	return activeWorkers, nil
+}
+
+// JobHasActiveAllocations reports whether the job has any allocation with removed=0 and disabled=0.
+func JobHasActiveAllocations(tx *sql.Tx, job string) (bool, error) {
+	activeWorkers, err := GetActiveAllocations(tx, job)
+	if err != nil {
+		return false, err
+	}
+	return len(activeWorkers) > 0, nil
+}
+
+// GetNonRemovedAllocations returns worker IPs with removed=0 (active or disabled).
+func GetNonRemovedAllocations(tx *sql.Tx, job string) ([]string, error) {
+	rows, err := tx.Query(
+		`SELECT worker_ip FROM allocations WHERE job = ? AND removed = 0 ORDER BY worker_ip`,
+		job,
+	)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	workers := make([]string, 0)
+	for rows.Next() {
+		var workerIP string
+		if err := rows.Scan(&workerIP); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		workers = append(workers, workerIP)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return workers, nil
+}
+
+// JobHasNonRemovedAllocations reports whether the job has any allocation with removed=0.
+func JobHasNonRemovedAllocations(tx *sql.Tx, job string) (bool, error) {
+	workers, err := GetNonRemovedAllocations(tx, job)
+	if err != nil {
+		return false, err
+	}
+	return len(workers) > 0, nil
 }
