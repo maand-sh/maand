@@ -5,12 +5,13 @@ CGO_ENABLED ?= 1
 export CGO_ENABLED
 
 BINARY          ?= maand
-UNIT_PKGS       := $(shell go list ./... | grep -v '/tests$$')
+# Library/cmd packages only — excludes maand/tests and maand/tests/integration.
+UNIT_PKGS       := $(shell go list ./... | grep -vE '/tests(/integration)?$$')
 UNIT_TIMEOUT    ?= 120s
 INTEGRATION_TIMEOUT ?= 25m
 GO_TEST_FLAGS   ?=
 
-.PHONY: all build test test-unit test-tests test-integration test-all clean help
+.PHONY: all build test test-unit test-tests test-integration test-all ci clean help
 
 all: build test
 
@@ -19,7 +20,8 @@ help:
 	@echo ""
 	@echo "  build             Build $(BINARY) (CGO_ENABLED=$(CGO_ENABLED))"
 	@echo "  test              Run unit packages + ./tests (default)"
-	@echo "  test-unit         Run library/cmd unit tests (CI packages)"
+	@echo "  test-unit         Run library/cmd unit tests (CI; no integration)"
+	@echo "  ci                Same as GitHub Actions: test-unit + build"
 	@echo "  test-tests        Run ./tests package tests"
 	@echo "  test-integration  Run integration tests (real workers; see assets/README.md)"
 	@echo "  test-all          test + test-integration"
@@ -36,12 +38,14 @@ test-unit:
 	go test $(GO_TEST_FLAGS) $(UNIT_PKGS) -count=1 -timeout $(UNIT_TIMEOUT)
 
 test-tests:
-	go test $(GO_TEST_FLAGS) ./tests/... -count=1 -timeout $(UNIT_TIMEOUT)
+	go test $(GO_TEST_FLAGS) ./tests -count=1 -timeout $(UNIT_TIMEOUT)
 
 test-integration:
 	go test $(GO_TEST_FLAGS) -tags=integration ./tests/integration/... -count=1 -timeout $(INTEGRATION_TIMEOUT) -v
 
 test-all: test test-integration
+
+ci: test-unit build
 
 clean:
 	rm -f $(BINARY)

@@ -3,10 +3,12 @@ package deploy
 import (
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	"maand/bucket"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,10 +29,15 @@ func TestWriteRsyncFilter_writesMergeFile(t *testing.T) {
 
 func TestSyncWorkers_usesHooks(t *testing.T) {
 	env := setupDeployTestEnv(t)
-	var synced []string
+	var (
+		synced []string
+		mu     sync.Mutex
+	)
 	SetTestHooks(&TestHooks{
 		Rsync: func(_ *bucket.Runtime, _, workerIP string) error {
+			mu.Lock()
 			synced = append(synced, workerIP)
+			mu.Unlock()
 			return nil
 		},
 		WorkerCommand: func(*bucket.Runtime, string, []string, []string) error { return nil },
@@ -38,7 +45,7 @@ func TestSyncWorkers_usesHooks(t *testing.T) {
 	t.Cleanup(ClearTestHooks)
 
 	require.NoError(t, syncWorkers(nil, env.bucketID, []string{"10.0.0.1", "10.0.0.2"}, []string{"app"}, true))
-	require.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, synced)
+	assert.ElementsMatch(t, []string{"10.0.0.1", "10.0.0.2"}, synced)
 }
 
 func TestBuildRsyncFilterLines_singleJobFinalSync(t *testing.T) {

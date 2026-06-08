@@ -17,13 +17,13 @@ jobs:
       - name: Install build deps
         run: sudo apt-get update && sudo apt-get install -y gcc
 
-      - name: Test (unit packages)
+      # Integration tests (make test-integration) need real workers and assets/ — local only.
+      - name: Unit tests
         env:
           CGO_ENABLED: "1"
-        run: |
-          go test $(go list ./... | grep -v '/tests$') -count=1 -timeout 120s
+        run: make test-unit
 
       - name: Build
         env:
           CGO_ENABLED: "1"
-        run: go build -o maand .
+        run: make build
