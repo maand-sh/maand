@@ -114,7 +114,7 @@ workspace/jobs/api/
 |-------|---------|
 | `version` | Semver-like release id (`1.2.0`); required when the job participates in the [dependency graph](./jobs-and-dependencies.md#job-version); drives deploy **`new_version`** per allocation |
 | `selectors` | Worker **labels** required for placement (all must match) |
-| `resources.memory` / `cpu` | Limits; validated against worker capacity |
+| `resources.memory` / `cpu` | Min/max bounds; actual reservation from `bucket.jobs.conf` — see [resources-and-placement.md](./resources-and-placement.md) |
 | `resources.ports` | Named ports: `{}` (maand assigns from pool) or an integer (fixed in manifest); range from `bucket.conf` |
 | `update_parallel_count` | Rolling restart batch size during deploy |
 | `commands` | Named hooks (`command_*`) with `executed_on` events |

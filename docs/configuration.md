@@ -78,7 +78,9 @@ memory = "512 mb"
 | `job_config_selector = ""` | `workspace/bucket.jobs.conf` |
 | `job_config_selector = "prod"` | `workspace/bucket.jobs.prod.conf` |
 
-Overrides are written to **`vars/bucket/job/<job>`** at build.
+Overrides are written to **`vars/bucket/job/<job>`** at build. Only **`memory`** and **`cpu`** keys affect reservations and worker validation; other keys are stored in KV only.
+
+Full guide (manifest bounds, validation, selectors): [resources-and-placement.md](./resources-and-placement.md).
 
 ---
 
