@@ -33,6 +33,7 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 | [commands.md](./commands.md) | Full CLI reference (all commands and flags) |
 | [configuration.md](./configuration.md) | `maand.conf`, `bucket.conf`, `bucket.jobs.conf`, `vars.toml` |
 | [resources-and-placement.md](./resources-and-placement.md) | Job memory/CPU, bucket overrides, environment selectors |
+| [certs.md](./certs.md) | TLS CA, job certificates, auto-rotation, `maand.conf` |
 | [build.md](./build.md) | `maand build` |
 | [deploy.md](./deploy.md) | `maand deploy` |
 | [health-check.md](./health-check.md) | `maand health_check` |
@@ -50,6 +51,7 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 |----------|-------|
 | [jobs-and-dependencies.md](./jobs-and-dependencies.md) | Manifest, **demands**, **version**, **`deployment_seq`**, deploy waves |
 | [kv.md](./kv.md) | KV namespaces, secrets, persistence |
+| [kv-variables.md](./kv-variables.md) | Global, worker, and job variables — how to set and read |
 | [templates.md](./templates.md) | `.tpl` rendering at deploy |
 | [rolling-upgrade.md](./rolling-upgrade.md) | Rolling job upgrades and worker reboots |
 | [disabled.md](./disabled.md) | Disable/re-enable workers, jobs, allocations |

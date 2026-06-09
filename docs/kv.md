@@ -2,6 +2,8 @@
 
 Maand keeps configuration and secrets in an in-memory **KV store** loaded from **`maand.db`** (`key_value` table). **Build**, **deploy**, and **job commands** read and write KV; **templates** (`.tpl`) read KV at deploy time.
 
+**Practical guide** (global / worker / job variables, examples): [kv-variables.md](./kv-variables.md).
+
 Inspect from the CLI:
 
 ```bash
@@ -66,7 +68,7 @@ Under **`maand/job/<job>/worker/<ip>`**:
 
 | Key | Meaning |
 |-----|---------|
-| `certs/*` | TLS material from manifest |
+| `certs/*` | TLS leaf cert/key PEMs from build — see [certs.md](./certs.md) |
 | `<job>_allocation_index` | Index among job peers |
 | `peer_workers` | Comma-separated peer worker IPs for this job |
 | `version` | Target version from build (`allocations.new_version`) |
