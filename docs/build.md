@@ -90,7 +90,7 @@ Workers removed from `workers.json` are marked **`removed`** on allocations (not
 | `selectors` | Worker **labels** required to place the job (all selectors must match worker labels). |
 | `update_parallel_count` | Rolling restart batch size during **deploy** (minimum 1). |
 | `resources.memory` / `cpu` | Limits; optional override via `bucket.jobs.conf`. |
-| `resources.ports` | Named ports: `{}` (maand assigns) or integer (fixed); must be within `bucket.conf` range |
+| `resources.ports` | Named ports: `{}` (maand assigns from pool) or integer (fixed; any port number) |
 | `commands` | Named commands (must be prefixed `command_`). |
 | `certs` | Per-job cert definitions → generated into KV per worker. |
 
@@ -193,8 +193,8 @@ port_max = "39999"
 
 Job manifests declare named ports in two ways:
 
-- **`{}`** — maand assigns the lowest free port in the inclusive range at build time.
-- **An integer** — you pin the port number in the manifest (must be inside `port_min`–`port_max`).
+- **`{}`** — maand assigns the lowest free port in the inclusive `port_min`–`port_max` range at build time.
+- **An integer** — you pin the port number in the manifest (any valid port; not limited to the bucket pool).
 
 Assigned numbers are stored in **`job_ports`** and exposed in KV (`maand/<port_name>`). Maand-provisioned ports keep the same number across rebuilds until the job is removed or the port name is removed. Fixed ports always follow the manifest value.
 

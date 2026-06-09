@@ -37,19 +37,7 @@ func newPortAllocator(existing data.JobPortAssignments, portRange bucket.PortRan
 	}
 }
 
-func (a *portAllocator) validateInRange(jobName, portName string, port int) error {
-	if port < a.range_.Min || port > a.range_.Max {
-		return fmt.Errorf("%w: job %s port %q uses %d outside range %d-%d",
-			bucket.ErrInvalidPortRange, jobName, portName, port, a.range_.Min, a.range_.Max)
-	}
-	return nil
-}
-
 func (a *portAllocator) claimPort(jobName, portName string, port int) error {
-	if err := a.validateInRange(jobName, portName, port); err != nil {
-		return err
-	}
-
 	if prev, ok := a.existing[jobName][portName]; ok && prev == port {
 		a.usedNumbers[port] = struct{}{}
 		return nil
@@ -84,9 +72,6 @@ func (a *portAllocator) assignProvisioned(jobName string, portName string) (int,
 	// Reuse the number already stored in job_ports for this job/port name so rebuilds
 	// keep stable bindings until the job is removed or the port name leaves the manifest.
 	if prev, ok := a.existing[jobName][portName]; ok {
-		if err := a.validateInRange(jobName, portName, prev); err != nil {
-			return 0, err
-		}
 		a.usedNumbers[prev] = struct{}{}
 		return prev, nil
 	}

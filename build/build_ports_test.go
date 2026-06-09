@@ -133,10 +133,25 @@ func TestPortAllocatorResolveProvisionedAndFixed(t *testing.T) {
 
 func intPtr(v int) *int { return &v }
 
-func TestPortAllocatorFixedPortOutOfRange(t *testing.T) {
+func TestPortAllocatorFixedPortOutsidePoolAllowed(t *testing.T) {
 	alloc := newPortAllocator(nil, bucket.PortRange{Min: 30000, Max: 30005})
 
-	_, err := alloc.assignFixed("api", "http_port", 29999)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, bucket.ErrInvalidPortRange)
+	port, err := alloc.assignFixed("database", "database_port", 5432)
+	require.NoError(t, err)
+	assert.Equal(t, 5432, port)
+
+	port, err = alloc.assignProvisioned("api", "http_port")
+	require.NoError(t, err)
+	assert.Equal(t, 30000, port)
+}
+
+func TestPortAllocatorProvisionedReuseOutsideNarrowedPool(t *testing.T) {
+	existing := data.JobPortAssignments{
+		"api": {"http_port": 30001},
+	}
+	alloc := newPortAllocator(existing, bucket.PortRange{Min: 30000, Max: 30000})
+
+	port, err := alloc.assignProvisioned("api", "http_port")
+	require.NoError(t, err)
+	assert.Equal(t, 30001, port)
 }
