@@ -82,7 +82,7 @@ func TestBuildJobAllocationVariables(t *testing.T) {
 	assert.Equal(t, "10.0.0.2", peers.Value)
 }
 
-func TestBuildJobAllocationVariablesPurgeStaleWorker(t *testing.T) {
+func TestBuildJobAllocationVariablesSyncsDisabledWorker(t *testing.T) {
 	t.Cleanup(kv.ResetStoreForTest)
 
 	db := openBuildAllocationsTestDB(t)
@@ -113,13 +113,56 @@ func TestBuildJobAllocationVariablesPurgeStaleWorker(t *testing.T) {
 	require.NoError(t, syncJobAllocationVariables(tx, "api"))
 	require.NoError(t, tx.Commit())
 
+	disabledNS := "maand/job/api/worker/10.0.0.2"
+	idx, err := kv.GetKVStore().Get(disabledNS, "api_allocation_index")
+	require.NoError(t, err)
+	assert.Equal(t, "1", idx.Value)
+
+	peers, err := kv.GetKVStore().Get(disabledNS, "peer_workers")
+	require.NoError(t, err)
+	assert.Equal(t, "10.0.0.1", peers.Value)
+
+	_, err = kv.GetKVStore().Get(disabledNS, "stale_meta")
+	assert.Error(t, err)
+
+	idx, err = kv.GetKVStore().Get("maand/job/api/worker/10.0.0.1", "api_allocation_index")
+	require.NoError(t, err)
+	assert.Equal(t, "0", idx.Value)
+}
+
+func TestBuildJobAllocationVariablesPurgeRemovedWorker(t *testing.T) {
+	t.Cleanup(kv.ResetStoreForTest)
+
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := db.Exec(`
+		INSERT INTO bucket (bucket_id, update_seq) VALUES ('bucket-1', 0);
+		INSERT INTO worker (worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position)
+		VALUES ('w1', '10.0.0.1', '1024', '2000', 0),
+		       ('w2', '10.0.0.2', '1024', '2000', 1);
+		INSERT INTO job (
+			job_id, name, version,
+			min_memory_mb, max_memory_mb, current_memory_mb,
+			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
+			update_parallel_count, health_check
+		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
+		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
+		VALUES ('a1', '10.0.0.1', 'api', 0, 0, 0, '0.0.0'),
+		       ('a2', '10.0.0.2', 'api', 0, 1, 0, '0.0.0');
+	`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	kv.GetKVStore().Put("maand/job/api/worker/10.0.0.2", "api_allocation_index", "1", 0)
+	require.NoError(t, syncJobAllocationVariables(tx, "api"))
+	require.NoError(t, tx.Commit())
+
 	keys, err := kv.GetKVStore().GetKeys("maand/job/api/worker/10.0.0.2")
 	require.NoError(t, err)
 	assert.Empty(t, keys)
-
-	idx, err := kv.GetKVStore().Get("maand/job/api/worker/10.0.0.1", "api_allocation_index")
-	require.NoError(t, err)
-	assert.Equal(t, "0", idx.Value)
 }
 
 func TestBuildJobAllocationVariablesClearsRemovedJobWorkers(t *testing.T) {

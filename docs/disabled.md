@@ -1,6 +1,8 @@
 # Disabling workers, jobs, and allocations
 
-Use **`workspace/disabled.json`** to stop workloads **without** removing workspace files, catalog rows, or worker **`data/`** / **`logs/`**. Disabled allocations are **inactive** for start/restart/rsync, but maand still **stages, hashes, and promotes** content and version changes on deploy so you can re-enable safely after a build.
+Use **`workspace/disabled.json`** for **maintenance** — drain a node, allocation, or entire job **without** removing workspace files, catalog rows, or worker **`data/`** / **`logs/`**.
+
+A disabled allocation is otherwise the same as an active one: it stays in **`allocations`**, build refreshes job and per-allocation KV and certs, and deploy **stages, hashes, and promotes** content. The **only** difference is runtime: maand **never starts** a disabled allocation (no start/restart/rsync on deploy).
 
 For removal (soft-delete until GC), see [gc.md](./gc.md) and [day-2-operations.md](./tutorials/day-2-operations.md#remove-a-worker-or-job).
 
@@ -110,10 +112,10 @@ Use this before host maintenance: drain all jobs on the machine without deleting
 
 | Phase | Disabled allocation |
 |-------|---------------------|
-| **`maand build`** | Sets `allocations.disabled = 1`. Re-enable clears the flag when the entry is removed from `disabled.json`. |
-| **`maand deploy` reconcile** | **Stop** if previously deployed (`previous_hash` set). **Keep** deploy artifacts, **`data/`**, **`logs/`**, hash row, and job KV. |
-| **Staging / hash / promote** | Still runs for non-removed allocations (including disabled). Content and **`new_version`** stay current in the catalog. |
-| **Start / restart / rsync** | Skipped for disabled rows. |
+| **`maand build`** | Sets `allocations.disabled = 1`. Same job KV, per-allocation KV (`*_allocation_index`, `peer_workers`), and certs as active peers. Re-enable clears the flag when the entry is removed from `disabled.json`. |
+| **`maand deploy` reconcile** | **Stop** if previously deployed (`previous_hash` set). **Keep** deploy artifacts, **`data/`**, **`logs/`**, hash row, and KV. |
+| **Staging / hash / promote** | Same as active — content and **`new_version`** stay current. |
+| **Start / restart / rsync** | **Skipped** — the only runtime difference from active. |
 | **`maand job start`** | Skipped unless you target active allocations only. |
 
 Inspect state:

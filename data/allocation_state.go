@@ -6,7 +6,9 @@ package data
 
 import "database/sql"
 
-// IsActiveAllocation reports whether removed/disabled flags denote a schedulable allocation.
+// IsActiveAllocation reports whether an allocation may be started on deploy
+// (removed=0 and disabled=0). Disabled allocations remain in the catalog and
+// receive build KV, certs, and deploy staging; only start/restart/rsync are skipped.
 func IsActiveAllocation(removed, disabled int) bool {
 	return removed == 0 && disabled == 0
 }

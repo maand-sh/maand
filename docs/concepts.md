@@ -165,9 +165,11 @@ Each allocation tracks **`current_version`** (last promoted, in **`hash`**) and 
 
 ### Active vs inactive
 
-An allocation is **active** when `removed = 0` and `disabled = 0`. Only active allocations receive:
+An allocation is **active** when `removed = 0` and `disabled = 0`. A **disabled** allocation (`removed = 0`, `disabled = 1`) is still a full member of the job’s allocation set — build writes the same job and per-allocation KV, certs, and hashes; deploy still stages and promotes content. The only difference is runtime: disabled allocations are **never started** (no start/restart/rsync on deploy).
 
-- Deploy rollouts and hooks
+Only **active** allocations receive:
+
+- Deploy start/restart/rsync and rollout hooks that run on workers
 - `maand job_command`, `maand health_check`
 - Default targets for `maand job start|stop|restart`
 

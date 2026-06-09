@@ -77,7 +77,7 @@ func buildJobCerts(tx *sql.Tx, jobName string, caChanged bool) error {
 	}
 	jobRegenerate := caChanged || jobCertConfigChanged
 
-	workerIPs, err := data.GetActiveAllocations(tx, jobName)
+	workerIPs, err := data.GetNonRemovedAllocations(tx, jobName)
 	if err != nil {
 		return err
 	}
