@@ -7,6 +7,7 @@ package deploy
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	"maand/bucket"
 	"maand/data"
@@ -155,6 +156,9 @@ func reconcileStoppedAllocation(
 	}
 
 	if previousHash != "" {
+		if alloc.Disabled {
+			log.Printf("deploy: stop disabled allocation %s on %s", alloc.Job, alloc.WorkerIP)
+		}
 		stopCmd := runnerCommand(bucketID, "stop", alloc.Job)
 		if assumeDead {
 			runWorkerCommandOrAssumeDead(rt, alloc.WorkerIP, []string{stopCmd}, nil)

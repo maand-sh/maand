@@ -130,7 +130,7 @@ func TestPlanJobRollout_startNewAllocation(t *testing.T) {
 	require.NoError(t, tx.Rollback())
 }
 
-func TestPlanJobRollout_noActiveAllocations(t *testing.T) {
+func TestPlanJobRollout_noAllocations(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)
 	env.insertJob(t, tx, "orphan", 0, 1)
@@ -139,9 +139,66 @@ func TestPlanJobRollout_noActiveAllocations(t *testing.T) {
 	tx = env.begin(t)
 	plan, err := planJobRollout(tx, "orphan", 0, false)
 	require.NoError(t, err)
-	assert.Equal(t, "no active allocations", plan.SkipReason)
+	assert.Equal(t, "no allocations", plan.SkipReason)
 	assert.False(t, plan.NeedsRollout)
 	require.NoError(t, tx.Rollback())
+}
+
+func TestPlanJobRollout_disabledPromotedRequiresStop(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "same", "same")
+	_, err := tx.Exec(`UPDATE allocations SET disabled = 1 WHERE job = 'app'`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	tx = env.begin(t)
+	plan, err := planJobRollout(tx, "app", 0, false)
+	require.NoError(t, err)
+	require.True(t, plan.NeedsRollout)
+	require.Len(t, plan.Allocations, 1)
+	assert.Equal(t, rolloutActionStop, plan.Allocations[0].Action)
+	require.NoError(t, tx.Rollback())
+}
+
+func TestDryRun_disabledPromotedRequiresDeploy(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	installNoopDeployHooks(t, env.bucketID)
+
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, Execute(nil, false))
+
+	tx = env.begin(t)
+	_, err := tx.Exec(`UPDATE allocations SET disabled = 1 WHERE job = 'app'`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	result, err := DryRun(nil, false)
+	require.NoError(t, err)
+	require.True(t, result.Required)
+	require.Len(t, result.Jobs, 1)
+	require.True(t, result.Jobs[0].NeedsRollout)
+	require.Equal(t, rolloutActionStop, result.Jobs[0].Allocations[0].Action)
+}
+
+func TestDryRun_disabledVersionPendingRequiresPromote(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "same", "same")
+	_, err := tx.Exec(`UPDATE hash SET current_version = '1.0.0' WHERE namespace = 'app_allocation' AND key = 'alloc-app-10.0.0.1'`)
+	require.NoError(t, err)
+	_, err = tx.Exec(`UPDATE allocations SET disabled = 1, new_version = '2.0.0' WHERE job = 'app'`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	result, err := DryRun(nil, false)
+	require.NoError(t, err)
+	require.True(t, result.Required)
+	require.Equal(t, rolloutActionStopPromote, result.Jobs[0].Allocations[0].Action)
 }
 
 func TestPlanJobRollout_forceRestart(t *testing.T) {

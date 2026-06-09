@@ -12,8 +12,10 @@ import (
 	"maand/data"
 )
 
-// JobNeedsRollout reports whether any active allocation for the job still needs
-// a deploy wave (new worker or staged content not yet promoted to workers).
+// JobNeedsRollout reports whether the job still needs a deploy wave: new workers,
+// staged content or versions not yet promoted, or missing hash rows on non-removed
+// allocations (including disabled). Reconcile stop for newly disabled allocations
+// runs at the start of deploy even when this returns false.
 // After a successful deploy, promoteAllocationHash sets previous_hash = current_hash,
 // so a re-run of maand deploy skips that job and continues with jobs that failed
 // or have pending hash changes.

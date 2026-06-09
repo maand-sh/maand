@@ -123,7 +123,10 @@ Inspect state:
 ```bash
 maand cat allocations --jobs api
 maand cat hashes --jobs api
+maand deploy --dry-run
 ```
+
+After disable, **`maand deploy --dry-run`** should show **`stop`** on allocations that were running (rollout `disabled` in **`cat hashes`**). If build changed content or version while disabled, dry-run shows **`stop+promote`** or **`promote`** (`disabled_restart` in **`cat hashes`**) — deploy stages and promotes without starting the allocation.
 
 **`cat hashes` rollout** for disabled rows:
 

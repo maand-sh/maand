@@ -18,6 +18,9 @@ const (
 	rolloutActionStart   = "start"
 	rolloutActionRestart = "restart"
 	rolloutActionSkip    = "skip"
+	rolloutActionStop    = "stop"
+	rolloutActionPromote = "promote"
+	rolloutActionStopPromote = "stop+promote"
 )
 
 // AllocationPlan describes one worker allocation after plan hashes are refreshed.
@@ -126,61 +129,39 @@ func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, force bool) (JobP
 		DeploymentSeq: deploymentSeq,
 	}
 
-	activeWorkers, err := data.GetActiveAllocations(tx, job)
+	workers, err := data.GetNonRemovedAllocationsOrdered(tx, job)
 	if err != nil {
 		return plan, err
 	}
-	if len(activeWorkers) == 0 {
-		plan.SkipReason = "no active allocations"
+	if len(workers) == 0 {
+		plan.SkipReason = "no allocations"
 		return plan, nil
 	}
 
 	namespace := fmt.Sprintf("%s_allocation", job)
-	for _, workerIP := range activeWorkers {
-		allocID, err := data.GetAllocationID(tx, workerIP, job)
+	for _, workerIP := range workers {
+		disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
 		if err != nil {
 			return plan, err
 		}
-
-		current, previous, ok, err := data.GetAllocationHash(tx, namespace, allocID)
-		if err != nil {
-			return plan, err
-		}
-
-		ap := AllocationPlan{WorkerIP: workerIP}
-		switch {
-		case !ok:
-			ap.Action = rolloutActionStart
-			plan.NeedsRollout = true
-		case previous == "":
-			ap.Action = rolloutActionStart
-			ap.CurrentHash = current
-			plan.NeedsRollout = true
-		case previous != current:
-			ap.Action = rolloutActionRestart
-			ap.PreviousHash = previous
-			ap.CurrentHash = current
-			plan.NeedsRollout = true
-		case force:
-			ap.Action = rolloutActionRestart
-			ap.PreviousHash = previous
-			ap.CurrentHash = current
-			plan.NeedsRollout = true
-		default:
-			needsVersion, err := data.AllocationNeedsVersionRollout(tx, job, workerIP)
+		if disabled == 1 {
+			ap, needs, err := planDisabledAllocation(tx, job, workerIP, namespace, force)
 			if err != nil {
 				return plan, err
 			}
-			if needsVersion {
-				ap.Action = rolloutActionRestart
-				ap.PreviousHash = previous
-				ap.CurrentHash = current
+			if needs {
 				plan.NeedsRollout = true
-			} else {
-				ap.Action = rolloutActionSkip
-				ap.PreviousHash = previous
-				ap.CurrentHash = current
 			}
+			plan.Allocations = append(plan.Allocations, ap)
+			continue
+		}
+
+		ap, needs, err := planActiveAllocation(tx, job, workerIP, namespace, force)
+		if err != nil {
+			return plan, err
+		}
+		if needs {
+			plan.NeedsRollout = true
 		}
 		plan.Allocations = append(plan.Allocations, ap)
 	}
@@ -189,6 +170,106 @@ func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, force bool) (JobP
 		plan.SkipReason = "already promoted on all allocations"
 	}
 	return plan, nil
+}
+
+func planActiveAllocation(
+	tx *sql.Tx,
+	job, workerIP, namespace string,
+	force bool,
+) (AllocationPlan, bool, error) {
+	allocID, err := data.GetAllocationID(tx, workerIP, job)
+	if err != nil {
+		return AllocationPlan{}, false, err
+	}
+
+	current, previous, ok, err := data.GetAllocationHash(tx, namespace, allocID)
+	if err != nil {
+		return AllocationPlan{}, false, err
+	}
+
+	ap := AllocationPlan{WorkerIP: workerIP}
+	switch {
+	case !ok:
+		ap.Action = rolloutActionStart
+		return ap, true, nil
+	case previous == "":
+		ap.Action = rolloutActionStart
+		ap.CurrentHash = current
+		return ap, true, nil
+	case previous != current:
+		ap.Action = rolloutActionRestart
+		ap.PreviousHash = previous
+		ap.CurrentHash = current
+		return ap, true, nil
+	case force:
+		ap.Action = rolloutActionRestart
+		ap.PreviousHash = previous
+		ap.CurrentHash = current
+		return ap, true, nil
+	default:
+		needsVersion, err := data.AllocationNeedsVersionRollout(tx, job, workerIP)
+		if err != nil {
+			return AllocationPlan{}, false, err
+		}
+		if needsVersion {
+			ap.Action = rolloutActionRestart
+			ap.PreviousHash = previous
+			ap.CurrentHash = current
+			return ap, true, nil
+		}
+		ap.Action = rolloutActionSkip
+		ap.PreviousHash = previous
+		ap.CurrentHash = current
+		return ap, false, nil
+	}
+}
+
+func planDisabledAllocation(
+	tx *sql.Tx,
+	job, workerIP, namespace string,
+	force bool,
+) (AllocationPlan, bool, error) {
+	allocID, err := data.GetAllocationID(tx, workerIP, job)
+	if err != nil {
+		return AllocationPlan{}, false, err
+	}
+
+	current, previous, ok, err := data.GetAllocationHash(tx, namespace, allocID)
+	if err != nil {
+		return AllocationPlan{}, false, err
+	}
+
+	ap := AllocationPlan{
+		WorkerIP:     workerIP,
+		PreviousHash: previous,
+		CurrentHash:  current,
+	}
+
+	wasDeployed := ok && previous != ""
+	needsVersion, err := data.AllocationNeedsVersionRollout(tx, job, workerIP)
+	if err != nil {
+		return AllocationPlan{}, false, err
+	}
+	hashMismatch := wasDeployed && previous != current
+	needsPromote := hashMismatch || needsVersion || (force && wasDeployed)
+
+	needs := false
+	if wasDeployed {
+		ap.Action = rolloutActionStop
+		needs = true
+	}
+	if needsPromote {
+		if ap.Action == rolloutActionStop {
+			ap.Action = rolloutActionStopPromote
+		} else {
+			ap.Action = rolloutActionPromote
+		}
+		needs = true
+	}
+	if ap.Action == "" {
+		ap.Action = rolloutActionSkip
+	}
+	return ap, needs, nil
 }
 
 // PrintDryRun writes a human-readable dry-run report to stdout.
@@ -243,6 +324,18 @@ func printAllocationPlan(alloc AllocationPlan) {
 		)
 	case rolloutActionSkip:
 		fmt.Printf("    %s  skip    hash=%s\n", alloc.WorkerIP, alloc.CurrentHash)
+	case rolloutActionStop:
+		fmt.Printf("    %s  stop    previous_hash=%s\n", alloc.WorkerIP, alloc.PreviousHash)
+	case rolloutActionPromote:
+		fmt.Printf(
+			"    %s  promote previous_hash=%s current_hash=%s\n",
+			alloc.WorkerIP, alloc.PreviousHash, alloc.CurrentHash,
+		)
+	case rolloutActionStopPromote:
+		fmt.Printf(
+			"    %s  stop+promote previous_hash=%s current_hash=%s\n",
+			alloc.WorkerIP, alloc.PreviousHash, alloc.CurrentHash,
+		)
 	default:
 		fmt.Printf("    %s  %s\n", alloc.WorkerIP, alloc.Action)
 	}

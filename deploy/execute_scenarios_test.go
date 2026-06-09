@@ -12,6 +12,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestExecute_disabledPromotedAllocationStopsOnDeploy(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	rec := installNoopDeployHooks(t, env.bucketID)
+
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	require.NoError(t, tx.Commit())
+
+	require.NoError(t, Execute(nil, false))
+	assert.True(t, rec.HasAction("10.0.0.1", "start", "app"))
+
+	rec2 := installNoopDeployHooks(t, env.bucketID)
+	tx = env.begin(t)
+	_, err := tx.Exec(`UPDATE allocations SET disabled = 1 WHERE job = 'app' AND worker_ip = '10.0.0.1'`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	require.NoError(t, Execute(nil, false))
+	assert.True(t, rec2.HasAction("10.0.0.1", "stop", "app"))
+}
+
 func TestExecute_disabledAllocationDoesNotStart(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	rec := installNoopDeployHooks(t, env.bucketID)
