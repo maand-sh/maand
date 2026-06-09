@@ -59,10 +59,10 @@ my_setting = "value"
 
 | Key | Purpose |
 |-----|---------|
-| `port_min` / `port_max` | Inclusive range for maand-assigned job ports |
+| `port_min` / `port_max` | Inclusive pool for maand-assigned (`{}`) job ports only; fixed manifest ports are not limited to this range |
 | Other keys | Copied to KV namespace **`vars/bucket`** at build |
 
-Job manifests declare ports as **`{}`** (assign from pool) or a **fixed integer** (must fall inside `port_min`–`port_max`). See [build.md](./build.md#workspacebucketconf).
+Job manifests declare ports as **`{}`** (assign from pool) or a **fixed integer** (any port number). See [build.md](./build.md#workspacebucketconf).
 
 ---
 
