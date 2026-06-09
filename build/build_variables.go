@@ -340,16 +340,9 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string, purgeJobCommandKV bool)
 			continue
 		}
 
-		activeWorkers, err := data.GetActiveAllocationsOrdered(tx, jobName)
+		workersForVars, err := data.GetNonRemovedAllocationsOrdered(tx, jobName)
 		if err != nil {
 			return err
-		}
-		workersForVars := activeWorkers
-		if len(workersForVars) == 0 {
-			workersForVars, err = data.GetNonRemovedAllocations(tx, jobName)
-			if err != nil {
-				return err
-			}
 		}
 
 		variables := make(map[string]string)

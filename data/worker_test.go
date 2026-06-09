@@ -80,6 +80,10 @@ func TestWorkerQueries(t *testing.T) {
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []string{"10.0.0.1", "10.0.0.2"}, nonRemoved)
 
+	nonRemovedOrdered, err := GetNonRemovedAllocationsOrdered(tx, "api")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, nonRemovedOrdered)
+
 	activeAllocs, err := GetActiveAllocations(tx, "api")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"10.0.0.1"}, activeAllocs)

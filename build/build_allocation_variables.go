@@ -45,15 +45,15 @@ func BuildJobAllocationVariables(tx *sql.Tx, removedJobs []string) error {
 }
 
 func syncJobAllocationVariables(tx *sql.Tx, jobName string) error {
-	activeWorkers, err := data.GetActiveAllocationsOrdered(tx, jobName)
+	workers, err := data.GetNonRemovedAllocationsOrdered(tx, jobName)
 	if err != nil {
 		return err
 	}
 
 	indexKey := jobName + "_allocation_index"
-	for idx, workerIP := range activeWorkers {
-		peers := make([]string, 0, len(activeWorkers)-1)
-		for _, peer := range activeWorkers {
+	for idx, workerIP := range workers {
+		peers := make([]string, 0, len(workers)-1)
+		for _, peer := range workers {
 			if peer != workerIP {
 				peers = append(peers, peer)
 			}
@@ -69,20 +69,25 @@ func syncJobAllocationVariables(tx *sql.Tx, jobName string) error {
 			return err
 		}
 	}
-	return purgeStaleJobAllocationVariables(tx, jobName, activeWorkers)
+	return purgeStaleJobAllocationVariables(tx, jobName)
 }
 
-func purgeStaleJobAllocationVariables(tx *sql.Tx, jobName string, activeWorkers []string) error {
+func purgeStaleJobAllocationVariables(tx *sql.Tx, jobName string) error {
+	nonRemovedWorkers, err := data.GetNonRemovedAllocations(tx, jobName)
+	if err != nil {
+		return err
+	}
+	retained := make(map[string]struct{}, len(nonRemovedWorkers))
+	for _, workerIP := range nonRemovedWorkers {
+		retained[workerIP] = struct{}{}
+	}
+
 	allocatedWorkers, err := data.GetAllocatedWorkers(tx, jobName)
 	if err != nil {
 		return err
 	}
-	active := make(map[string]struct{}, len(activeWorkers))
-	for _, workerIP := range activeWorkers {
-		active[workerIP] = struct{}{}
-	}
 	for _, workerIP := range allocatedWorkers {
-		if _, ok := active[workerIP]; ok {
+		if _, ok := retained[workerIP]; ok {
 			continue
 		}
 		namespace := fmt.Sprintf("maand/job/%s/worker/%s", jobName, workerIP)
