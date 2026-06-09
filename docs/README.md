@@ -32,6 +32,7 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 |----------|-----------------|
 | [commands.md](./commands.md) | Full CLI reference (all commands and flags) |
 | [configuration.md](./configuration.md) | `maand.conf`, `bucket.conf`, `bucket.jobs.conf`, `vars.toml` |
+| [resources-and-placement.md](./resources-and-placement.md) | Job memory/CPU, bucket overrides, environment selectors |
 | [build.md](./build.md) | `maand build` |
 | [deploy.md](./deploy.md) | `maand deploy` |
 | [health-check.md](./health-check.md) | `maand health_check` |
