@@ -119,7 +119,7 @@ workspace/jobs/api/
 | `update_parallel_count` | Rolling restart batch size during deploy |
 | `commands` | Named hooks (`command_*`) with `executed_on` events |
 | `health_check` | Optional built-in probes (tcp/http/ssh) — **or** a `health_check` command, not both |
-| `certs` | TLS material generated into KV per allocation |
+| `certs` | TLS definitions → generated at build, deployed under `jobs/<job>/certs/` — [certs.md](./certs.md) |
 
 Manifest reference: [jobs-and-dependencies.md](./jobs-and-dependencies.md). Configuration files: [configuration.md](./configuration.md). Command scripts: [job-command.md](./job-command.md).
 

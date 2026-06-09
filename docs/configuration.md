@@ -38,7 +38,9 @@ job_config_selector = ""
 | `ssh_port` | `22` | SSH port for worker connections and worker health checks |
 | `use_sudo` | `true` | Prefix remote rsync and some commands with `sudo` |
 | `certs_ttl` | `60` | Days until generated job certs expire |
-| `certs_renewal_buffer` | `10` | Regenerate certs when within this many days of expiry |
+| `certs_renewal_buffer` | `0` if omitted | Regenerate leaf certs when `NotAfter + buffer` is in the past (use `10` for early renewal) |
+
+Full TLS guide: [certs.md](./certs.md).
 | `job_config_selector` | `""` | Suffix for **`bucket.jobs.<selector>.conf`** (see below) |
 
 Path on disk: **`<bucket>/maand.conf`**. Worker key path used at runtime: **`secrets/<ssh_key>`**.
@@ -86,7 +88,7 @@ Full guide (manifest bounds, validation, selectors): [resources-and-placement.md
 
 ## `workspace/jobs/<job>/vars.toml` (optional)
 
-Stable job-scoped variables merged into **`vars/job/<job>`** at build (put-only; keys not listed are preserved). See [kv.md](./kv.md#varsjobjob).
+Stable job-scoped variables merged into **`vars/job/<job>`** at build (put-only; keys not listed are preserved). See [kv-variables.md](./kv-variables.md).
 
 ---
 

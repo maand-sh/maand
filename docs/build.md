@@ -266,11 +266,12 @@ Full namespace reference, persistence rules, and purge behavior: [kv.md](./kv.md
 
 ### Certificates
 
-- Bucket **CA** in `secrets/ca.crt` / `ca.key`.
-- Per-job certs from manifest → stored in KV under each worker namespace.
-- Regenerated when CA hash or `build_certs` job hash changes.
-- Manifest `"pkcs8": true` writes PKCS#8 private keys (`PRIVATE KEY` PEM); default is PKCS#1 (`RSA PRIVATE KEY`).
-- Removing certs from a job manifest purges `certs/*` KV keys on the next build.
+See [certs.md](./certs.md) for the full guide (CA, manifest options, auto-rotation, deploy paths). Summary:
+
+- Bucket **CA** in `secrets/ca.crt` / `ca.key` (created on `maand init`).
+- Per-job certs from manifest → KV per allocation → `jobs/<job>/certs/` on workers at deploy.
+- Regenerated when CA or manifest `certs` hash changes, or when a leaf cert enters the `certs_renewal_buffer` window (`maand.conf`).
+- Removing `certs` from the manifest purges `certs/*` KV keys on the next build.
 
 ## `post_build` job commands
 

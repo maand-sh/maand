@@ -28,7 +28,7 @@ workspace/jobs/database/
 | `update_parallel_count` | Rolling restart batch size **within one deploy wave** (default 1) |
 | `resources` | Memory, CPU, ports (validated at build) |
 | `commands` | Named hooks — see below |
-| `certs` | TLS definitions → KV per allocation |
+| `certs` | TLS definitions → KV per allocation — [certs.md](./certs.md) |
 
 Example:
 
