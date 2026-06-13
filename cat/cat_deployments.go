@@ -16,7 +16,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
-func Hashes(jobsCSV, workersCSV string, activeOnly bool) error {
+func Deployments(jobsCSV, workersCSV string, activeOnly bool) error {
 	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return bucket.DatabaseError(err)
@@ -33,7 +33,7 @@ func Hashes(jobsCSV, workersCSV string, activeOnly bool) error {
 	jobsFilter := parseCSVFilter(jobsCSV)
 	workersFilter := parseCSVFilter(workersCSV)
 
-	if err := validateHashFilters(tx, jobsFilter, workersFilter); err != nil {
+	if err := validateDeploymentFilters(tx, jobsFilter, workersFilter); err != nil {
 		return err
 	}
 
@@ -77,10 +77,10 @@ func Hashes(jobsCSV, workersCSV string, activeOnly bool) error {
 	rowCount := 0
 	for rows.Next() {
 		var (
-			allocID, workerIP, job       string
-			disabled, removed            int
-			currentHash, previousHash    string
-			currentVersion, newVersion   string
+			allocID, workerIP, job     string
+			disabled, removed          int
+			currentHash, previousHash  string
+			currentVersion, newVersion string
 		)
 		if err := rows.Scan(
 			&allocID, &workerIP, &job, &disabled, &removed,
@@ -102,7 +102,7 @@ func Hashes(jobsCSV, workersCSV string, activeOnly bool) error {
 		return err
 	}
 	if rowCount == 0 {
-		return bucket.NotFoundError("hashes")
+		return bucket.NotFoundError("deployments")
 	}
 
 	t.Render()
@@ -128,7 +128,7 @@ func parseCSVFilter(csv string) []string {
 	return utils.Unique(out)
 }
 
-func validateHashFilters(tx *sql.Tx, jobsFilter, workersFilter []string) error {
+func validateDeploymentFilters(tx *sql.Tx, jobsFilter, workersFilter []string) error {
 	if len(jobsFilter) > 0 {
 		allJobs, err := data.GetAllAllocatedJobs(tx)
 		if err != nil {

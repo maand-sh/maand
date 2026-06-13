@@ -595,7 +595,7 @@ func TestCatCommand(t *testing.T) {
 	err = cat.Jobs()
 	assert.NoError(t, err)
 
-	err = cat.JobPorts()
+	err = cat.JobPorts("")
 	assert.NoError(t, err)
 
 	err = cat.KV("", false, false)

@@ -60,7 +60,7 @@ Missing keys or disallowed namespaces **panic** at render time (deploy fails for
   "cluster": "{{ get "vars/job/api" "cluster_name" }}",
   "version": "{{ .NewVersion }}",
   "worker": "{{ .WorkerIP }}",
-  "listen_port": "{{ get "maand/job/api" "http_port" }}"
+  "listen_port": "{{ get "maand" "http_port" }}"
 }
 ```
 

@@ -33,4 +33,6 @@ maand run_command "hostname" --concurrency 4
 ## Notes
 
 - Commands run on workers as the configured **`ssh_user`** (default `agent`).
+- **Working directory:** scripts start in the worker's bucket directory **`/opt/worker/$BUCKET_ID`**, so relative paths like `jobs/<job>/...` resolve directly. If the bucket has not been deployed yet (no such directory), it falls back to the SSH login directory so host-bootstrap commands still work.
+- **`BUCKET_ID`** and **`WORKER_IP`** are exported into every script.
 - This is separate from **job commands** (`pre_deploy`, `job_control`, etc.) which use the runtime API and job workspaces.

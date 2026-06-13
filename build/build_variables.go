@@ -6,11 +6,9 @@ package build
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -405,26 +403,6 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string, purgeJobCommandKV bool)
 			variables[fmt.Sprintf("worker_%d", idx)] = workerIP
 		}
 
-		portMap, err := data.GetJobPortMap(tx, jobName)
-		if err != nil {
-			return err
-		}
-		if len(portMap) > 0 {
-			portNames := make([]string, 0, len(portMap))
-			for name := range portMap {
-				portNames = append(portNames, name)
-			}
-			sort.Strings(portNames)
-			for _, name := range portNames {
-				variables[name] = portMap[name]
-			}
-			portsJSON, err := json.Marshal(portMap)
-			if err != nil {
-				return fmt.Errorf("%w: marshal ports_json for job %s: %w", bucket.ErrUnexpectedError, jobName, err)
-			}
-			variables["ports_json"] = string(portsJSON)
-		}
-
 		jobNamespace := fmt.Sprintf("maand/job/%s", jobName)
 		err = syncKeyValues(tx, jobNamespace, variables)
 		if err != nil {
@@ -536,6 +514,6 @@ func syncKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) er
 // bucket.jobs.conf => vars/bucket/job/a
 // bucket.jobs.conf (memory, cpu) => maand/job/a
 // job resources (memory and cpu) => maand/job/a
-// job resources (ports) => maand
-// job meta => maand/job/a
+// job ports => maand
+// job meta (workers, version, resources) => maand/job/a
 // job certs => maand/job/a/worker/10.0.0.1

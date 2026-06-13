@@ -8,7 +8,7 @@ Structured checklist for **`maand deploy`** failures, skipped jobs, partial roll
 
 ```text
 1. maand deploy --dry-run [-b]     # would deploy run? which jobs?
-2. maand cat hashes [--jobs J]     # per-allocation rollout state
+2. maand cat deployments [--jobs J]     # per-allocation rollout state
 3. maand cat allocations [--jobs J]
 4. maand cat jobs                  # deployment_seq, disabled flag
 5. maand build && maand deploy     # refresh plan hashes after workspace edit
@@ -18,7 +18,7 @@ Structured checklist for **`maand deploy`** failures, skipped jobs, partial roll
 ```bash
 maand info
 maand deploy --dry-run
-maand cat hashes --jobs api
+maand cat deployments --jobs api
 maand cat allocations --jobs api
 maand cat kv --jobs api
 ```
@@ -50,9 +50,9 @@ Interpret output:
 ## Read allocation hash state
 
 ```bash
-maand cat hashes
-maand cat hashes --jobs api --active
-maand cat hashes --workers 10.0.0.1
+maand cat deployments
+maand cat deployments --jobs api --active
+maand cat deployments --workers 10.0.0.1
 ```
 
 | Rollout | Meaning | Typical action |
@@ -77,7 +77,7 @@ Columns **`current_version`** / **`new_version`**: version-only rollout when has
 |-------|-----|
 | No workspace change since last successful deploy | Expected; edit job or use **`--force`** |
 | Edited workspace but only ran deploy | Run **`maand build`** then **`maand deploy`** |
-| Version bump without content change | **`build`** sets **`new_version`**; deploy should restart — check **`cat hashes`** for version mismatch |
+| Version bump without content change | **`build`** sets **`new_version`**; deploy should restart — check **`cat deployments`** for version mismatch |
 | Job fully **disabled** | No active allocations; enable or use **`--jobs`** on active jobs only |
 
 ### Job not in deploy wave at all
@@ -153,7 +153,7 @@ Deploy does not require this check; **`maand job`** does.
 Deploy **commits** successful jobs; failed jobs stay unpromoted.
 
 ```bash
-maand cat hashes        # promoted vs restart per job
+maand cat deployments        # promoted vs restart per job
 maand deploy            # retries only jobs still needing rollout
 ```
 
@@ -242,7 +242,7 @@ If deploy fails mid-run, this directory is removed when the command exits.
 |------|---------|
 | Bucket summary | `maand info` |
 | Plan deploy | `maand deploy --dry-run` |
-| Hash / version state | `maand cat hashes` |
+| Hash / version state | `maand cat deployments` |
 | Allocation flags | `maand cat allocations` |
 | Deploy order | `maand cat jobs` |
 | KV for templates/hooks | `maand cat kv --jobs <job>` |
@@ -256,7 +256,7 @@ If deploy fails mid-run, this directory is removed when the command exits.
 ## Escalation checklist
 
 1. **`maand build`** succeeded after last workspace edit?
-2. **`maand cat hashes`**: expected rollout state per worker?
+2. **`maand cat deployments`**: expected rollout state per worker?
 3. **`maand deploy --dry-run`**: job listed as required?
 4. **`deployment_seq`**: blocked by an earlier job?
 5. **`disabled.json`**: unintended drain?

@@ -35,7 +35,7 @@ func runHealthCheckCommand(
 	job, commandName string,
 	verbose, updateHash bool,
 ) (bool, error) {
-	cmdErr := jobcommand.JobCommand(tx, rt, job, commandName, "health_check", 1, verbose, nil)
+	cmdErr := jobcommand.JobCommand(tx, rt, job, commandName, "health_check", 10, verbose, nil)
 	if cmdErr == nil {
 		return false, nil
 	}

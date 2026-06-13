@@ -79,7 +79,7 @@ maand info
 maand cat workers
 maand cat jobs
 maand cat allocations
-maand cat hashes
+maand cat deployments
 maand cat job_commands
 maand cat job_ports
 maand cat kv
@@ -87,7 +87,7 @@ maand cat kv get <namespace> <key>
 maand cat kv get --reveal secrets/job/<job> <key>
 ```
 
-Rollout debugging: [deploy-debugging.md](./deploy-debugging.md) · Hash columns: [commands.md](./commands.md#maand-cat-hashes)
+Rollout debugging: [deploy-debugging.md](./deploy-debugging.md) · Hash columns: [commands.md](./commands.md#maand-cat-deployments)
 
 ---
 

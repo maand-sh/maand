@@ -46,13 +46,13 @@ See [README.md](./README.md#typical-workflow) for the command sequence.
 | Different CPU/memory per env | `bucket.jobs.prod.conf` + `job_config_selector` | [configuration.md](./configuration.md) |
 | Ordered multi-job deploy | Command **demands** → `deployment_seq` waves | [jobs-and-dependencies.md](./jobs-and-dependencies.md) |
 | Rolling restart without downtime | `update_parallel_count` + health between batches | [rolling-upgrade.md](./rolling-upgrade.md) |
-| Skip redeploy when nothing changed | Content hashes + version promotion per allocation | [deploy.md](./deploy.md), `maand cat hashes` |
+| Skip redeploy when nothing changed | Content hashes + version promotion per allocation | [deploy.md](./deploy.md), `maand cat deployments` |
 | Bootstrap secrets before templates | `pre_deploy` + `put_job_secret` / runtime API | [job-command.md](./job-command.md), [kv-variables.md](./kv-variables.md) |
 | Custom canary or blue/green | `job_control` command + env `NEW_ALLOCATIONS` | [job-command.md](./job-command.md), [rolling-upgrade.md](./rolling-upgrade.md) |
 | Single-writer migration across nodes | Runtime **semaphore** (`capacity=1`) | [job-command.md](./job-command.md#semaphores) |
 | Drain one node for maintenance | `disabled.json` → build → deploy (stops, no restart) | [disabled.md](./disabled.md) |
 | mTLS or app TLS on workers | Manifest `certs` + auto-rotation on build | [certs.md](./certs.md) |
-| Debug “why didn’t deploy run?” | `--dry-run`, `maand cat hashes`, [deploy-debugging.md](./deploy-debugging.md) | [deploy-debugging.md](./deploy-debugging.md) |
+| Debug “why didn’t deploy run?” | `--dry-run`, `maand cat deployments`, [deploy-debugging.md](./deploy-debugging.md) | [deploy-debugging.md](./deploy-debugging.md) |
 | One-off operator script | `maand job_command` (event **`cli`**) | [job-command.md](./job-command.md) |
 
 ---
@@ -60,7 +60,7 @@ See [README.md](./README.md#typical-workflow) for the command sequence.
 ## Where maand is strong
 
 1. **No agents** — workers only need SSH, `make`, `python3`, `rsync`, `bash`. Good fit when you do not want Nomad/K8s overhead.
-2. **Declarative + incremental deploy** — content hashes and version tracking mean redeploys skip promoted allocations and resume after partial failure. Dry-run and `maand cat hashes` make rollout state visible. See [deploy.md](./deploy.md) and [deploy-debugging.md](./deploy-debugging.md).
+2. **Declarative + incremental deploy** — content hashes and version tracking mean redeploys skip promoted allocations and resume after partial failure. Dry-run and `maand cat deployments` make rollout state visible. See [deploy.md](./deploy.md) and [deploy-debugging.md](./deploy-debugging.md).
 3. **Multi-job orchestration** — dependency graph, ordered deploy waves, rolling restarts with health gates between batches. See [jobs-and-dependencies.md](./jobs-and-dependencies.md) and [rolling-upgrade.md](./rolling-upgrade.md).
 4. **Extensibility without a custom agent** — job commands, runtime HTTP API (KV, demands, semaphores), and layered configuration support migrations, secret bootstrap, custom lifecycle, and CLI-triggered ops on the orchestrator host. See [job-command.md](./job-command.md) and [kv-variables.md](./kv-variables.md).
 5. **Operational tooling built in** — maintenance disable (not delete), GC, dry-run, hash inspection, cert renewal on build, resource validation, and structured [deploy debugging](./deploy-debugging.md).

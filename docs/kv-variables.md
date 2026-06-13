@@ -6,7 +6,7 @@ Maand stores configuration in a **KV store** (SQLite `key_value` table). Values 
 |-------|-------------|-------------|
 | **Global (bucket)** | `bucket.conf`, build | Settings shared by every job |
 | **Worker** | `workers.json`, build | Host capacity, labels, peers |
-| **Job** | manifest, `vars.toml`, `bucket.jobs.conf`, build, hooks | App config, ports, resource limits |
+| **Job** | manifest, `vars.toml`, `bucket.jobs.conf`, build, hooks | App config, resource limits |
 | **Allocation** | build + deploy | Per (job × worker): certs, peer list, target version |
 
 **Read** values with **`maand cat kv`**, **templates** (`get`), or **job commands** (`maand.kv.get`).  
@@ -90,7 +90,7 @@ maand cat kv get maand bucket_id
 maand cat kv get maand api_http_port
 ```
 
-Job-specific port numbers are also on **`maand/job/<job>`** (see below).
+Port numbers live **only** in **`maand`**. Use `get "maand" "<port_name>"` in templates and job commands (including cross-job reads; no `demands` required).
 
 ---
 
@@ -158,7 +158,7 @@ Three namespaces serve different purposes.
 
 ### `maand/job/<job>` — catalog metadata (build)
 
-**Source:** `manifest.json`, allocations, ports, resource limits.
+**Source:** `manifest.json`, allocations, resource limits.
 
 | Key | Meaning |
 |-----|---------|
@@ -168,19 +168,17 @@ Three namespaces serve different purposes.
 | `workers`, `workers_length`, `worker_0`, … | Allocated worker IPs (ordered) |
 | `memory`, `cpu` | Current reservation |
 | `min_memory_mb`, `max_memory_mb`, `min_cpu_mhz`, `max_cpu_mhz` | Manifest bounds |
-| `<port_name>` | Assigned port number |
-| `ports_json` | JSON map of all ports |
 
 ```bash
 maand cat kv --jobs api
 maand cat kv get maand/job/api workers
-maand cat kv get maand/job/api ports_json
+maand cat kv get maand api_http_port
 ```
 
-Template:
+Template (port from global namespace):
 
 ```text
-{{ get "maand/job/api" "api_http_port" }}
+{{ get "maand" "api_http_port" }}
 ```
 
 ### `vars/bucket/job/<job>` — bucket overrides per job
@@ -350,7 +348,7 @@ service_name = "api-gateway"
 {
   "env": "{{ get "vars/bucket" "environment" }}",
   "service": "{{ get "vars/job/api" "service_name" }}",
-  "listen": "{{ get "maand/job/api" "api_http_port" }}",
+  "listen": "{{ get "maand" "api_http_port" }}",
   "peers": "{{ get (printf "maand/job/api/worker/%s" .WorkerIP) "peer_workers" }}",
   "version": "{{ .NewVersion }}"
 }
@@ -391,7 +389,8 @@ Persisted when deploy checkpoints KV for that job.
 | Per-job bucket override | `workspace/bucket.jobs*.conf` | `vars/bucket/job/<job>` |
 | App config in git | `workspace/jobs/<job>/vars.toml` | `vars/job/<job>` |
 | Secret | job command hook | `secrets/job/<job>` |
-| Port / workers / version | `manifest.json` + build | `maand/job/<job>` |
+| Port numbers | `manifest.json` + build | `maand` |
+| Workers / version | `manifest.json` + build | `maand/job/<job>` |
 | Host metadata | `workers.json` + build | `maand/worker/<ip>` |
 | Peers / certs on one node | automatic at build/deploy | `maand/job/<job>/worker/<ip>` |
 

@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"encoding/json"
 	"testing"
 
 	"maand/build"
@@ -34,12 +33,13 @@ func TestBuildKVJobAndAllocationVariables(t *testing.T) {
 	assert.Equal(t, "10.0.0.2", worker0)
 	assert.Equal(t, "10.0.0.1", worker1)
 
-	portsJSON, _ := GetKey("maand/job/svc", "ports_json")
-	var ports map[string]string
-	require.NoError(t, json.Unmarshal([]byte(portsJSON), &ports))
-	assert.Len(t, ports, 2)
-	assert.NotEmpty(t, ports["svc_http_port"])
-	assert.NotEmpty(t, ports["svc_cql_port"])
+	httpPort, _ := GetKey("maand", "svc_http_port")
+	cqlPort, _ := GetKey("maand", "svc_cql_port")
+	assert.NotEmpty(t, httpPort)
+	assert.NotEmpty(t, cqlPort)
+
+	_, err := GetKey("maand/job/svc", "ports_json")
+	assert.Error(t, err)
 
 	jobs, _ := GetKey("maand", "jobs")
 	assert.Equal(t, "svc", jobs)

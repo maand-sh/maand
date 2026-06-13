@@ -22,7 +22,7 @@ Configuration files: [configuration.md](./configuration.md) · KV: [kv.md](./kv.
 | `maand cat workers` | Worker catalog |
 | `maand cat jobs` | Job catalog (includes **`deployment_seq`**) |
 | `maand cat allocations` | Job × worker rows (`--jobs`, `--workers` filters) |
-| `maand cat hashes` | Allocation `current_hash` / `previous_hash` and rollout state (`--jobs`, `--workers`) |
+| `maand cat deployments` | Allocation `current_hash` / `previous_hash` and rollout state (`--jobs`, `--workers`) |
 | `maand cat job_commands` | Commands from manifests |
 | `maand cat job_ports` | Declared ports per job |
 | `maand cat kv` | List KV keys (`--jobs`, `--active`, `--deleted`; or `maand cat kv get <ns> <key> [--reveal]`) |
@@ -192,7 +192,7 @@ maand info
 maand cat workers
 maand cat jobs
 maand cat allocations [--jobs api] [--workers 10.0.0.1]
-maand cat hashes [--jobs vault] [--workers 10.0.0.1]
+maand cat deployments [--jobs vault] [--workers 10.0.0.1]
 maand cat job_commands
 maand cat job_ports
 maand cat kv
@@ -205,10 +205,10 @@ maand cat kv get --reveal secrets/job/vault root_token
 
 See [info.md](./info.md).
 
-### `maand cat hashes`
+### `maand cat deployments`
 
 ```bash
-maand cat hashes [--jobs j1,j2] [--workers ip,...] [--active]
+maand cat deployments [--jobs j1,j2] [--workers ip,...] [--active]
 ```
 
 | Flag | Description |

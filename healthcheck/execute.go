@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	defaultJobParallelism = 4
+	defaultJobParallelism = 16
 	waitRetryInterval     = time.Second
 )
 
@@ -37,6 +37,15 @@ func PrepareRuntime(tx *sql.Tx) (context.CancelFunc, error) {
 // HealthCheck runs manifest probes and health_check commands for a job.
 // When updateHash is true, failed health_check commands mark allocations for redeploy.
 func HealthCheck(tx *sql.Tx, rt *bucket.Runtime, wait, updateHash bool, job string, verbose bool) (bool, error) {
+	hasActive, err := data.JobHasActiveAllocations(tx, job)
+	if err != nil {
+		return false, err
+	}
+	if !hasActive {
+		fmt.Printf("health check skipped: %s (no active allocations)\n", job)
+		return false, nil
+	}
+
 	spec, err := data.GetJobHealthCheck(tx, job)
 	if err != nil {
 		return false, err

@@ -59,6 +59,15 @@ func handleNewAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string) 
 }
 
 func allocationsNeedingRestart(tx *sql.Tx, job string, force bool) ([]string, error) {
+	// New allocations (no promoted hash yet) are started by handleNewAllocations and must
+	// never be restarted by the update path. GetVersionPendingAllocations would otherwise
+	// include them on a fresh deploy (current_version empty vs build target), causing a
+	// redundant second rollout right after the initial start.
+	newAllocations, err := data.GetNewAllocations(tx, job)
+	if err != nil {
+		return nil, err
+	}
+
 	if !force {
 		updated, err := data.GetUpdatedAllocations(tx, job)
 		if err != nil {
@@ -68,13 +77,10 @@ func allocationsNeedingRestart(tx *sql.Tx, job string, force bool) ([]string, er
 		if err != nil {
 			return nil, err
 		}
-		return utils.Unique(append(updated, versionPending...)), nil
+		candidates := utils.Unique(append(updated, versionPending...))
+		return utils.Difference(candidates, newAllocations), nil
 	}
 	active, err := data.GetActiveAllocations(tx, job)
-	if err != nil {
-		return nil, err
-	}
-	newAllocations, err := data.GetNewAllocations(tx, job)
 	if err != nil {
 		return nil, err
 	}
@@ -99,20 +105,36 @@ func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job stri
 	if err != nil {
 		return err
 	}
+	if parallelism < 1 {
+		parallelism = 1
+	}
 
 	restartCmd := runnerCommand(bucketID, "restart", job)
-	if err := runWorkerBatches(active, parallelism, func(workerIP string) error {
+	restart := func(workerIP string) error {
 		env, err := allocationVersionEnv(tx, job, workerIP)
 		if err != nil {
 			return err
 		}
 		return runWorkerCommand(rt, workerIP, []string{restartCmd}, env)
-	}); err != nil {
-		return fmt.Errorf("restart updated allocations: %w", err)
 	}
 
-	_, err = healthcheck.HealthCheck(tx, rt, true, false, job, true)
-	return err
+	// Rolling upgrade: restart in batches of update_parallel_count and run the job
+	// health check after each batch so a bad rollout is caught before the next wave.
+	for i := 0; i < len(active); i += parallelism {
+		end := i + parallelism
+		if end > len(active) {
+			end = len(active)
+		}
+		batch := active[i:end]
+		if err := runParallelWorkers(batch, len(batch), restart); err != nil {
+			return fmt.Errorf("restart updated allocations: %w", err)
+		}
+		if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func handleStoppedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID string, jobs []string) error {
@@ -232,7 +254,10 @@ func reconcileRemovedAndDisabledAllocations(
 		if err != nil {
 			return err
 		}
-		if activeCount > 1 {
+		// Health-check the job once at the end whenever any active allocation
+		// remains. Skip only when the job has no active allocations left (fully
+		// removed/disabled), since there is nothing to probe.
+		if activeCount > 0 {
 			if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
 				return err
 			}

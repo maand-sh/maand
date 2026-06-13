@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHashesShowsAllocationHashState(t *testing.T) {
+func TestDeploymentsShowsAllocationHashState(t *testing.T) {
 	root := t.TempDir()
 	orig := bucket.Location
 	bucket.Location = root
@@ -63,11 +63,11 @@ func TestHashesShowsAllocationHashState(t *testing.T) {
 	assert.Equal(t, "disabled", rolloutStatus(1, 0, "same", "same", "1.0.0", "1.0.0"))
 	assert.Equal(t, "disabled_restart", rolloutStatus(1, 0, "same", "same", "1.0.0", "2.0.0"))
 
-	require.NoError(t, Hashes("vault", "10.0.0.1", false))
+	require.NoError(t, Deployments("vault", "10.0.0.1", false))
 }
 
-func TestHashesFiltersByJobAndWorker(t *testing.T) {
-	env := setupHashesTestBucket(t)
+func TestDeploymentsFiltersByJobAndWorker(t *testing.T) {
+	env := setupDeploymentsTestBucket(t)
 
 	tx, err := env.db.Begin()
 	require.NoError(t, err)
@@ -75,13 +75,13 @@ func TestHashesFiltersByJobAndWorker(t *testing.T) {
 	seedHashAllocation(t, tx, "api", "10.0.0.2", "alloc-2", "h2", "h2")
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Hashes("vault", "", false))
-	require.NoError(t, Hashes("", "10.0.0.2", false))
-	require.NoError(t, Hashes("vault", "10.0.0.1", false))
+	require.NoError(t, Deployments("vault", "", false))
+	require.NoError(t, Deployments("", "10.0.0.2", false))
+	require.NoError(t, Deployments("vault", "10.0.0.1", false))
 }
 
-func TestHashesActiveFilterExcludesRemoved(t *testing.T) {
-	env := setupHashesTestBucket(t)
+func TestDeploymentsActiveFilterExcludesRemoved(t *testing.T) {
+	env := setupDeploymentsTestBucket(t)
 
 	tx, err := env.db.Begin()
 	require.NoError(t, err)
@@ -91,27 +91,27 @@ func TestHashesActiveFilterExcludesRemoved(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
-	assert.Error(t, Hashes("vault", "", true))
-	require.NoError(t, Hashes("vault", "", false))
+	assert.Error(t, Deployments("vault", "", true))
+	require.NoError(t, Deployments("vault", "", false))
 }
 
-func TestHashesRejectsUnknownFilter(t *testing.T) {
-	env := setupHashesTestBucket(t)
+func TestDeploymentsRejectsUnknownFilter(t *testing.T) {
+	env := setupDeploymentsTestBucket(t)
 
 	tx, err := env.db.Begin()
 	require.NoError(t, err)
 	seedHashAllocation(t, tx, "vault", "10.0.0.1", "alloc-1", "h1", "h0")
 	require.NoError(t, tx.Commit())
 
-	assert.Error(t, Hashes("missing", "", false))
-	assert.Error(t, Hashes("", "10.0.0.99", false))
+	assert.Error(t, Deployments("missing", "", false))
+	assert.Error(t, Deployments("", "10.0.0.99", false))
 }
 
-type hashesTestEnv struct {
+type deploymentsTestEnv struct {
 	db *sql.DB
 }
 
-func setupHashesTestBucket(t *testing.T) hashesTestEnv {
+func setupDeploymentsTestBucket(t *testing.T) deploymentsTestEnv {
 	t.Helper()
 	root := t.TempDir()
 	orig := bucket.Location
@@ -126,7 +126,7 @@ func setupHashesTestBucket(t *testing.T) hashesTestEnv {
 	db, err := data.OpenDatabase(true)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
-	return hashesTestEnv{db: db}
+	return deploymentsTestEnv{db: db}
 }
 
 func seedHashAllocation(t *testing.T, tx *sql.Tx, job, workerIP, allocID, currentHash, previousHash string) {
