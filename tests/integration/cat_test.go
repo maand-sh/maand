@@ -24,7 +24,7 @@ func TestIntegrationInfoAndCat(t *testing.T) {
 	require.NoError(t, cat.Jobs())
 	require.NoError(t, cat.Allocations("", ""))
 	require.NoError(t, cat.JobCommands())
-	require.NoError(t, cat.JobPorts())
+	require.NoError(t, cat.JobPorts(""))
 	require.NoError(t, cat.KV("", false, false))
 
 	worker := workerIPs(t)[0]

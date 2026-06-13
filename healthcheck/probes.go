@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"maand/data"
@@ -31,13 +32,31 @@ func runManifestHealthChecks(tx *sql.Tx, job string, spec *workspace.ManifestHea
 	}
 
 	timeout := probeTimeout(spec)
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(workers)*len(spec.Checks))
+
 	for _, workerIP := range workers {
 		for idx, probe := range spec.Checks {
-			if err := runProbe(tx, job, workerIP, idx, probe, timeout); err != nil {
-				return err
-			}
+			wg.Add(1)
+			go func(ip string, i int, p workspace.HealthCheckProbe) {
+				defer wg.Done()
+				if err := runProbe(tx, job, ip, i, p, timeout); err != nil {
+					errCh <- err
+				}
+			}(workerIP, idx, probe)
 		}
 	}
+
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

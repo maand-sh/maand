@@ -23,7 +23,7 @@ func TestMigrateSchemaCreatesCatalogViews(t *testing.T) {
 		"cat_job_commands",
 		"cat_kv",
 		"cat_workers",
-		"cat_hashes",
+		"cat_deployments",
 	}
 	for _, viewName := range views {
 		assert.True(t, mustViewExists(t, viewName), "missing view %s", viewName)
@@ -52,16 +52,16 @@ func TestMigrateSchemaIdempotentInTransaction(t *testing.T) {
 	assert.Equal(t, versionBefore, mustGetSchemaVersion(t))
 }
 
-func TestUpgradeBucketFromV1ToV2(t *testing.T) {
+func TestUpgradeBucketFromV1ToLatest(t *testing.T) {
 	initFreshBucket(t)
 	requireLatestSchema(t)
-	require.True(t, mustViewExists(t, "cat_hashes"))
+	require.True(t, mustViewExists(t, "cat_deployments"))
 
 	db, err := data.OpenDatabase(true)
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE schema_version SET version = 1`)
 	require.NoError(t, err)
-	_, err = db.Exec(`DROP VIEW IF EXISTS cat_hashes`)
+	_, err = db.Exec(`DROP VIEW IF EXISTS cat_deployments`)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
@@ -71,7 +71,7 @@ func TestUpgradeBucketFromV1ToV2(t *testing.T) {
 	upgradeBucket(t)
 
 	requireLatestSchema(t)
-	assert.True(t, mustViewExists(t, "cat_hashes"))
+	assert.True(t, mustViewExists(t, "cat_deployments"))
 	require.NoError(t, data.CheckSchemaVersion())
 }
 

@@ -113,6 +113,31 @@ func TestAllocationsNeedingRestart_includesVersionPending(t *testing.T) {
 	require.NoError(t, tx.Rollback())
 }
 
+// On a fresh deploy a new allocation (previous_hash NULL) has an empty current_version,
+// so it looks version-pending vs the build target. It must NOT be in the restart set:
+// handleNewAllocations already started it, and restarting would be a redundant second rollout.
+func TestAllocationsNeedingRestart_excludesNewVersionPending(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "h", "")
+	_, err := tx.Exec(`UPDATE allocations SET new_version = '1.0.0' WHERE alloc_id = 'alloc-app-10.0.0.1'`)
+	require.NoError(t, err)
+
+	newAllocs, err := data.GetNewAllocations(tx, "app")
+	require.NoError(t, err)
+	require.Equal(t, []string{"10.0.0.1"}, newAllocs)
+
+	versionPending, err := data.GetVersionPendingAllocations(tx, "app")
+	require.NoError(t, err)
+	require.Equal(t, []string{"10.0.0.1"}, versionPending)
+
+	workers, err := allocationsNeedingRestart(tx, "app", false)
+	require.NoError(t, err)
+	assert.Empty(t, workers)
+	require.NoError(t, tx.Rollback())
+}
+
 func TestHandleStoppedAllocations_disabledStopsWithoutRemovingArtifacts(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	var stopped, removedArtifacts bool

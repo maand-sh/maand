@@ -122,13 +122,13 @@ Inspect state:
 
 ```bash
 maand cat allocations --jobs api
-maand cat hashes --jobs api
+maand cat deployments --jobs api
 maand deploy --dry-run
 ```
 
-After disable, **`maand deploy --dry-run`** should show **`stop`** on allocations that were running (rollout `disabled` in **`cat hashes`**). If build changed content or version while disabled, dry-run shows **`stop+promote`** or **`promote`** (`disabled_restart` in **`cat hashes`**) — deploy stages and promotes without starting the allocation.
+After disable, **`maand deploy --dry-run`** should show **`stop`** on allocations that were running (rollout `disabled` in **`cat deployments`**). If build changed content or version while disabled, dry-run shows **`stop+promote`** or **`promote`** (`disabled_restart` in **`cat deployments`**) — deploy stages and promotes without starting the allocation.
 
-**`cat hashes` rollout** for disabled rows:
+**`cat deployments` rollout** for disabled rows:
 
 | Rollout | Meaning |
 |---------|---------|
@@ -185,7 +185,7 @@ These target **active** allocations only (`removed=0`, `disabled=0`):
 
 These still see disabled rows where relevant:
 
-- **`maand cat allocations`**, **`maand cat hashes`** (use **`--active`** to filter)
+- **`maand cat allocations`**, **`maand cat deployments`** (use **`--active`** to filter)
 - **`maand cat kv --jobs <job>`** — includes namespaces for disabled-but-not-removed allocations
 - Deploy **hash refresh** and **promote** for disabled jobs (catalog stays current)
 
@@ -219,7 +219,7 @@ While **`api`** is disabled, you can still edit **`workspace/jobs/api/`**, run *
 maand cat allocations --jobs api
 # disabled=1 on target rows
 
-maand cat hashes --jobs api
+maand cat deployments --jobs api
 # rollout=disabled or disabled_restart
 
 maand deploy --dry-run

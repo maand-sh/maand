@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var catHashesCmd = &cobra.Command{
-	Use:   "hashes",
+var catDeploymentsCmd = &cobra.Command{
+	Use:   "deployments",
 	Short: "Show allocation content hashes and rollout state",
 	Long: `Show current_hash and previous_hash per allocation for deploy debugging.
 
@@ -27,15 +27,15 @@ Rollout: removed, disabled (catalog flags), or new, restart, promoted, health_fa
 		workersStr, _ := flags.GetString("workers")
 		activeOnly, _ := flags.GetBool("active")
 
-		if err := cat.Hashes(jobsStr, workersStr, activeOnly); err != nil {
+		if err := cat.Deployments(jobsStr, workersStr, activeOnly); err != nil {
 			log.Fatalln(err)
 		}
 	},
 }
 
 func init() {
-	catCmd.AddCommand(catHashesCmd)
-	catHashesCmd.Flags().String("jobs", "", "Comma-separated job names")
-	catHashesCmd.Flags().String("workers", "", "Comma-separated worker IPs")
-	catHashesCmd.Flags().Bool("active", false, "Show only active allocations (removed=0, disabled=0)")
+	catCmd.AddCommand(catDeploymentsCmd)
+	catDeploymentsCmd.Flags().String("jobs", "", "Comma-separated job names")
+	catDeploymentsCmd.Flags().String("workers", "", "Comma-separated worker IPs")
+	catDeploymentsCmd.Flags().Bool("active", false, "Show only active allocations (removed=0, disabled=0)")
 }

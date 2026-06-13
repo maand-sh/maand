@@ -254,7 +254,7 @@ Files under `jobs/<job>/` ending in **`.tpl`** are rendered at staging time. Ful
 | State | Behavior |
 |-------|----------|
 | **`removed=1`** (worker/job dropped at build) | If previously deployed: **stop**, then remove deployed job files on the worker (**`data/`** and **`logs/`** are left in place for redeploy). Local staging under `tmp/workers/<ip>/jobs/<job>/` is removed. Workers removed from **`workers.json`**: after all their removed allocations are processed, **`rm -rf /opt/worker/<bucket_id>/`**. Unreachable removed workers are assumed dead (logged, deploy continues). |
-| **`disabled=1`** | Excluded from start/restart/rsync targets; stop if was running; **keep** deployed job files, KV, and hash/version state. Content and version changes are still **staged, hashed, and promoted** on deploy (rollout shows `disabled` or `disabled_restart` in `maand cat hashes`). After re-enable (`maand build` clears `disabled.json`), deploy **starts** the allocation via `GetNewAllocations`. |
+| **`disabled=1`** | Excluded from start/restart/rsync targets; stop if was running; **keep** deployed job files, KV, and hash/version state. Content and version changes are still **staged, hashed, and promoted** on deploy (rollout shows `disabled` or `disabled_restart` in `maand cat deployments`). After re-enable (`maand build` clears `disabled.json`), deploy **starts** the allocation via `GetNewAllocations`. |
 
 Redeploying the same job on the same worker reuses existing **`data/`** and **`logs/`** (rsync excludes those paths). **`deploy`** deletes the allocation **hash row** when reconciling **`removed=1`** allocations (even if the job is skipped from rollout), so a later redeploy treats it as a **new** rollout (`make start`) while worker **`data/`** and **`logs/`** remain. After **`build`** only, hashes still show the last promoted state until **`deploy`** runs.
 
@@ -308,12 +308,12 @@ Worker key path: **`secrets/<ssh_key>`** relative to the bucket root.
 
 ```bash
 maand cat allocations
-maand cat hashes
+maand cat deployments
 maand cat jobs
 maand info
 ```
 
-Hash state lives in table **`hash`** with namespace `<job>_allocation` and key `alloc_id`. **`maand cat hashes`** shows **`current_hash`**, **`previous_hash`**, versions, and rollout (`removed`, `disabled`, or hash-derived `new` / `restart` / `promoted` / `health_failed`). Use **`--active`** to see only allocations deploy would target.
+Hash state lives in table **`hash`** with namespace `<job>_allocation` and key `alloc_id`. **`maand cat deployments`** shows **`current_hash`**, **`previous_hash`**, versions, and rollout (`removed`, `disabled`, or hash-derived `new` / `restart` / `promoted` / `health_failed`). Use **`--active`** to see only allocations deploy would target.
 
 ---
 
@@ -339,7 +339,7 @@ Hash state lives in table **`hash`** with namespace `<job>_allocation` and key `
 - [job-command.md](./job-command.md) — writing `command_*` scripts
 - [disabled.md](./disabled.md) — disable/re-enable
 - [rolling-upgrade.md](./rolling-upgrade.md) — `update_parallel_count`, version upgrades
-- [deploy-debugging.md](./deploy-debugging.md) — dry-run, `cat hashes`, failures
+- [deploy-debugging.md](./deploy-debugging.md) — dry-run, `cat deployments`, failures
 - [health-check.md](./health-check.md) — standalone health checks
 - [job.md](./job.md) — manual start/stop/restart
 - [gc.md](./gc.md) — purge removed allocations

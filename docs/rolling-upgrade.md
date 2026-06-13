@@ -105,7 +105,7 @@ maand deploy
 # or: maand deploy --jobs api
 
 # 4. Verify
-maand cat hashes --jobs api
+maand cat deployments --jobs api
 maand health_check --jobs api --wait
 ```
 
@@ -242,7 +242,7 @@ If **`worker.json` / `update_seq` mismatch**, run **`maand deploy`** before **`m
 
 ```bash
 maand deploy --dry-run
-maand cat hashes --jobs api
+maand cat deployments --jobs api
 maand cat allocations --jobs api
 ```
 

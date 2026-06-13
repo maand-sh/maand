@@ -66,7 +66,7 @@ func TestCatCatalogCommands(t *testing.T) {
 		require.NoError(t, JobCommands())
 	})
 	captureStdout(t, func() {
-		require.NoError(t, JobPorts())
+		require.NoError(t, JobPorts(""))
 	})
 	captureStdout(t, func() {
 		require.NoError(t, Info())

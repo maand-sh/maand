@@ -15,7 +15,10 @@ var catJobPortsCmd = &cobra.Command{
 	Use:   "job_ports",
 	Short: "Shows available job ports",
 	Run: func(cmd *cobra.Command, args []string) {
-		err := cat.JobPorts()
+		flags := cmd.Flags()
+		jobsStr, _ := flags.GetString("jobs")
+
+		err := cat.JobPorts(jobsStr)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -24,4 +27,5 @@ var catJobPortsCmd = &cobra.Command{
 
 func init() {
 	catCmd.AddCommand(catJobPortsCmd)
+	catJobPortsCmd.Flags().String("jobs", "", "comma separated jobs")
 }

@@ -7,6 +7,8 @@ package cat
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"maand/bucket"
 	"maand/data"
@@ -15,9 +17,7 @@ import (
 	"github.com/jedib0t/go-pretty/v6/table"
 )
 
-func JobPorts() error {
-	// TODO: jobs filter
-
+func JobPorts(jobsCSV string) error {
 	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return bucket.DatabaseError(err)
@@ -32,6 +32,22 @@ func JobPorts() error {
 		_ = tx.Rollback()
 	}()
 
+	var jobsFilter []string
+	if jobsCSV != "" {
+		jobsFilter = strings.Split(jobsCSV, ",")
+	}
+	jobsFilter = utils.Unique(jobsFilter)
+
+	if len(jobsFilter) > 0 {
+		allJobs, err := data.GetJobs(tx)
+		if err != nil {
+			return err
+		}
+		if len(utils.Intersection(allJobs, jobsFilter)) == 0 {
+			return fmt.Errorf("invalid input, jobs %v", jobsFilter)
+		}
+	}
+
 	count := 0
 	query := "SELECT count(*) FROM job_ports"
 	row := tx.QueryRow(query)
@@ -40,7 +56,12 @@ func JobPorts() error {
 		return bucket.NotFoundError("job ports")
 	}
 
-	rows, err := tx.Query(`SELECT (SELECT name FROM job WHERE job_id = jp.job_id) as job, name, port FROM job_ports jp`)
+	sqlQuery := `SELECT j.name as job, jp.name, jp.port FROM job_ports jp JOIN job j ON jp.job_id = j.job_id`
+	if len(jobsFilter) > 0 {
+		sqlQuery = fmt.Sprintf("%s WHERE j.name IN ('%s')", sqlQuery, strings.Join(jobsFilter, "','"))
+	}
+
+	rows, err := tx.Query(sqlQuery)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}

@@ -25,7 +25,7 @@ Related: [job-command.md](./job-command.md) · [templates.md](./templates.md) ·
 | `maand` | build | yes (synced) | Global: `bucket_id`, `jobs`, port names |
 | `maand/worker/<ip>` | build | yes | Worker metadata, labels, peers |
 | `maand/worker/<ip>/tags/<key>` | build | yes | From `workers.json` tags |
-| `maand/job/<job>` | build | yes (when job active) | Job metadata, `version`, ports |
+| `maand/job/<job>` | build | yes (when job active) | Job metadata, `version`, workers |
 | `maand/job/<job>/worker/<ip>` | build + deploy | yes (when alloc active) | Certs, peers, `version` |
 | `vars/bucket` | build | yes | From `bucket.conf` |
 | `vars/bucket/job/<job>` | build | yes (when job active) | From `bucket.jobs*.conf` |

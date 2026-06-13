@@ -48,7 +48,7 @@ func TestRequireCurrentSchemaBlocksV1Database(t *testing.T) {
 	require.NoError(t, err)
 	_, err = db.Exec(`UPDATE schema_version SET version = 1`)
 	require.NoError(t, err)
-	_, err = db.Exec(`DROP VIEW IF EXISTS cat_hashes`)
+	_, err = db.Exec(`DROP VIEW IF EXISTS cat_deployments`)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 

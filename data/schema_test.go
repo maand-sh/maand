@@ -100,22 +100,23 @@ func TestCheckSchemaVersionBlocksAtV1(t *testing.T) {
 
 	err := CheckSchemaVersion()
 	require.ErrorIs(t, err, bucket.ErrSchemaUpgradeRequired)
-	assert.Contains(t, err.Error(), "binary expects 2")
+	assert.Contains(t, err.Error(), "binary expects 3")
 }
 
-func TestMigrateSchemaUpgradesV1ToV2(t *testing.T) {
+func TestMigrateSchemaUpgradesV1ToLatest(t *testing.T) {
 	defer withTestBucket(t)()
 	db := openDatabaseAtSchemaVersion(t, 1)
 	defer func() { _ = db.Close() }()
 
-	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
+	assert.Equal(t, 0, viewExists(t, db, "cat_deployments"))
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	require.NoError(t, MigrateSchema(tx))
 	require.NoError(t, tx.Commit())
 
-	assert.Equal(t, 1, viewExists(t, db, "cat_hashes"))
+	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
+	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
 	var version int
 	require.NoError(t, db.QueryRow(`SELECT version FROM schema_version WHERE id = 1`).Scan(&version))
 	assert.Equal(t, LatestSchemaVersion, version)
@@ -136,7 +137,24 @@ func TestMigrateToV2IsIdempotent(t *testing.T) {
 	assert.Equal(t, 1, viewExists(t, db, "cat_hashes"))
 }
 
-func TestCatHashesViewJoinsAllocationAndHash(t *testing.T) {
+func TestMigrateToV3RenamesHashesView(t *testing.T) {
+	defer withTestBucket(t)()
+	db := openDatabaseAtSchemaVersion(t, 2)
+	defer func() { _ = db.Close() }()
+
+	assert.Equal(t, 1, viewExists(t, db, "cat_hashes"))
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, migrateToV3(tx))
+	require.NoError(t, migrateToV3(tx))
+	require.NoError(t, tx.Commit())
+
+	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
+	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
+}
+
+func TestCatDeploymentsViewJoinsAllocationAndHash(t *testing.T) {
 	db := openMigratedTestDB(t)
 	defer func() { _ = db.Close() }()
 
@@ -147,7 +165,7 @@ func TestCatHashesViewJoinsAllocationAndHash(t *testing.T) {
 
 	var currentHash string
 	err = db.QueryRow(
-		`SELECT current_hash FROM cat_hashes WHERE alloc_id = 'alloc-1'`,
+		`SELECT current_hash FROM cat_deployments WHERE alloc_id = 'alloc-1'`,
 	).Scan(&currentHash)
 	require.NoError(t, err)
 	assert.Equal(t, "hash-a", currentHash)

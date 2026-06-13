@@ -262,9 +262,13 @@ func writeWorkerCommandScript(bucketID, workerIP string, scriptContent []byte) (
 	scriptFileName := fmt.Sprintf("command-%s-%s.sh", sanitizeWorkerIPForFilename(workerIP), uuid.NewString())
 	scriptFilePath := path.Join(bucket.TempLocation, scriptFileName)
 
+	// Start in the worker's bucket directory so relative paths (jobs/<job>/...) resolve as
+	// expected. Fall back to the SSH login directory when the bucket has not been deployed
+	// yet (e.g. host bootstrap via run_command before the first maand deploy).
 	prefix := strings.Join([]string{
 		fmt.Sprintf("export BUCKET_ID=%s", bucketID),
 		fmt.Sprintf("export WORKER_IP=%s", workerIP),
+		fmt.Sprintf("cd %q 2>/dev/null || true", fmt.Sprintf("/opt/worker/%s", bucketID)),
 	}, "\n")
 
 	fileContent := prefix + "\n" + string(scriptContent)
