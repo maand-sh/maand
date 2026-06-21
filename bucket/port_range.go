@@ -60,6 +60,11 @@ func LoadPortRange() (PortRange, error) {
 	return r, r.Validate()
 }
 
+// Contains reports whether port is inside the inclusive maand assignment pool.
+func (r PortRange) Contains(port int) bool {
+	return port >= r.Min && port <= r.Max
+}
+
 // Validate checks the port pool bounds.
 func (r PortRange) Validate() error {
 	if r.Min < 1 || r.Max > 65535 || r.Min > r.Max {

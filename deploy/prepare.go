@@ -134,5 +134,14 @@ func prepareJobOnWorker(tx *sql.Tx, job, workerIP string) error {
 	if err := transpile(tx, job, workerIP); err != nil {
 		return err
 	}
+	hasPrometheusConfig, err := data.JobHasPrometheusServerConfig(tx, job)
+	if err != nil {
+		return err
+	}
+	if hasPrometheusConfig {
+		if err := assemblePrometheusAlertRules(tx, path.Join(workerDirPath, "jobs", job)); err != nil {
+			return err
+		}
+	}
 	return updateCerts(tx, job, workerIP)
 }

@@ -73,3 +73,20 @@ func GetJobPortMap(tx *sql.Tx, jobName string) (map[string]string, error) {
 	}
 	return ports, nil
 }
+
+// GetJobPortMapInt returns port name → number for one job.
+func GetJobPortMapInt(tx *sql.Tx, jobName string) (map[string]int, error) {
+	stringPorts, err := GetJobPortMap(tx, jobName)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]int, len(stringPorts))
+	for name, value := range stringPorts {
+		port, err := strconv.Atoi(value)
+		if err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		out[name] = port
+	}
+	return out, nil
+}

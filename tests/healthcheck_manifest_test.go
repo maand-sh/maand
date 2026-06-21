@@ -96,13 +96,13 @@ func TestManifestTCPHealthCheck(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestBuildRejectsManifestAndCommandHealthCheck(t *testing.T) {
+func TestBuildAllowsManifestAndCommandHealthCheck(t *testing.T) {
 	initFreshBucket(t)
-	writeWorkersJSON(t, `[{"host":"10.0.0.1","labels":["app"]}]`)
+	writeWorkersJSON(t, `[{"host":"127.0.0.1","labels":["app"]}]`)
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "app")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_modules"), 0o755))
-	require.NoError(t, os.WriteFile(path.Join(jobDir, "_modules", "command_health.py"), []byte(""), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "_modules", "command_health.py"), []byte(`import sys; sys.exit(0)`), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
 		"selectors": ["app"],
 		"resources": {"ports": {"api_port": 30010}},
@@ -111,8 +111,29 @@ func TestBuildRejectsManifestAndCommandHealthCheck(t *testing.T) {
 	}`), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
 
-	err := build.Execute()
-	assert.ErrorIs(t, err, bucket.ErrInvalidManifest)
+	require.NoError(t, build.Execute())
+
+	var stored string
+	MustQueryRow(t, `SELECT health_check FROM job WHERE name = 'app'`, &stored)
+	require.NotEmpty(t, stored)
+
+	count := MustQueryCount(t,
+		`SELECT count(*) FROM job_commands WHERE job = 'app' AND executed_on = 'health_check'`,
+	)
+	assert.Equal(t, 1, count)
+
+	var assignedPort int
+	MustQueryRow(t, `SELECT port FROM job_ports WHERE name = 'api_port'`, &assignedPort)
+
+	ln, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(assignedPort)))
+	require.NoError(t, err)
+	defer func() { _ = ln.Close() }()
+
+	tx, rt, cleanup := openHealthCheckSession(t)
+	defer cleanup()
+
+	_, err = healthcheck.HealthCheck(tx, rt, false, false, "app", false)
+	require.NoError(t, err)
 }
 
 func TestBuildRejectsSSHHealthCheckWithoutCommand(t *testing.T) {

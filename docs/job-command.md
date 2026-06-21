@@ -20,7 +20,7 @@ Use job commands when you need **orchestrator-side logic** tied to build, deploy
 | Bootstrap secrets before templates render | **`pre_deploy`** + `put_job_secret` | Secrets land in KV before rsync and `.tpl` render |
 | Validate workspace or seed KV after catalog changes | **`post_build`** | Runs before deploy; build fails on error |
 | Post-rollout smoke test or notification | **`post_deploy`** | Runs after successful start/restart |
-| Liveness/readiness probe | **`health_check`** command *or* manifest `health_check` section (mutually exclusive) | See [health-check.md](./health-check.md) |
+| Liveness/readiness probe | **`health_check`** command and/or manifest `health_check` section (commands run after probes) | See [health-check.md](./health-check.md) |
 | One-off ops (reindex, flush cache, admin task) | **`cli`** + `maand job_command` | Operator-triggered; commits KV on success |
 | Run arbitrary shell on a worker | Python **`run_ssh`** / **`run_make_target`** / **`run_runner_target`** | Same SSH paths deploy uses; Bun has no SSH helpers |
 

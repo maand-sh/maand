@@ -118,7 +118,7 @@ workspace/jobs/api/
 | `resources.ports` | Named ports: `{}` (maand assigns from `bucket.conf` pool) or an integer (fixed in manifest) |
 | `update_parallel_count` | Rolling restart batch size during deploy |
 | `commands` | Named hooks (`command_*`) with `executed_on` events |
-| `health_check` | Optional built-in probes (tcp/http/ssh) — **or** a `health_check` command, not both |
+| `health_check` | Optional built-in probes (tcp/http/ssh) and/or a `health_check` command (probes first) |
 | `certs` | TLS definitions → generated at build, deployed under `jobs/<job>/certs/` — [certs.md](./certs.md) |
 
 Manifest reference: [jobs-and-dependencies.md](./jobs-and-dependencies.md). Configuration files: [configuration.md](./configuration.md). Command scripts: [job-command.md](./job-command.md).

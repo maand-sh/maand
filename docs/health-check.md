@@ -2,17 +2,17 @@
 
 **Health check** verifies workers are reachable, then checks each job on active allocations.
 
-Each job uses **one** health mechanism (enforced at build):
+Each job may use **manifest probes**, a **custom command**, or **both**:
 
-- **Manifest probes** — `health_check.checks` in `manifest.json` (tcp / http / ssh), or
+- **Manifest probes** — `health_check.checks` in `manifest.json` (tcp / http / ssh)
 - **Custom command** — `command_*` with `executed_on: ["health_check"]`
 
-**Not both** on the same job.
+When both are defined, manifest probes run first, then `health_check` commands (in DB order).
 
 Order when you run **`maand health_check`**:
 
 1. **Worker health** — TCP dial to each worker’s **SSH port** (`maand.conf` `ssh_port`, default **22**).
-2. **Job health** — manifest probes **or** `health_check` command scripts (per job).
+2. **Job health** — manifest probes (if any), then `health_check` command scripts (if any).
 
 Deploy runs **job** health automatically after **restart** / **job_control** for jobs that define one of the above. Deploy does **not** re-run the worker SSH gate on every job (use `maand health_check` for that).
 
@@ -46,7 +46,7 @@ maand health_check --update-hash --jobs vault
 
 1. **`maand build`** (allocations and `job_commands` in DB).
 2. **Host tools**: `python3`, `bun` (if needed), `bash`, `ssh`.
-3. Jobs need either a **`health_check`** section in `manifest.json` **or** a command with **`executed_on`: `["health_check"]`** — **not both** (`maand build` fails if both are defined).
+3. Jobs need a **`health_check`** section in `manifest.json` and/or a command with **`executed_on`: `["health_check"]`**.
 
 If a job has **neither**:
 
@@ -111,7 +111,7 @@ Example **`ssh`** probe (systemd on the worker):
 }
 ```
 
-Script: `_modules/command_health.py`. Use for cluster readiness (`nodetool status`, etc.) when manifest probes are not enough. Do not combine with a manifest **`health_check`** section on the same job.
+Script: `_modules/command_health.py`. Use for cluster readiness (`nodetool status`, etc.) when manifest probes are not enough. You may combine with manifest probes; commands run after probes pass.
 
 **Health-fast workspace:** for `health_check` commands only, maand stages **`_modules/command_<name>.*`**, embedded `maand.py` / `maand.ts`, and certs — not the full job tree (Makefile, templates, etc.).
 
@@ -146,9 +146,9 @@ kv.Initialize + StartRuntimeAPI (localhost:8080 for scripts)
 CheckWorkers (SSH TCP on all workers)
 Resolve job list (--jobs filter or all jobs from DB)
 Run jobs in parallel (up to 4 jobs at a time)
-  For each job (one path per job):
-    Either manifest health_check probes (tcp/http/ssh per allocation)
-    Or each health_check command (in DB order):
+  For each job:
+    Manifest health_check probes (tcp/http/ssh per allocation), if defined
+    Then each health_check command (in DB order), if defined:
       jobcommand.JobCommand(..., event="health_check", concurrency=1)
 Commit transaction on success (or on failure when --update-hash marked allocations)
 ```

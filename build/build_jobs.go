@@ -133,6 +133,9 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 		if err := workspace.ValidateHealthCheck(jobName, manifest); err != nil {
 			return nil, err
 		}
+		if err := workspace.ValidatePrometheusServerFiles(jobName); err != nil {
+			return nil, err
+		}
 		healthCheckJSON := ""
 		if manifest.HealthCheck != nil && len(manifest.HealthCheck.Checks) > 0 {
 			encoded, err := json.Marshal(manifest.HealthCheck)

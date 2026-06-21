@@ -145,6 +145,22 @@ func TestPortAllocatorFixedPortOutsidePoolAllowed(t *testing.T) {
 	assert.Equal(t, 30000, port)
 }
 
+func TestPortAllocatorProvisionedReassignWhenOutsidePool(t *testing.T) {
+	existing := data.JobPortAssignments{
+		"node_agent": {"node_agent_port_metrics": 9500},
+	}
+	alloc := newPortAllocator(existing, bucket.PortRange{Min: 30000, Max: 30005})
+
+	port, err := alloc.assignProvisioned("node_agent", "node_agent_port_metrics")
+	require.NoError(t, err)
+	assert.Equal(t, 30000, port)
+	assert.NotEqual(t, 9500, port)
+
+	port, err = alloc.assignProvisioned("node_agent", "node_agent_port_metrics")
+	require.NoError(t, err)
+	assert.Equal(t, 30000, port)
+}
+
 func TestPortAllocatorProvisionedReuseOutsideNarrowedPool(t *testing.T) {
 	existing := data.JobPortAssignments{
 		"api": {"http_port": 30001},
@@ -153,5 +169,5 @@ func TestPortAllocatorProvisionedReuseOutsideNarrowedPool(t *testing.T) {
 
 	port, err := alloc.assignProvisioned("api", "http_port")
 	require.NoError(t, err)
-	assert.Equal(t, 30001, port)
+	assert.Equal(t, 30000, port)
 }

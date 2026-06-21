@@ -38,27 +38,10 @@ func hasManifestHealthChecks(manifest Manifest) bool {
 	return manifest.HealthCheck != nil && len(manifest.HealthCheck.Checks) > 0
 }
 
-func hasHealthCheckCommand(manifest Manifest) bool {
-	for _, command := range GetCommands(manifest) {
-		for _, executedOn := range command.ExecutedOn {
-			if executedOn == "health_check" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// ValidateHealthCheck ensures a job uses either manifest probes or health_check
-// commands, not both, and that manifest probes reference declared ports and known types.
+// ValidateHealthCheck ensures manifest probes reference declared ports and known types.
+// Jobs may also define health_check commands; those run after manifest probes at check time.
 func ValidateHealthCheck(jobName string, manifest Manifest) error {
-	hasManifest := hasManifestHealthChecks(manifest)
-	hasCommand := hasHealthCheckCommand(manifest)
-	if hasManifest && hasCommand {
-		return fmt.Errorf("%w: job %s cannot define both health_check in manifest and a command with executed_on health_check",
-			bucket.ErrInvalidManifest, jobName)
-	}
-	if !hasManifest {
+	if !hasManifestHealthChecks(manifest) {
 		return nil
 	}
 

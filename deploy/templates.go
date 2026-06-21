@@ -17,6 +17,7 @@ import (
 	"maand/bucket"
 	"maand/data"
 	"maand/kv"
+	"maand/promconfig"
 	"maand/utils"
 )
 
@@ -45,7 +46,7 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 	if err != nil {
 		return err
 	}
-	funcMap := templateFuncMap(job, allowedNamespaces)
+	funcMap := templateFuncMap(tx, job, allowedNamespaces)
 
 	workerData, err := getWorkerData(tx, workerIP)
 	if err != nil {
@@ -85,7 +86,7 @@ func transpile(tx *sql.Tx, job, workerIP string) error {
 	return nil
 }
 
-func templateFuncMap(job string, allowedNamespaces []string) template.FuncMap {
+func templateFuncMap(tx *sql.Tx, job string, allowedNamespaces []string) template.FuncMap {
 	store := kv.GetKVStore()
 	return template.FuncMap{
 		"get": func(ns, key string) string {
@@ -144,6 +145,23 @@ func templateFuncMap(job string, allowedNamespaces []string) template.FuncMap {
 			default:
 				panic("expected a string or an int")
 			}
+		},
+		"scrapeConfigs": func() string {
+			if len(utils.Difference([]string{promconfig.KVNamespace}, allowedNamespaces)) > 0 {
+				panic(fmt.Sprintf("%s namespace is not available for job %s", promconfig.KVNamespace, job))
+			}
+			yamlFragment, err := promconfig.RenderScrapeConfigsYAML(tx, nil)
+			if err != nil {
+				panic(err)
+			}
+			return yamlFragment
+		},
+		"ruleFiles": func() string {
+			yamlFragment, err := promconfig.RenderRuleFilesYAML(tx)
+			if err != nil {
+				panic(err)
+			}
+			return yamlFragment
 		},
 	}
 }

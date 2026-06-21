@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"maand/bucket"
 )
@@ -171,6 +172,10 @@ func CopyJobFiles(tx *sql.Tx, jobName, outputPath string) error {
 		err := rows.Scan(&filePath, &content, &isDir)
 		if err != nil {
 			return bucket.DatabaseError(err)
+		}
+
+		if isPrometheusWorkspacePath(filePath) {
+			continue
 		}
 
 		if isDir {
@@ -376,4 +381,8 @@ func GetAllAllocatedJobs(tx *sql.Tx) ([]string, error) {
 		return nil, err
 	}
 	return jobNames, nil
+}
+
+func isPrometheusWorkspacePath(filePath string) bool {
+	return strings.Contains(filePath, "/_prometheus/")
 }

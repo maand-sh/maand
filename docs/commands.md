@@ -12,6 +12,7 @@ Configuration files: [configuration.md](./configuration.md) · KV: [kv.md](./kv.
 | `maand build` | Read workspace → update `maand.db`, KV, certs; run `post_build` hooks | [build.md](./build.md) |
 | `maand deploy` | Push jobs to workers, roll out, run deploy hooks | [deploy.md](./deploy.md) · [rolling-upgrade.md](./rolling-upgrade.md) · [deploy-debugging.md](./deploy-debugging.md) |
 | `maand health_check` | Worker SSH gate + per-job health (manifest probes or commands) | [health-check.md](./health-check.md) |
+| `maand runbooks serve` | Serve `_prometheus/runbooks` markdown from catalog | [prometheus.md](./prometheus.md) |
 | `maand gc` | Purge removed allocations, worker data, old KV history | [gc.md](./gc.md) |
 
 ## Inspect commands
@@ -25,6 +26,7 @@ Configuration files: [configuration.md](./configuration.md) · KV: [kv.md](./kv.
 | `maand cat deployments` | Allocation `current_hash` / `previous_hash` and rollout state (`--jobs`, `--workers`) |
 | `maand cat job_commands` | Commands from manifests |
 | `maand cat job_ports` | Declared ports per job |
+| `maand cat prometheus` | `_prometheus/` catalog (`get`, `scrape` subcommands) |
 | `maand cat kv` | List KV keys (`--jobs`, `--active`, `--deleted`; or `maand cat kv get <ns> <key> [--reveal]`) |
 
 ## Job control
@@ -162,6 +164,16 @@ See [health-check.md](./health-check.md).
 
 ---
 
+## `maand runbooks serve`
+
+```bash
+maand runbooks serve [--addr :8080]
+```
+
+Serves `_prometheus/runbooks/*.md` from the build catalog over HTTP. See [prometheus.md](./prometheus.md).
+
+---
+
 ## `maand run_command`
 
 ```bash
@@ -195,6 +207,9 @@ maand cat allocations [--jobs api] [--workers 10.0.0.1]
 maand cat deployments [--jobs vault] [--workers 10.0.0.1]
 maand cat job_commands
 maand cat job_ports
+maand cat prometheus [--jobs j1,j2]
+maand cat prometheus get <job> <path>
+maand cat prometheus scrape [--jobs j1,j2]
 maand cat kv
 maand cat kv --jobs vault
 maand cat kv --jobs vault --active

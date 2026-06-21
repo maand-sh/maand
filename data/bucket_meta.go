@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"maand/bucket"
+	"maand/utils"
 )
 
 // BucketInitialized reports whether the bucket table has a bucket_id row.
@@ -103,6 +104,7 @@ func AllowedKVNamespaces(job, workerIP string) []string {
 		fmt.Sprintf("vars/job/%s", job),
 		fmt.Sprintf("secrets/job/%s", job),
 		fmt.Sprintf("maand/job/%s/worker/%s", job, workerIP),
+		"maand/prometheus",
 	}
 }
 
@@ -136,6 +138,26 @@ func UpstreamDemandKVNamespaces(tx *sql.Tx, job string) ([]string, error) {
 		return nil, err
 	}
 	return namespaces, nil
+}
+
+// BuildScrapeTemplateNamespaces returns KV namespaces available when rendering scrape.yaml.tpl at build.
+func BuildScrapeTemplateNamespaces(tx *sql.Tx, job string) ([]string, error) {
+	namespaces := []string{
+		"maand",
+		"vars/bucket",
+		fmt.Sprintf("maand/job/%s", job),
+		fmt.Sprintf("vars/bucket/job/%s", job),
+		fmt.Sprintf("vars/job/%s", job),
+		fmt.Sprintf("secrets/job/%s", job),
+	}
+	if tx == nil {
+		return namespaces, nil
+	}
+	upstream, err := UpstreamDemandKVNamespaces(tx, job)
+	if err != nil {
+		return nil, err
+	}
+	return utils.Unique(append(namespaces, upstream...)), nil
 }
 
 // AllowedKVNamespacesWithUpstream includes read namespaces for upstream jobs referenced in demands.

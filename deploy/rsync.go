@@ -70,6 +70,7 @@ func rsync(rt *bucket.Runtime, bucketID, workerIP string) error {
 		"--exclude=jobs/*/data",
 		"--exclude=jobs/*/logs",
 		"--exclude=jobs/*/_modules",
+		"--exclude=jobs/*/_prometheus",
 		"--rsync-path=" + remoteRS,
 		"--filter=merge " + ruleFilePath,
 		"--rsh=" + worker.RSHShell(keyFilePath, workerIP),

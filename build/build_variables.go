@@ -347,6 +347,7 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string, purgeJobCommandKV bool)
 
 		variables["job_id"] = workspace.GetHashUUID(jobName)
 		variables["name"] = jobName
+		variables["job_name"] = jobName
 
 		version, err := data.GetJobVersion(tx, jobName)
 		if err != nil {

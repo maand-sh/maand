@@ -26,7 +26,7 @@ func TestTemplateFuncMap_getSecretAndHelpers(t *testing.T) {
 	require.NoError(t, store.PutSecret(kv.SecretJobNamespace("app"), "token", "abc123", 0))
 
 	allowed := data.AllowedKVNamespaces("app", "10.0.0.1")
-	funcs := templateFuncMap("app", allowed)
+	funcs := templateFuncMap(tx, "app", allowed)
 
 	getSecret := funcs["getSecret"].(func(string) string)
 	assert.Equal(t, "abc123", getSecret("token"))
@@ -43,7 +43,7 @@ func TestTemplateFuncMap_mathAndStringHelpers(t *testing.T) {
 	require.NoError(t, kv.Initialize(tx))
 
 	allowed := data.AllowedKVNamespaces("app", "10.0.0.1")
-	funcs := templateFuncMap("app", allowed)
+	funcs := templateFuncMap(tx, "app", allowed)
 
 	assert.Equal(t, 7, funcs["add"].(func(int, int) int)(3, 4))
 	assert.Equal(t, 1, funcs["sub"].(func(int, int) int)(3, 2))
@@ -62,7 +62,7 @@ func TestTemplateFuncMap_getPanicsOnDisallowedNamespace(t *testing.T) {
 	require.NoError(t, kv.Initialize(tx))
 
 	allowed := data.AllowedKVNamespaces("app", "10.0.0.1")
-	funcs := templateFuncMap("app", allowed)
+	funcs := templateFuncMap(tx, "app", allowed)
 	get := funcs["get"].(func(string, string) string)
 
 	require.Panics(t, func() {
@@ -80,7 +80,7 @@ func TestTemplateFuncMap_getAndKeys(t *testing.T) {
 	store.Put("vars/job/app", "name", "maand", 0)
 
 	allowed := data.AllowedKVNamespaces("app", "10.0.0.1")
-	funcs := templateFuncMap("app", allowed)
+	funcs := templateFuncMap(tx, "app", allowed)
 	get := funcs["get"].(func(string, string) string)
 	keys := funcs["keys"].(func(string) []string)
 

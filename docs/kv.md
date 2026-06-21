@@ -31,6 +31,7 @@ Related: [job-command.md](./job-command.md) · [templates.md](./templates.md) ·
 | `vars/bucket/job/<job>` | build | yes (when job active) | From `bucket.jobs*.conf` |
 | `vars/job/<job>` | build (`vars.toml`) + job commands | **yes** | App config; not wiped on rebuild |
 | `secrets/job/<job>` | job commands | **yes** | AES-256-GCM encrypted |
+| `maand/prometheus` | build | yes (synced) | Aggregated scrape configs, alert index, runbooks — see [prometheus.md](./prometheus.md) |
 
 When a job has **no active allocations**, build and deploy purge build-owned namespaces; **`vars/job`** and **`secrets/job`** are retained unless **`maand build --purge-job-kv`** or deploy reconcile removes them. **`maand gc`** purges remainder. See [gc.md](./gc.md).
 

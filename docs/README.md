@@ -37,6 +37,7 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 | [build.md](./build.md) | `maand build` |
 | [deploy.md](./deploy.md) | `maand deploy` |
 | [health-check.md](./health-check.md) | `maand health_check` |
+| [prometheus.md](./prometheus.md) | `_prometheus/` scrape, alerts, runbooks, prometheus job |
 | [job.md](./job.md) | `maand job` (start/stop/restart/run/status/create) |
 | [job-command.md](./job-command.md) | `maand job_command` and hook events |
 | [run-command.md](./run-command.md) | `maand run_command` |
@@ -82,6 +83,9 @@ maand cat allocations
 maand cat deployments
 maand cat job_commands
 maand cat job_ports
+maand cat prometheus
+maand cat prometheus get api scrape.yaml
+maand cat prometheus scrape
 maand cat kv
 maand cat kv get <namespace> <key>
 maand cat kv get --reveal secrets/job/<job> <key>

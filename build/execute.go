@@ -15,6 +15,7 @@ import (
 	"maand/data"
 	"maand/jobcommand"
 	"maand/kv"
+	"maand/promconfig"
 	"maand/workspace"
 )
 
@@ -151,6 +152,10 @@ func Execute(opts ...Options) error {
 	}
 
 	if err := BuildJobAllocationVariables(buildTx, removedJobs); err != nil {
+		return err
+	}
+
+	if err := promconfig.BuildCatalog(buildTx, jobWorkspace); err != nil {
 		return err
 	}
 

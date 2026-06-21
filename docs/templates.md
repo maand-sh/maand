@@ -46,6 +46,8 @@ Equivalent KV:
 | `upper` / `lower` | `{{ upper "hello" }}` | Case conversion |
 | `add` / `sub` / `mul` / `div` | `{{ add 1 2 }}` | Integer math |
 | `int` | `{{ int "42" }}` | Parse string or pass through int |
+| `scrapeConfigs` | `{{ scrapeConfigs }}` | Expands catalog scrape jobs at deploy render (live allocations + ports) |
+| `ruleFiles` | `{{ ruleFiles }}` | Lists assembled alert rule paths at deploy render (`rules/<job>/<file>.yaml`) |
 
 Missing keys or disallowed namespaces **panic** at render time (deploy fails for that job).
 
@@ -65,6 +67,27 @@ Missing keys or disallowed namespaces **panic** at render time (deploy fails for
 ```
 
 Populate **`vars/job/api`** via **`vars.toml`**, **`pre_deploy`** hooks, or **`post_build`** before deploy.
+
+---
+
+## Prometheus scrape configs
+
+Jobs with `_prometheus/scrape.yaml` or **`scrape.yaml.tpl`** store unexpanded configs in KV at build. Template scrape files are rendered at build with job-level context (`.Job`, `get`, `getSecret` — not `scrapeConfigs` or `.WorkerIP`). **`{{ scrapeConfigs }}`** expands `maand:port/*` placeholders when the prometheus job is staged.
+
+**`workspace/jobs/prometheus/prometheus.yml.tpl`:**
+
+```yaml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+{{ scrapeConfigs }}
+```
+
+See [prometheus.md](./prometheus.md) for `_prometheus/` layout, alerts, and runbooks.
 
 ---
 

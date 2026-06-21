@@ -163,6 +163,7 @@ Three namespaces serve different purposes.
 | Key | Meaning |
 |-----|---------|
 | `name`, `job_id` | Job name and UUID |
+| `job_name` | Prometheus scrape `job_name` when `_prometheus/scrape.yaml` exists; otherwise the maand job name |
 | `version` | Target version from manifest |
 | `selectors` | Job selectors |
 | `workers`, `workers_length`, `worker_0`, … | Allocated worker IPs (ordered) |

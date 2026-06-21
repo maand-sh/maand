@@ -69,11 +69,15 @@ func (a *portAllocator) assignProvisioned(jobName string, portName string) (int,
 		return 0, err
 	}
 
-	// Reuse the number already stored in job_ports for this job/port name so rebuilds
-	// keep stable bindings until the job is removed or the port name leaves the manifest.
+	// Reuse the number already stored in job_ports when it lies in the bucket pool.
+	// Numbers outside port_min–port_max (e.g. a former fixed port like 9500) are
+	// released and reassigned from the pool when the manifest uses {}.
 	if prev, ok := a.existing[jobName][portName]; ok {
-		a.usedNumbers[prev] = struct{}{}
-		return prev, nil
+		if a.range_.Contains(prev) {
+			a.usedNumbers[prev] = struct{}{}
+			return prev, nil
+		}
+		a.releaseAssignedNumber(jobName, portName)
 	}
 
 	for port := a.range_.Min; port <= a.range_.Max; port++ {

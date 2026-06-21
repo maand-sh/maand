@@ -62,7 +62,7 @@ See [job.md](../job.md).
 
 ## Health checks
 
-Each job uses **one** approach (not both):
+Each job may use **manifest probes**, a **custom command**, or **both** (probes run first):
 
 **Option A — manifest probes** (tcp/http/ssh) in `manifest.json` — see [health-check.md](../health-check.md#built-in-manifest-health-recommended).
 
@@ -101,6 +101,33 @@ maand deploy --force --jobs api
 Deploy runs health checks automatically after restart when health is configured.
 
 See [health-check.md](../health-check.md).
+
+---
+
+## Prometheus monitoring
+
+Add **`_prometheus/`** under each job that exposes metrics (see [prometheus.md](../prometheus.md)):
+
+```text
+workspace/jobs/api/_prometheus/
+├── scrape.yaml
+├── alerts/
+└── runbooks/
+```
+
+After adding or changing scrape configs:
+
+```bash
+maand build
+maand deploy --jobs api,...      # app jobs first
+maand deploy --jobs prometheus   # refresh scrape config + alert rules
+```
+
+Serve runbooks locally:
+
+```bash
+maand runbooks serve --addr :8080
+```
 
 ---
 

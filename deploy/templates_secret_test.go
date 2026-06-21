@@ -30,16 +30,16 @@ func TestTemplateGetSecret(t *testing.T) {
 	store, err := kv.RequireStore()
 	require.NoError(t, err)
 	require.NoError(t, store.PutSecret(kv.SecretJobNamespace("app"), "token", "abc123", 0))
-	require.NoError(t, tx.Rollback())
 
 	tpl := `token={{ getSecret "token" }}`
-	funcMap := templateFuncMap("app", data.AllowedKVNamespaces("app", "10.0.0.1"))
+	funcMap := templateFuncMap(tx, "app", data.AllowedKVNamespaces("app", "10.0.0.1"))
 	tmpl, err := template.New("test").Funcs(funcMap).Parse(tpl)
 	require.NoError(t, err)
 
 	var buf strings.Builder
 	require.NoError(t, tmpl.Execute(&buf, AllocationData{}))
 	assert.Equal(t, "token=abc123", buf.String())
+	require.NoError(t, tx.Rollback())
 }
 
 func TestTemplateGetDecryptsSecretsNamespace(t *testing.T) {
@@ -54,15 +54,15 @@ func TestTemplateGetDecryptsSecretsNamespace(t *testing.T) {
 	store, err := kv.RequireStore()
 	require.NoError(t, err)
 	require.NoError(t, store.PutSecret(kv.SecretJobNamespace("app"), "token", "secret-value", 0))
-	require.NoError(t, tx.Rollback())
 
 	ns := kv.SecretJobNamespace("app")
 	tpl := `{{ get "` + ns + `" "token" }}`
-	funcMap := templateFuncMap("app", data.AllowedKVNamespaces("app", "10.0.0.1"))
+	funcMap := templateFuncMap(tx, "app", data.AllowedKVNamespaces("app", "10.0.0.1"))
 	tmpl, err := template.New("test").Funcs(funcMap).Parse(tpl)
 	require.NoError(t, err)
 
 	var buf strings.Builder
 	require.NoError(t, tmpl.Execute(&buf, AllocationData{}))
 	assert.Equal(t, "secret-value", buf.String())
+	require.NoError(t, tx.Rollback())
 }

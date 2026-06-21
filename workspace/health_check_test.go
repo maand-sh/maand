@@ -48,7 +48,7 @@ func TestValidateHealthCheck(t *testing.T) {
 	assert.ErrorIs(t, ValidateHealthCheck("cassandra", sshManifest), bucket.ErrInvalidManifest)
 }
 
-func TestValidateHealthCheck_rejectsManifestAndCommand(t *testing.T) {
+func TestValidateHealthCheck_allowsManifestAndCommand(t *testing.T) {
 	manifest := Manifest{
 		Resources: struct {
 			Memory struct {
@@ -73,5 +73,5 @@ func TestValidateHealthCheck_rejectsManifestAndCommand(t *testing.T) {
 			},
 		},
 	}
-	assert.ErrorIs(t, ValidateHealthCheck("api", manifest), bucket.ErrInvalidManifest)
+	assert.NoError(t, ValidateHealthCheck("api", manifest))
 }

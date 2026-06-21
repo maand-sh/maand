@@ -57,7 +57,9 @@ func writeNodeExporterJob(t *testing.T) {
 	t.Helper()
 	jobDir := filepath.Join(bucket.WorkspaceLocation, "jobs", monitoringJobNodeExporter)
 	modulesDir := filepath.Join(jobDir, "_modules")
+	promDir := filepath.Join(jobDir, "_prometheus")
 	require.NoError(t, os.MkdirAll(modulesDir, 0o755))
+	require.NoError(t, os.MkdirAll(promDir, 0o755))
 
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "manifest.json"), []byte(`{
 		"version": "1.0.0",
@@ -67,6 +69,14 @@ func writeNodeExporterJob(t *testing.T) {
 			"command_ready": {"executed_on": ["cli"]}
 		}
 	}`), 0o644))
+
+	require.NoError(t, os.WriteFile(filepath.Join(promDir, "scrape.yaml"), []byte(`
+- job_name: node_exporter
+  metrics_path: /metrics
+  static_configs:
+    - targets:
+        - maand:port/node_exporter_metrics_port
+`), 0o644))
 
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "Makefile"), []byte(nodeExporterMakefile()), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "config.env.tpl"), []byte(
@@ -224,6 +234,7 @@ func prometheusCompose() string {
       - "{{ get "maand" "prometheus_http_port" }}:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./rules:/etc/prometheus/rules:ro
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --web.enable-lifecycle
@@ -236,16 +247,6 @@ func prometheusScrapeConfig() string {
   evaluation_interval: 5s
 
 scrape_configs:
-  - job_name: node_exporter
-    static_configs:
-      - targets:
-          - '{{ .WorkerIP }}:{{ get "maand" "node_exporter_metrics_port" }}'
-{{- $workerNS := printf "maand/worker/%s" .WorkerIP }}
-{{- $peers := get $workerNS "worker_peers" }}
-{{- if $peers }}
-{{- range split $peers "," }}
-          - '{{ . }}:{{ get "maand" "node_exporter_metrics_port" }}'
-{{- end }}
-{{- end }}
+{{ scrapeConfigs }}
 `
 }
