@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/data"
 	"maand/healthcheck"
 
@@ -34,7 +33,7 @@ func setupJobWithProvisionedPortHealthCheck(t *testing.T, healthChecksJSON strin
 	}`
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(manifest), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	MustQueryRow(t, `SELECT port FROM job_ports WHERE name = 'api_port'`, &assignedPort)
 	return assignedPort
@@ -78,7 +77,7 @@ func TestBuildRejectsInvalidHealthCheckPort(t *testing.T) {
 	}`), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidManifest)
 }
 
@@ -111,7 +110,7 @@ func TestBuildAllowsManifestAndCommandHealthCheck(t *testing.T) {
 	}`), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	var stored string
 	MustQueryRow(t, `SELECT health_check FROM job WHERE name = 'app'`, &stored)
@@ -148,7 +147,7 @@ func TestBuildRejectsSSHHealthCheckWithoutCommand(t *testing.T) {
 	}`), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidManifest)
 }
 
@@ -170,7 +169,7 @@ func TestBuildStoresHealthCheckJSON(t *testing.T) {
 	}`), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	var stored string
 	MustQueryRow(t, `SELECT health_check FROM job WHERE name = 'app'`, &stored)

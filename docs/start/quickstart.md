@@ -68,7 +68,7 @@ Edit **`workspace/workers.json`**:
 ]
 ```
 
-Every worker automatically gets the **`worker`** label. Jobs use **selectors** to decide which workers receive an allocation.
+Every worker automatically gets the **`worker`** label. Jobs match workers using manifest **`selectors`** when set; otherwise the **job name** must appear as a worker label.
 
 Test SSH from the CLI host:
 
@@ -110,7 +110,7 @@ status:
 EOF
 ```
 
-Ensure **`manifest.json`** includes selectors (the `create` command writes `"selectors": ["worker"]`):
+Ensure **`manifest.json`** includes selectors when the job should run on the shared worker pool (the `create` command writes `"selectors": ["worker"]`):
 
 ```json
 {

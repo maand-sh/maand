@@ -3,10 +3,7 @@ package tests
 import (
 	"testing"
 
-	"maand/build"
-
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBuildKVJobAndAllocationVariables(t *testing.T) {
@@ -20,7 +17,7 @@ func TestBuildKVJobAndAllocationVariables(t *testing.T) {
 		"resources": {"ports": {"svc_http_port": {}, "svc_cql_port": {}}}
 	}`)
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	workers, _ := GetKey("maand/job/svc", "workers")
 	assert.Equal(t, "10.0.0.2,10.0.0.1", workers)

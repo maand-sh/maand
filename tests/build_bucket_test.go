@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/cat"
 	"maand/initialize"
 
@@ -19,7 +18,7 @@ func TestInit(t *testing.T) {
 	err := initialize.Execute()
 	assert.NoError(t, err)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 }
 
@@ -29,7 +28,7 @@ func TestInitKV(t *testing.T) {
 	err := initialize.Execute()
 	assert.NoError(t, err)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	err = cat.KV("", false, false)
@@ -48,7 +47,7 @@ func TestUntouchedBucketConf(t *testing.T) {
 	err := initialize.Execute()
 	assert.NoError(t, err)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	key, _ := GetKey("vars/bucket", "a")
@@ -62,7 +61,7 @@ func TestBucketConfOps(t *testing.T) {
 	assert.NoError(t, err)
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.conf"), []byte(`a="1"`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ := GetKey("vars/bucket", "a")
@@ -73,7 +72,7 @@ a="3"
 b="1"
 `
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.conf"), []byte(vars), os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("vars/bucket", "a")
@@ -82,7 +81,7 @@ b="1"
 	assert.Equal(t, "1", value)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.conf"), []byte(`a="1"`), os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("vars/bucket", "a")
@@ -92,7 +91,7 @@ b="1"
 
 	_ = os.Remove(path.Join(bucket.WorkspaceLocation, "bucket.conf"))
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("vars/bucket", "a")
@@ -110,7 +109,7 @@ func TestEmptyBucketConf(t *testing.T) {
 	assert.NoError(t, err)
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.conf"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	key, _ := GetKey("maand", "a")
@@ -126,7 +125,7 @@ func TestBucketConfAdded(t *testing.T) {
 	err := initialize.Execute()
 	assert.NoError(t, err)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	key, _ := GetKey("maand", "a")
@@ -134,7 +133,7 @@ func TestBucketConfAdded(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.conf"), []byte(`a="1"`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	key, _ = GetKey("vars/bucket", "a")
@@ -172,7 +171,7 @@ func TestJobConfAddedLater(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"version":"1.1"}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ := GetKey("maand/job/a", "test")
@@ -183,7 +182,7 @@ func TestJobConfAddedLater(t *testing.T) {
 test="1"
 `
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.jobs.conf"), []byte(jobsConf), os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("vars/bucket/job/a", "test")
@@ -204,7 +203,7 @@ func TestJobConfEmptyLater(t *testing.T) {
 	jobsConf := ``
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.jobs.conf"), []byte(jobsConf), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 }
 
@@ -225,7 +224,7 @@ test="1"
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"version":"1.1"}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ := GetKey("vars/bucket/job/a", "test")
@@ -243,7 +242,7 @@ func TestJobKV(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"version":"1.1"}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ := GetKey("maand/job/a", "job_id")
@@ -281,7 +280,7 @@ func TestJobMemoryCPUOpsKV(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"cpu": {"min":"12 Ghz", "max":"23 Ghz"}, "memory":{"min":"12 GB", "max":"24 GB"}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ := GetKey("maand/job/a", "min_cpu_mhz")
@@ -304,7 +303,7 @@ func TestJobMemoryCPUOpsKV(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"cpu": {"min":"12", "max":"23"}, "memory":{"min":"12", "max":"24"}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("maand/job/a", "min_cpu_mhz")
@@ -326,7 +325,7 @@ func TestJobMemoryCPUOpsKV(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("maand/job/a", "min_cpu_mhz")
@@ -351,14 +350,14 @@ func TestJobPortOpsKV(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ := GetKey("maand", "web_port")
 	firstPort := value
 	assert.NotEmpty(t, firstPort)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("maand", "web_port")
@@ -366,7 +365,7 @@ func TestJobPortOpsKV(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port": {}, "web_port2": {}}}}`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("maand", "web_port")
@@ -377,7 +376,7 @@ func TestJobPortOpsKV(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port2": {}}}}`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("maand", "web_port")
@@ -401,7 +400,7 @@ port_max = "30000"
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"p1": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	jobPath = path.Join(bucket.WorkspaceLocation, "jobs", "b")
@@ -409,7 +408,7 @@ port_max = "30000"
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"p1": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrPortRangeExhausted)
 }
 
@@ -429,12 +428,12 @@ func TestJobPortPrefixFormat(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"b_port_web": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"Bad-Port": {}}}}`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrPortKeyFormat)
 }
 
@@ -450,7 +449,7 @@ func TestJobSelectorsAndOperator(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"}]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	err = cat.Allocations("", "")
@@ -462,10 +461,10 @@ func TestJobSelectorsAndOperator(t *testing.T) {
 	count = GetRowCount("SELECT count(1) FROM allocations where job = 'a'")
 	assert.Equal(t, 1, count)
 
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker", "a"]}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker", "gpu"]}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE removed = 1")
@@ -473,8 +472,8 @@ func TestJobSelectorsAndOperator(t *testing.T) {
 	count = GetRowCount("SELECT count(1) FROM allocations")
 	assert.Equal(t, 1, count)
 
-	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "labels": ["a"]}]`), os.ModePerm)
-	err = build.Execute()
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "labels": ["gpu"]}]`), os.ModePerm)
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE removed = 0")
@@ -518,7 +517,7 @@ func TestAllocations(t *testing.T) {
 	}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(1) FROM allocations WHERE removed = 0")
@@ -529,7 +528,7 @@ func TestAllocations(t *testing.T) {
 		{ "host": "10.0.0.2" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE removed = 0")
@@ -543,7 +542,7 @@ func TestAllocations(t *testing.T) {
 		{ "host": "10.0.0.2", "labels": ["a"] }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE removed = 0")
@@ -558,7 +557,7 @@ func TestAllocations(t *testing.T) {
 		{ "host": "10.0.0.3", "labels": ["b"] }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE removed = 0")
@@ -586,7 +585,7 @@ func TestCatCommand(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors": ["worker"], "commands":{"command_health_check":{"executed_on":["cli"]}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	err = cat.JobCommands()
@@ -612,7 +611,7 @@ func TestBuildUnInitialized(t *testing.T) {
 	_ = os.RemoveAll(bucket.Location)
 
 	_ = os.MkdirAll(bucket.WorkspaceLocation, os.ModePerm)
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrNotInitialized)
 }
 
@@ -629,7 +628,7 @@ func TestCAUpdateUpdatesHash(t *testing.T) {
 	err = initialize.Execute()
 	assert.NoError(t, err)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	var currentHash1, previousHash1 string
@@ -637,7 +636,7 @@ func TestCAUpdateUpdatesHash(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.SecretLocation, "ca.crt"), pub, os.ModePerm)
 	_ = os.WriteFile(path.Join(bucket.SecretLocation, "ca.key"), pri, os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	var currentHash2, previousHash2 string
@@ -666,7 +665,7 @@ func TestCAUpdateTriggerCertUpdates(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "certs":{"a":{"subject":{"common_name":"3"}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value1, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
@@ -674,7 +673,7 @@ func TestCAUpdateTriggerCertUpdates(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.SecretLocation, "ca.crt"), caPub, os.ModePerm)
 	_ = os.WriteFile(path.Join(bucket.SecretLocation, "ca.key"), caPri, os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value2, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
@@ -695,15 +694,15 @@ func TestCAAndCertNotUpdatedOnEveryBuild(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "certs":{"a":{"subject":{"common_name":"3"}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value1, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
 	assert.NotEmpty(t, value1)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value2, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
@@ -724,7 +723,7 @@ func TestCertInKV(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "certs":{"a":{"subject":{"common_name":"3"}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value2, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
@@ -745,7 +744,7 @@ func TestCertUpdateAfterExpire(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "certs":{"a":{"subject":{"common_name":"3"}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value2, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
@@ -760,7 +759,7 @@ func TestCertUpdateAfterExpire(t *testing.T) {
 	err = bucket.WriteMaandConf(&conf)
 	assert.NoError(t, err)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value1, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
@@ -777,7 +776,7 @@ func TestMakefileNotFound(t *testing.T) {
 	_ = os.MkdirAll(jobPath, os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"], "certs":{"a":{"subject":{"common":"fsadfsad"}}}}`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "invalid job: job a, Makefile not found")
@@ -794,7 +793,7 @@ func TestInvalidmanifestJSON(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"],`), os.ModePerm)
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "jobs", "a", "Makefile"), nil, os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 
 	assert.Error(t, err)
 	assert.ErrorContains(t, err, "invalid manifest.json: job a\nunexpected end of JSON input")
@@ -813,14 +812,14 @@ func TestCertsRemovedFromManifestPurgesKV(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(manifestWithCerts), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	crt, _ := GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")
 	assert.NotEmpty(t, crt)
 
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["worker"]}`), os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	crt, _ = GetKey("maand/job/a/worker/10.0.0.1", "certs/a.crt")

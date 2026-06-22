@@ -63,6 +63,74 @@ func TestBuildJobsFromWorkspaceManifest(t *testing.T) {
 	assert.Equal(t, "1.0.0", version)
 }
 
+func TestBuildJobs_storesPlacementSelectors(t *testing.T) {
+	root := t.TempDir()
+	orig := bucket.Location
+	bucket.Location = root
+	bucket.UpdatePath()
+	t.Cleanup(func() {
+		bucket.Location = orig
+		bucket.UpdatePath()
+	})
+
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "api")
+	require.NoError(t, os.MkdirAll(jobPath, 0o755))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors":["web"]}`), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "Makefile"), []byte(""), 0o644))
+
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	_, err = BuildJobs(tx, workspace.Default())
+	require.NoError(t, err)
+
+	selectors, err := data.GetJobSelectors(tx, "api")
+	require.NoError(t, err)
+	require.NoError(t, tx.Rollback())
+
+	assert.ElementsMatch(t, []string{"web"}, selectors)
+}
+
+func TestBuildAllocations_placesJobByNameSelectorOnly(t *testing.T) {
+	root := t.TempDir()
+	orig := bucket.Location
+	bucket.Location = root
+	bucket.UpdatePath()
+	t.Cleanup(func() {
+		bucket.Location = orig
+		bucket.UpdatePath()
+	})
+
+	require.NoError(t, os.MkdirAll(bucket.WorkspaceLocation, 0o755))
+	workersJSON := `[{"host":"10.0.0.1","labels":["prometheus"],"memory":"1024","cpu":"2000","position":0}]`
+	require.NoError(t, os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(workersJSON), 0o644))
+
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "prometheus")
+	require.NoError(t, os.MkdirAll(jobPath, 0o755))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{}`), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "Makefile"), []byte(""), 0o644))
+
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	_, err = BuildWorkers(tx, workspace.Default())
+	require.NoError(t, err)
+	_, err = BuildJobs(tx, workspace.Default())
+	require.NoError(t, err)
+	require.NoError(t, BuildAllocations(tx, workspace.Default()))
+	require.NoError(t, tx.Commit())
+
+	var allocCount int
+	require.NoError(t, db.QueryRow(
+		`SELECT count(*) FROM allocations WHERE job = 'prometheus' AND removed = 0`,
+	).Scan(&allocCount))
+	assert.Equal(t, 1, allocCount)
+}
+
 func TestBuildWorkers_rejectsDuplicateLabels(t *testing.T) {
 	root := t.TempDir()
 	orig := bucket.Location

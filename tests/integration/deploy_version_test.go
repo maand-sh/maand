@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/deploy"
 
 	"github.com/stretchr/testify/assert"
@@ -59,7 +58,7 @@ func TestIntegrationDeployVersionUpgrade(t *testing.T) {
 
 	ip := workerIPs(t)[0]
 	writeVersionedIntegrationJob(t, "2.0.0")
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 	assert.Equal(t, "2.0.0", latestKVValue(t, "maand/job/"+integrationJobName, "version"))
 
 	plan := dryRunPlanForJob(t, integrationJobName)
@@ -108,7 +107,7 @@ func TestIntegrationDeployVersionUpgradeWithoutManifestVersionChange(t *testing.
 		[]byte("content-only"),
 		0o644,
 	))
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	plan := dryRunPlanForJob(t, integrationJobName)
 	assert.True(t, plan.NeedsRollout)

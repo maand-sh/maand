@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -24,7 +23,7 @@ func TestBuildRejectsJobMemoryAboveWorkerCapacity(t *testing.T) {
 		}
 	}`)
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
 }
 
@@ -32,7 +31,7 @@ func TestBuildRejectsDuplicateWorkerHost(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"},{"host":"10.0.0.1"}]`)
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
@@ -47,7 +46,7 @@ func TestBuildRejectsJobMemoryWhenWorkerUnconfigured(t *testing.T) {
 		}
 	}`)
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
 	assert.Contains(t, err.Error(), "must specify memory")
 }

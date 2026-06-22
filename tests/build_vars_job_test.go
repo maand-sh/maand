@@ -61,12 +61,12 @@ func TestVarsJobFromWorkspaceSurvivesRebuild(t *testing.T) {
 dc = "us-east"
 `), 0o644))
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 	assert.Equal(t, "prod", mustGetPersistedKV(t, "vars/job/app", "cluster_name"))
 	assert.Equal(t, "us-east", mustGetPersistedKV(t, "vars/job/app", "dc"))
 
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{"selectors":["app"],"version":"2"}`), 0o644))
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	assert.Equal(t, "prod", mustGetPersistedKV(t, "vars/job/app", "cluster_name"))
 }
@@ -76,10 +76,10 @@ func TestVarsJobKVPutSurvivesRebuild(t *testing.T) {
 	writeWorkersJSON(t, `[{"host":"10.0.0.1","labels":["app"]}]`)
 	writeMinimalJob(t, "app", `{"selectors":["app"]}`)
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 	seedVarsJobKey(t, "app", "from_script", "stable")
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 	assert.Equal(t, "stable", mustGetPersistedKV(t, "vars/job/app", "from_script"))
 }
 
@@ -95,7 +95,7 @@ func TestVarsJobWorkspaceMergeDoesNotDeleteScriptKeys(t *testing.T) {
 
 	seedVarsJobKey(t, "app", "runtime_only", "keep-me")
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 	assert.Equal(t, "yes", mustGetPersistedKV(t, "vars/job/app", "tracked"))
 	assert.Equal(t, "keep-me", mustGetPersistedKV(t, "vars/job/app", "runtime_only"))
 }
@@ -104,7 +104,7 @@ func TestBuildPurgesJobCommandKVWhenFlagSetAndNoActiveAllocations(t *testing.T) 
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1","labels":["vault"]}]`)
 	writeMinimalJob(t, "vault", `{"selectors":["vault"],"version":"1.0.0"}`)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	seedVarsJobKey(t, "vault", "cluster_initialized", "true")
 	seedJobKV(t, "vault", "secrets/job/vault", "root_token", "enc:v1:token")
@@ -114,7 +114,7 @@ func TestBuildPurgesJobCommandKVWhenFlagSetAndNoActiveAllocations(t *testing.T) 
 		[]byte(`{"selectors":["nomatch"],"version":"1.0.0"}`),
 		0o644,
 	))
-	require.NoError(t, build.Execute(build.Options{PurgeJobCommandKV: true}))
+	executeBuild(t, build.Options{PurgeJobCommandKV: true})
 
 	assertKVNamespaceDeleted(t, "vars/job/vault", "cluster_initialized")
 	assertKVNamespaceDeleted(t, "secrets/job/vault", "root_token")
@@ -124,7 +124,7 @@ func TestBuildDoesNotPurgeJobCommandKVWhenNoActiveAllocations(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1","labels":["vault"]}]`)
 	writeMinimalJob(t, "vault", `{"selectors":["vault"],"version":"1.0.0"}`)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	seedVarsJobKey(t, "vault", "cluster_initialized", "true")
 	seedJobKV(t, "vault", "secrets/job/vault", "root_token", "enc:v1:token")
@@ -134,7 +134,7 @@ func TestBuildDoesNotPurgeJobCommandKVWhenNoActiveAllocations(t *testing.T) {
 		[]byte(`{"selectors":["nomatch"],"version":"1.0.0"}`),
 		0o644,
 	))
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	assert.Equal(t, "true", mustGetPersistedKV(t, "vars/job/vault", "cluster_initialized"))
 	assert.Equal(t, "enc:v1:token", mustGetPersistedKV(t, "secrets/job/vault", "root_token"))

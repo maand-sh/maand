@@ -166,7 +166,7 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			return nil, bucket.DatabaseError(err)
 		}
 
-		for _, selector := range manifest.Selectors {
+		for _, selector := range workspace.PlacementSelectors(jobName, manifest) {
 			_, err := tx.Exec("INSERT INTO job_selectors (job_id, selector) VALUES (?, ?)", jobID, selector)
 			if err != nil {
 				return nil, bucket.DatabaseError(err)

@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"maand/build"
 	"maand/bucket"
 	"maand/deploy"
 
@@ -44,7 +43,7 @@ func TestIntegrationDeployRolloutAfterFileChange(t *testing.T) {
 
 	marker := filepath.Join(bucket.WorkspaceLocation, "jobs", integrationJobName, "marker.txt")
 	require.NoError(t, os.WriteFile(marker, []byte("changed"), 0o644))
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	result, err = deploy.DryRun(nil, false)
 	require.NoError(t, err)

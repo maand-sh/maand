@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -34,7 +33,7 @@ sys.exit(1)
 		}
 	}`), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "post_build")
 

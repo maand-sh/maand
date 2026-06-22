@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/initialize"
 
 	"github.com/stretchr/testify/assert"
@@ -19,7 +18,7 @@ func TestValidateDemandUnknownJob(t *testing.T) {
 
 	writeDemandJob(t, "b", "missing", "command_x", "1.0.0", "")
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidJobCommandDemand)
 }
 
@@ -30,7 +29,7 @@ func TestValidateDemandUnknownCommand(t *testing.T) {
 	writeBaseJob(t, "a", "command_y", "1.0.0")
 	writeDemandJob(t, "b", "a", "command_x", "1.0.0", "")
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidJobCommandDemand)
 }
 
@@ -41,7 +40,7 @@ func TestValidateDemandVersionTooLow(t *testing.T) {
 	writeBaseJob(t, "a", "command_x", "1.0.0")
 	writeDemandJob(t, "b", "a", "command_x", "2.0.0", `,"config":{"min_version":"2.0.0"}`)
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrJobCommandDemandVersionMismatch)
 }
 
@@ -52,7 +51,7 @@ func TestValidateDemandVersionOk(t *testing.T) {
 	writeBaseJob(t, "a", "command_x", "2.1.0")
 	writeDemandJob(t, "b", "a", "command_x", "1.0.0", `,"config":{"min_version":"2.0.0","max_version":"3.0.0"}`)
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 }
 
 func TestValidateDemandRequiresUpstreamVersion(t *testing.T) {
@@ -62,7 +61,7 @@ func TestValidateDemandRequiresUpstreamVersion(t *testing.T) {
 	writeBaseJob(t, "a", "command_x", "")
 	writeDemandJob(t, "b", "a", "command_x", "1.0.0", `,"config":{"min_version":"1.0.0"}`)
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidJobVersion)
 }
 

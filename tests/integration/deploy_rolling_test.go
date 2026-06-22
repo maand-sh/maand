@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/deploy"
 
 	"github.com/stretchr/testify/assert"
@@ -40,7 +39,7 @@ func TestIntegrationDeployRollingUpgradeOnContentChange(t *testing.T) {
 
 	marker := filepath.Join(bucket.WorkspaceLocation, "jobs", integrationJobName, "upgrade-marker.txt")
 	require.NoError(t, os.WriteFile(marker, []byte("v2"), 0o644))
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	plan := dryRunPlanForJob(t, integrationJobName)
 	assert.True(t, plan.NeedsRollout)
@@ -76,7 +75,7 @@ func TestIntegrationDeployRollingUpgradeParallelism(t *testing.T) {
 
 	marker := filepath.Join(bucket.WorkspaceLocation, "jobs", integrationJobName, "upgrade-marker.txt")
 	require.NoError(t, os.WriteFile(marker, []byte("v3"), 0o644))
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	plan := dryRunPlanForJob(t, integrationJobName)
 	assert.True(t, plan.NeedsRollout)

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/initialize"
 
 	"github.com/stretchr/testify/assert"
@@ -21,7 +20,7 @@ func TestBuild1(t *testing.T) {
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "workers.json"))
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 }
 
@@ -33,7 +32,7 @@ func TestBuild2(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(``), fs.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
@@ -45,7 +44,7 @@ func TestBuild3(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[]`), fs.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 }
 
@@ -57,7 +56,7 @@ func TestBuild4(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{}]`), fs.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
@@ -69,7 +68,7 @@ func TestBuild5(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`{}`), fs.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
@@ -81,7 +80,7 @@ func TestBuild6(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"},{"host":"10.0.0.1"}]`), fs.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
@@ -93,7 +92,7 @@ func TestBuild7(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1","labels":[1]}]`), fs.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidWorkerJSON)
 }
 
@@ -105,7 +104,7 @@ func TestBuild8(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"}]`), fs.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	namespace := "maand/worker/10.0.0.1"
@@ -136,7 +135,7 @@ func TestBuild8(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"},{"host":"10.0.0.2"}]`), fs.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	namespace = "maand/worker/10.0.0.2"

@@ -9,7 +9,6 @@ package integration
 import (
 	"testing"
 
-	"maand/build"
 	"maand/deploy"
 	"maand/gc"
 
@@ -26,7 +25,7 @@ func TestIntegrationGCAfterWorkerRemoval(t *testing.T) {
 
 	remaining := ips[0]
 	replaceWorkersJSON(t, `[{"host":"`+remaining+`"}]`)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	assert.Equal(t, len(ips), countAllocations(t, false)+countAllocations(t, true))
 	assert.GreaterOrEqual(t, countAllocations(t, true), 1)

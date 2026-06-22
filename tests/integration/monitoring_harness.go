@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/data"
 	"maand/initialize"
 
@@ -124,7 +123,7 @@ func setupMonitoringIntegrationBucket(t *testing.T) {
 	require.NoError(t, initialize.Execute())
 	installAssets(t)
 	writeMonitoringJobs(t)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 }
 
 func jobDeploymentSeq(t *testing.T, job string) int {

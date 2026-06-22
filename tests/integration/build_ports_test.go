@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +25,7 @@ func TestIntegrationJobPortsStableAcrossRebuild(t *testing.T) {
 	kv1 := latestKVValue(t, "maand", portName)
 	assert.Equal(t, port1, kv1)
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 	port2 := jobAssignedPort(t, integrationJobName, portName)
 	kv2 := latestKVValue(t, "maand", portName)
 	assert.Equal(t, port1, port2)
@@ -35,7 +34,7 @@ func TestIntegrationJobPortsStableAcrossRebuild(t *testing.T) {
 	jobDir := filepath.Join(bucket.WorkspaceLocation, "jobs", integrationJobName)
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "rebuild-marker"), []byte("touch"), 0o644))
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 	port3 := jobAssignedPort(t, integrationJobName, portName)
 	kv3 := latestKVValue(t, "maand", portName)
 	assert.Equal(t, port1, port3)

@@ -60,6 +60,27 @@ func (m Manifest) ParallelUpdateCount() int {
 	return m.UpdateParallelCount
 }
 
+// PlacementSelectors returns worker labels required to place this job.
+// When manifest selectors are set, only those are used; otherwise the job name is the selector.
+func PlacementSelectors(jobName string, manifest Manifest) []string {
+	if len(manifest.Selectors) > 0 {
+		selectors := make([]string, 0, len(manifest.Selectors))
+		seen := make(map[string]struct{}, len(manifest.Selectors))
+		for _, selector := range manifest.Selectors {
+			if selector == "" {
+				continue
+			}
+			if _, ok := seen[selector]; ok {
+				continue
+			}
+			seen[selector] = struct{}{}
+			selectors = append(selectors, selector)
+		}
+		return selectors
+	}
+	return []string{jobName}
+}
+
 // ListedCommands returns manifest commands with names filled from map keys.
 func (m Manifest) ListedCommands() []JobCommand {
 	commands := make([]JobCommand, 0, len(m.Commands))
@@ -111,4 +132,9 @@ func GetDeployParallelCount(manifest Manifest) int {
 // GetUpdateParallelCount is deprecated; use Manifest.ParallelUpdateCount.
 func GetUpdateParallelCount(manifest Manifest) int {
 	return manifest.ParallelUpdateCount()
+}
+
+// GetPlacementSelectors returns effective placement selectors for a job.
+func GetPlacementSelectors(jobName string, manifest Manifest) []string {
+	return PlacementSelectors(jobName, manifest)
 }

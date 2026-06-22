@@ -88,7 +88,7 @@ Workers removed from `workers.json` are marked **`removed`** on allocations (not
 | Field | Purpose |
 |-------|---------|
 | `version` | Job version string — see [Job version](#job-version) below |
-| `selectors` | Worker **labels** required to place the job (all selectors must match worker labels). |
+| `selectors` | Worker **labels** for placement. When omitted, the **job name** is used (all selectors must match worker labels). |
 | `update_parallel_count` | Rolling restart batch size during **deploy** upgrades (minimum 1; default 1). |
 | `deploy_parallel_count` | Rolling **start** batch size on first deploy (0 = all new allocations at once). |
 | `resources.memory` / `cpu` | Limits; optional override via `bucket.jobs.conf`. |

@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +30,7 @@ use_sudo = true
 job_config_selector = "prod"
 `), 0o644))
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	value, err := GetKey("vars/bucket/job/app", "marker")
 	require.NoError(t, err)

@@ -182,7 +182,7 @@ Fix by raising worker capacity, lowering a job reservation in `bucket.jobs.conf`
 
 ## Selectors for different environments
 
-**Selectors** are worker **labels**. Build creates an allocation for job × worker only when **every** job selector appears on the worker. The label **`worker`** is added automatically to every host.
+**Selectors** are worker **labels**. Build creates an allocation for job × worker only when **every** job selector appears on the worker. When `selectors` is omitted from the manifest, the **job name** is the selector. The label **`worker`** is added automatically to every host.
 
 ### Pattern: one job, environment labels
 
@@ -240,7 +240,7 @@ maand cat allocations
 maand cat allocations --jobs api
 ```
 
-Each row is a (job, worker) pair. If a job has no rows, no worker matched all selectors.
+Each row is a (job, worker) pair. If a job has no rows, no worker matched all selectors (manifest `selectors`, or the job name when selectors are omitted).
 
 ---
 

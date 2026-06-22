@@ -36,7 +36,7 @@ maand cat job_commands
 | Field | Purpose |
 |-------|---------|
 | `version` | Semver-like release id; see [Version](#version) |
-| `selectors` | Worker **labels** required for placement (all must match) |
+| `selectors` | Worker **labels** required for placement (all must match). When omitted, the **job name** is used — see [Placement selectors](#placement-selectors). |
 | `update_parallel_count` | Rolling **restart** batch size during deploy (default **1**) |
 | `deploy_parallel_count` | Rolling **start** batch size on first deploy (**0** = all at once) |
 | `resources` | Memory, CPU, ports — [resources-and-placement.md](resources-and-placement.md) |
@@ -67,6 +67,32 @@ Example:
 ```
 
 Port `{}` assigns from the `bucket.conf` pool; an integer fixes the port in the manifest.
+
+---
+
+## Placement selectors
+
+If `selectors` is set in the manifest, **only** those labels are used for placement. If `selectors` is omitted or empty, the **job name** is the sole selector. A worker must have every required selector as a label (plus the automatic `worker` label from `workers.json`).
+
+| Manifest | Effective selectors | Worker labels needed |
+|----------|---------------------|----------------------|
+| *(empty)* | `prometheus` | `prometheus`, `worker` |
+| `"selectors": ["worker"]` | `worker` | `worker` |
+| `"selectors": ["worker", "prod"]` | `worker`, `prod` | `worker`, `prod` |
+
+Dedicated jobs (for example **`prometheus`**) can omit `selectors` when the target worker is labeled with the job name:
+
+```json
+{}
+```
+
+Label that worker in **`workers.json`**:
+
+```json
+{ "host": "10.0.0.5", "labels": ["prometheus"], "memory": "4 gb", "cpu": "2 ghz" }
+```
+
+Shared pool jobs use `"selectors": ["worker"]`. Environment-specific jobs add labels such as `"prod"` / `"staging"` — see [resources-and-placement.md](resources-and-placement.md).
 
 ---
 

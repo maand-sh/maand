@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/initialize"
 
 	"github.com/stretchr/testify/assert"
@@ -27,7 +26,7 @@ func TestJobCommandWithoutTrigger(t *testing.T) {
 	_ = os.MkdirAll(path.Join(jobPath, "_modules"), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "_modules", "command_health_check.py"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidJobCommandConfiguration)
 }
 
@@ -44,7 +43,7 @@ func TestJobCommandBuildWithTrigger(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "_modules", "command_health_check.py"), []byte(``), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"commands":{"command_health_check":{"executed_on":["post_build"]}}}`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(1) FROM job_commands WHERE executed_on in ('post_build')")
@@ -53,7 +52,7 @@ func TestJobCommandBuildWithTrigger(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"commands":{"command_health_check":{"executed_on":["post_build", "pre_deploy"]}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(1) FROM job_commands WHERE executed_on in ('post_build', 'pre_deploy')")
@@ -71,7 +70,7 @@ func TestJobCommandFileMissing(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"commands":{"command_health_check":{"executed_on":["post_build"]}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrJobCommandFileNotFound)
 }
 
@@ -90,7 +89,7 @@ func TestJobCommandAddedUpdatedRemoved(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"commands":{"command_health_check1":{"executed_on":["post_build"]}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(1) FROM job_commands WHERE executed_on = 'post_build'")
@@ -99,7 +98,7 @@ func TestJobCommandAddedUpdatedRemoved(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"commands":{"command_health_check1":{"executed_on":["post_build"]}, "command_health_check2":{"executed_on":["post_build"]}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(1) FROM job_commands WHERE executed_on = 'post_build'")
@@ -108,7 +107,7 @@ func TestJobCommandAddedUpdatedRemoved(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"commands":{"command_health_check3":{"executed_on":["post_build"]}, "command_health_check2":{"executed_on":["post_build"]}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(1) FROM job_commands WHERE executed_on = 'post_build'")
@@ -141,7 +140,7 @@ func TestJobDepsAndDeploymentSeq(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"}]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(1) FROM job_commands WHERE executed_on = 'cli'")
@@ -182,7 +181,7 @@ func TestJobCommandCircularDependency(t *testing.T) {
 	writeCircularJob("b", "a")
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"}]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrCircularJobCommandDependency)
 }
 
@@ -199,6 +198,6 @@ func TestJobCommandPrefixFormat(t *testing.T) {
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"commands":{"1command_health_check1":{"executed_on":["post_build"]}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidJobCommandConfiguration)
 }

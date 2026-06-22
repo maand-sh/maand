@@ -113,7 +113,7 @@ workspace/jobs/api/
 | Field | Purpose |
 |-------|---------|
 | `version` | Semver-like release id; required when the job participates in the [dependency graph](../reference/deployment-sequence.md); drives deploy **`new_version`** per allocation |
-| `selectors` | Worker **labels** required for placement (all must match) |
+| `selectors` | Worker **labels** for placement; when omitted, the **job name** is used |
 | `resources.memory` / `cpu` | Min/max bounds; actual reservation from `bucket.jobs.conf` — see [resources-and-placement.md](../reference/resources-and-placement.md) |
 | `resources.ports` | Named ports: `{}` (maand assigns from `bucket.conf` pool) or an integer (fixed in manifest) |
 | `update_parallel_count` | Rolling restart batch size during deploy |
@@ -137,20 +137,23 @@ An **allocation** is the binding **(job × worker)**: “run job *api* on worker
 Maand creates allocations automatically during **build** by **label matching**:
 
 1. For each worker, collect its labels (including `worker`).
-2. For each job, require **every** selector label to appear on the worker.
-3. Insert or update a row in **`allocations`** for each match.
+2. For each job, use manifest `selectors` when set; otherwise use the **job name** as the selector.
+3. Require **every** selector to appear on the worker.
+4. Insert or update a row in **`allocations`** for each match.
 
 ```text
-workers.json          jobs/api/manifest.json
-  labels: [worker,     selectors: [worker]
-           gpu]                │
-       │                       │
-       └──── match? ───────────┘
+workers.json              jobs/api/manifest.json
+  labels: [worker,         selectors: [worker, prod]
+           prod]                   │
+       │                           │  selectors: [worker, prod]
+       └──── all match? ───────────┘
                  │
                  ▼
         allocation (api @ 10.0.0.1)
         alloc_id = hash("api|10.0.0.1")
 ```
+
+Dedicated jobs can omit manifest selectors when the worker carries the job name (for example job **`prometheus`** on a worker labeled **`prometheus`**).
 
 ### Allocation fields
 

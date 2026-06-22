@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/data"
 	"maand/deploy"
 	"maand/runcommand"
@@ -26,7 +25,7 @@ import (
 func TestIntegrationEndToEndBuildTarget(t *testing.T) {
 	setupIntegrationWorkspace(t)
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	db, err := data.OpenDatabase(true)
 	require.NoError(t, err)
@@ -59,14 +58,14 @@ func TestIntegrationEndToEndBuildTarget(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, result.Required, "deploy should be in sync after promote")
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 	result, err = deploy.DryRun(nil, false)
 	require.NoError(t, err)
 	assert.False(t, result.Required, "unchanged rebuild should not require deploy")
 
 	marker := filepath.Join(bucket.WorkspaceLocation, "jobs", integrationJobName, "marker.txt")
 	require.NoError(t, os.WriteFile(marker, []byte("integration-v1"), 0o644))
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 
 	assert.Greater(t, countJobAllocationHashes(t, integrationJobName), 0,
 		"rebuild must not remove existing allocation hash rows")

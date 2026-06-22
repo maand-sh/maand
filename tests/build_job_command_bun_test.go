@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -55,7 +54,7 @@ func TestJobCommandBunAndPythonConflict(t *testing.T) {
 	require.NoError(t, os.WriteFile(path.Join(jobPath, "command_health_check.py"), []byte(``), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobPath, "command_health_check.ts"), []byte(``), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidJobCommandConfiguration)
 }
 
@@ -85,7 +84,7 @@ func TestJobCommandBunFileMissing(t *testing.T) {
 	}`
 	writeMinimalJob(t, "missing", manifest)
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrJobCommandFileNotFound)
 }
 
@@ -108,7 +107,7 @@ func TestJobCommandBunPythonAndJSConflict(t *testing.T) {
 	require.NoError(t, os.WriteFile(path.Join(jobPath, "command_health_check.py"), []byte(``), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobPath, "command_health_check.js"), []byte(``), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.ErrorIs(t, err, bucket.ErrInvalidJobCommandConfiguration)
 }
 

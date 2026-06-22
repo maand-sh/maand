@@ -1,6 +1,10 @@
 package workspace
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestManifestDefaults(t *testing.T) {
 	m := Manifest{}
@@ -28,4 +32,18 @@ func TestManifestListedCommands(t *testing.T) {
 	if commands[0].Demands.Config == nil {
 		t.Fatal("expected non-nil config map")
 	}
+}
+
+func TestPlacementSelectors_jobNameOnlyWhenEmpty(t *testing.T) {
+	assert.Equal(t, []string{"prometheus"}, PlacementSelectors("prometheus", Manifest{}))
+}
+
+func TestPlacementSelectors_usesManifestSelectorsWhenSet(t *testing.T) {
+	m := Manifest{Selectors: []string{"worker", "prod"}}
+	assert.Equal(t, []string{"worker", "prod"}, PlacementSelectors("api", m))
+}
+
+func TestPlacementSelectors_deduplicatesManifestSelectors(t *testing.T) {
+	m := Manifest{Selectors: []string{"web", "web"}}
+	assert.Equal(t, []string{"web"}, PlacementSelectors("web", m))
 }

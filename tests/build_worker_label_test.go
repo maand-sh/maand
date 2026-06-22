@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/initialize"
 
 	"github.com/stretchr/testify/assert"
@@ -21,7 +20,7 @@ func TestWorkerLabelDefault(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{ "host": "10.0.0.1" }]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	var labels string
@@ -40,7 +39,7 @@ func TestWorkerLabelsAdded(t *testing.T) {
 		{ "host": "10.0.0.2", "labels": ["b"] }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	var labels string
@@ -62,7 +61,7 @@ func TestWorkerLabelsRemoved(t *testing.T) {
 		{ "host": "10.0.0.2" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	var labels string
@@ -79,7 +78,7 @@ func TestWorkerLabelsRemoved(t *testing.T) {
 		{ "host": "10.0.0.2" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	query = "SELECT GROUP_CONCAT(label) FROM (SELECT label FROM worker_labels WHERE worker_id = (select worker_id FROM worker WHERE worker_ip = '%s') ORDER BY label)"
@@ -97,7 +96,7 @@ func TestWorkerLabelsUpdated(t *testing.T) {
 		{ "host": "10.0.0.1", "labels": ["a", "z"] }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	var labels string
@@ -110,7 +109,7 @@ func TestWorkerLabelsUpdated(t *testing.T) {
 		{ "host": "10.0.0.1", "labels": ["a", "v"] }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	GetRowValues(fmt.Sprintf(query, "10.0.0.1"), &labels)
@@ -125,5 +124,5 @@ func TestWorkerLabelsDuplicated(t *testing.T) {
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{ "host": "10.0.0.1", "labels": ["a", "a"] }]`), os.ModePerm)
 
-	assert.ErrorIs(t, build.Execute(), bucket.ErrInvalidWorkerJSON)
+	assert.ErrorIs(t, executeBuildErr(t), bucket.ErrInvalidWorkerJSON)
 }

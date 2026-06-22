@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/initialize"
 
 	"github.com/stretchr/testify/assert"
@@ -24,7 +23,7 @@ func TestWorkerTagAdded(t *testing.T) {
 		{"host": "10.0.0.1" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	query := "SELECT group_concat(key), group_concat(value) FROM worker_tags"
@@ -34,7 +33,7 @@ func TestWorkerTagAdded(t *testing.T) {
 		{"host": "10.0.0.1", "tags": {"a":"v", "b": "v3"} }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	GetRowValues(query, &keys, &values)
@@ -55,7 +54,7 @@ func TestWorkerTagUpdated(t *testing.T) {
 		{"host": "10.0.0.1", "tags": {"b": "v2"} }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	query := "SELECT group_concat(key), group_concat(value) FROM worker_tags"
@@ -68,7 +67,7 @@ func TestWorkerTagUpdated(t *testing.T) {
 		{"host": "10.0.0.1", "tags": {"a":"v", "b": "v3"} }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	GetRowValues(query, &keys, &values)
@@ -89,7 +88,7 @@ func TestWorkerTagRemoved(t *testing.T) {
 		{"host": "10.0.0.1", "tags": {"a":"v", "b": "v2"} }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	query := "SELECT ifnull(group_concat(key), ''), ifnull(group_concat(value), '') FROM worker_tags"
@@ -99,7 +98,7 @@ func TestWorkerTagRemoved(t *testing.T) {
 		{"host": "10.0.0.1" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	values = ""
@@ -116,14 +115,14 @@ func TestWokerTagsKV(t *testing.T) {
 	assert.NoError(t, err)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "tags":{"a":"1"}}]`), os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ := GetKey("maand/worker/10.0.0.1/tags", "a")
 	assert.Equal(t, "1", value)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "tags":{"a":"2", "b":"2"}}]`), os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("maand/worker/10.0.0.1/tags", "a")
@@ -132,7 +131,7 @@ func TestWokerTagsKV(t *testing.T) {
 	assert.Equal(t, "2", value)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1", "tags":{"b":"2"}}]`), os.ModePerm)
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	value, _ = GetKey("maand/worker/10.0.0.1/tags", "a")

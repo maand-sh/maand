@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/promconfig"
 
 	"github.com/stretchr/testify/assert"
@@ -141,7 +140,7 @@ func TestBuildPrometheusCatalog_scrapeTemplateMutualExclusion(t *testing.T) {
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "_prometheus", "scrape.yaml"), []byte("- job_name: api\n"), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "_prometheus", "scrape.yaml.tpl"), []byte("- job_name: api\n"), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.Error(t, err)
 }
 
@@ -156,7 +155,7 @@ func TestBuildPrometheusCatalog_optionalWithoutPrometheusJob(t *testing.T) {
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "_prometheus", "scrape.yaml"), []byte("- job_name: api\n"), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "_prometheus", "scrape.yaml.tpl"), []byte("- job_name: api\n"), 0o644))
 
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 }
 
 func TestBuildPrometheusCatalog_maandJobPlaceholder(t *testing.T) {
@@ -210,7 +209,7 @@ func TestBuildPrometheusCatalog_duplicateJobNameFails(t *testing.T) {
 `), 0o644))
 	}
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.Error(t, err)
 }
 
@@ -225,7 +224,7 @@ func TestBuildPrometheusCatalog_prometheusConfigMutualExclusion(t *testing.T) {
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "prometheus.yml"), []byte("global: {}\n"), 0o644))
 	require.NoError(t, os.WriteFile(path.Join(jobDir, "prometheus.yml.tpl"), []byte("global: {}\n"), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.Error(t, err)
 }
 
@@ -248,7 +247,7 @@ groups:
           runbook: Missing
 `), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.Error(t, err)
 }
 
@@ -271,7 +270,7 @@ groups:
 `), 0o644))
 	}
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.Error(t, err)
 }
 
@@ -311,6 +310,6 @@ groups:
       - alert: ApiDown
 `), 0o644))
 
-	err := build.Execute()
+	err := executeBuildErr(t)
 	assert.Error(t, err)
 }

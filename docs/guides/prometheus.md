@@ -270,7 +270,17 @@ Link from alert annotations (e.g. set `runbook_url` in Alertmanager) to `http://
 
 ## Example: node_exporter
 
-**`manifest.json`**
+**`manifest.json`** — runs on any worker that has the **`node_exporter`** label (job name); add `"selectors": ["worker"]` when sharing a generic worker pool:
+
+```json
+{
+  "resources": {
+    "ports": { "node_exporter_metrics_port": {} }
+  }
+}
+```
+
+Or on shared workers:
 
 ```json
 {

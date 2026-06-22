@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"maand/bucket"
-	"maand/build"
 	"maand/cat"
 	"maand/initialize"
 
@@ -25,7 +24,7 @@ func TestWorkerOperationAdded(t *testing.T) {
 		{ "host": "10.0.0.2" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT COUNT(*) FROM worker")
@@ -37,7 +36,7 @@ func TestWorkerOperationAdded(t *testing.T) {
 		{ "host": "10.0.0.3" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT COUNT(*) FROM worker")
@@ -58,7 +57,7 @@ func TestWorkerOperationUpdated(t *testing.T) {
 		{ "host": "10.0.0.2" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT COUNT(*) FROM worker")
@@ -69,7 +68,7 @@ func TestWorkerOperationUpdated(t *testing.T) {
 		{ "host": "10.0.0.3" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT COUNT(*) FROM worker")
@@ -92,7 +91,7 @@ func TestWorkerOperationRemoved(t *testing.T) {
 		{ "host": "10.0.0.3" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT COUNT(*) FROM worker")
@@ -103,7 +102,7 @@ func TestWorkerOperationRemoved(t *testing.T) {
 		{ "host": "10.0.0.3" }
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT COUNT(*) FROM worker")
@@ -122,7 +121,7 @@ func TestWorkerDefaultKVLabels(t *testing.T) {
 		{"host": "10.0.0.3"}
 	]`), os.ModePerm)
 
-	err = build.Execute()
+	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	err = cat.KV("", false, false)

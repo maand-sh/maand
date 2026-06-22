@@ -8,6 +8,7 @@ package integration
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -22,6 +23,7 @@ import (
 	"maand/deploy"
 	"maand/initialize"
 	"maand/worker"
+	"maand/workspace"
 
 	"github.com/stretchr/testify/require"
 )
@@ -132,7 +134,7 @@ func setupIntegrationWorkspace(t *testing.T) {
 func setupIntegrationBucket(t *testing.T) {
 	t.Helper()
 	setupIntegrationWorkspace(t)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 }
 
 // setupPortOnlyIntegrationBucket initializes a bucket with a single port job and runs build.
@@ -142,7 +144,7 @@ func setupPortOnlyIntegrationBucket(t *testing.T) {
 	resetIntegrationBucket(t)
 	require.NoError(t, initialize.Execute())
 	writePortOnlyIntegrationJob(t)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 }
 
 func writePortOnlyIntegrationJob(t *testing.T) {
@@ -163,7 +165,7 @@ func setupFullIntegrationBucket(t *testing.T) {
 	require.NoError(t, initialize.Execute())
 	installAssets(t)
 	writeFullIntegrationJob(t)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 }
 
 func workerIPs(t *testing.T) []string {
@@ -399,7 +401,7 @@ func setupRollingIntegrationBucket(t *testing.T, updateParallel int) {
 	require.NoError(t, initialize.Execute())
 	installAssets(t)
 	writeRollingIntegrationJob(t, updateParallel)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 }
 
 func jobUpdateParallelCount(t *testing.T, job string) int {
@@ -495,7 +497,7 @@ func setupVersionIntegrationBucket(t *testing.T, version string) {
 	require.NoError(t, initialize.Execute())
 	installAssets(t)
 	writeVersionedIntegrationJob(t, version)
-	require.NoError(t, build.Execute())
+	executeBuild(t)
 }
 
 func latestKVValue(t *testing.T, namespace, key string) string {
@@ -587,4 +589,106 @@ func workerVersionData(t *testing.T, workerIP, field string) string {
 		bucketID, integrationJobName, field,
 	)
 	return strings.TrimSpace(remoteShellOutput(t, workerIP, fmt.Sprintf("cat %s 2>/dev/null || echo", path)))
+}
+
+func syncWorkerLabelsFromJobs(tb testing.TB) {
+	tb.Helper()
+	jobsDir := filepath.Join(bucket.WorkspaceLocation, "jobs")
+	entries, err := os.ReadDir(jobsDir)
+	if err != nil {
+		return
+	}
+	jobNames := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		jobName := entry.Name()
+		manifestPath := filepath.Join(jobsDir, jobName, "manifest.json")
+		raw, err := os.ReadFile(manifestPath)
+		if err != nil {
+			continue
+		}
+		var manifest workspace.Manifest
+		if err := json.Unmarshal(raw, &manifest); err != nil {
+			continue
+		}
+		if integrationShouldSyncJobNameLabel(manifest) {
+			jobNames = append(jobNames, jobName)
+		}
+	}
+	if len(jobNames) == 0 {
+		return
+	}
+
+	workersPath := filepath.Join(bucket.WorkspaceLocation, "workers.json")
+	raw, err := os.ReadFile(workersPath)
+	if err != nil {
+		return
+	}
+
+	var workers []map[string]any
+	if err := json.Unmarshal(raw, &workers); err != nil {
+		return
+	}
+
+	for i := range workers {
+		labels := integrationLabelStrings(workers[i]["labels"])
+		for _, jobName := range jobNames {
+			if !integrationContainsString(labels, jobName) {
+				labels = append(labels, jobName)
+			}
+		}
+		workers[i]["labels"] = labels
+	}
+
+	updated, err := json.Marshal(workers)
+	require.NoError(tb, err)
+	require.NoError(tb, os.WriteFile(workersPath, updated, 0o644))
+}
+
+func integrationShouldSyncJobNameLabel(manifest workspace.Manifest) bool {
+	return len(manifest.Selectors) == 0
+}
+
+func integrationLabelStrings(raw any) []string {
+	switch v := raw.(type) {
+	case nil:
+		return nil
+	case []any:
+		labels := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				labels = append(labels, s)
+			}
+		}
+		return labels
+	case []string:
+		return append([]string(nil), v...)
+	default:
+		return nil
+	}
+}
+
+func integrationContainsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
+func executeBuildErr(tb testing.TB, opts ...build.Options) error {
+	tb.Helper()
+	syncWorkerLabelsFromJobs(tb)
+	if len(opts) > 0 {
+		return build.Execute(opts[0])
+	}
+	return build.Execute()
+}
+
+func executeBuild(tb testing.TB, opts ...build.Options) {
+	tb.Helper()
+	require.NoError(tb, executeBuildErr(tb, opts...))
 }
