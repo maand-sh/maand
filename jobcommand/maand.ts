@@ -62,6 +62,28 @@ export async function getStoreValue(namespace: string, key: string): Promise<Res
   } as RequestInit);
 }
 
+export async function putDeployOrder(order: string | string[]): Promise<Response> {
+  const job = jobName();
+  const value = Array.isArray(order) ? order.map(String).filter(Boolean).join(",") : order;
+  return fetch(`${runtimeApiBaseUrl()}${ROUTE_STORE_KEYS}`, {
+    method: "PUT",
+    headers: {
+      ...runtimeRequestHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      namespace: `maand/job/${job}`,
+      key: "deploy_order",
+      value,
+    }),
+  });
+}
+
+export async function getDeployOrder(): Promise<Response> {
+  const job = jobName();
+  return getStoreValue(`maand/job/${job}`, "deploy_order");
+}
+
 export async function putJobVariable(key: string, value: string): Promise<Response> {
   const job = jobName();
   return fetch(`${runtimeApiBaseUrl()}${ROUTE_STORE_KEYS}`, {

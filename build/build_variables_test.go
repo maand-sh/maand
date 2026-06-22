@@ -67,6 +67,40 @@ func TestJobShouldPurgeBuildKV(t *testing.T) {
 	assert.True(t, purge)
 }
 
+func TestBuildJobVariablesSyncsDeployOrder(t *testing.T) {
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := db.Exec(`
+		INSERT INTO worker (worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position)
+		VALUES ('w1', '10.0.0.1', '1024', '2000', 0),
+		       ('w2', '10.0.0.2', '1024', '2000', 1);
+		INSERT INTO job (
+			job_id, name, version,
+			min_memory_mb, max_memory_mb, current_memory_mb,
+			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
+			update_parallel_count, deploy_parallel_count, health_check
+		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, 0, '');
+		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
+		VALUES ('a1', '10.0.0.1', 'api', 0, 0, 0, '0.0.0'),
+		       ('a2', '10.0.0.2', 'api', 0, 0, 0, '0.0.0');
+	`)
+	require.NoError(t, err)
+
+	kv.ResetStoreForTest()
+	t.Cleanup(kv.ResetStoreForTest)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, buildJobVariables(tx, nil, false))
+	require.NoError(t, tx.Commit())
+
+	order, err := kv.GetKVStore().Get("maand/job/api", "deploy_order")
+	require.NoError(t, err)
+	assert.Equal(t, "10.0.0.1,10.0.0.2", order.Value)
+}
+
 func TestBuildJobVariablesPurgesCommandKVWhenRequested(t *testing.T) {
 	db := openBuildVariablesTestDB(t)
 	defer func() { _ = db.Close() }()

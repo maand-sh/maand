@@ -33,15 +33,14 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload any) {
 	}
 }
 
-func validateStoreKeyPayload(tx *sql.Tx, payload storeKeyPayload, jobName, workerIP string, isWrite bool) *apiResponseError {
+func validateStoreKeyPayload(tx *sql.Tx, payload storeKeyPayload, jobName, workerIP, event string, isWrite bool) *apiResponseError {
 	if payload.Namespace == "" || payload.Key == "" || (isWrite && payload.Value == "") {
 		return runtimeAPIErrors.missingKeyFields
 	}
 
 	if isWrite {
-		expectedNamespace := fmt.Sprintf("vars/job/%s", jobName)
-		if payload.Namespace != expectedNamespace {
-			return runtimeAPIErrors.namespaceDenied
+		if apiErr := validateStoreKeyWrite(payload, jobName, event); apiErr != nil {
+			return apiErr
 		}
 		return nil
 	}
@@ -54,6 +53,25 @@ func validateStoreKeyPayload(tx *sql.Tx, payload storeKeyPayload, jobName, worke
 		return runtimeAPIErrors.namespaceDenied
 	}
 	return nil
+}
+
+var deployOrderWriteEvents = map[string]struct{}{
+	"pre_deploy": {},
+	"cli":        {},
+}
+
+func validateStoreKeyWrite(payload storeKeyPayload, jobName, event string) *apiResponseError {
+	varsNamespace := fmt.Sprintf("vars/job/%s", jobName)
+	if payload.Namespace == varsNamespace {
+		return nil
+	}
+	if payload.Namespace == kv.JobCatalogNamespace(jobName) && payload.Key == kv.DeployOrderKey {
+		if _, ok := deployOrderWriteEvents[event]; !ok {
+			return runtimeAPIErrors.namespaceDenied
+		}
+		return nil
+	}
+	return runtimeAPIErrors.namespaceDenied
 }
 
 func validateStoreSecretPayload(payload storeKeyPayload, jobName, workerIP string) *apiResponseError {

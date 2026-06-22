@@ -100,7 +100,7 @@ func TestCheckSchemaVersionBlocksAtV1(t *testing.T) {
 
 	err := CheckSchemaVersion()
 	require.ErrorIs(t, err, bucket.ErrSchemaUpgradeRequired)
-	assert.Contains(t, err.Error(), "binary expects 3")
+	assert.Contains(t, err.Error(), "binary expects 4")
 }
 
 func TestMigrateSchemaUpgradesV1ToLatest(t *testing.T) {
@@ -152,6 +152,29 @@ func TestMigrateToV3RenamesHashesView(t *testing.T) {
 
 	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
 	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
+}
+
+func TestMigrateToV4AddsDeployParallelCount(t *testing.T) {
+	defer withTestBucket(t)()
+	db := openDatabaseAtSchemaVersion(t, 3)
+	defer func() { _ = db.Close() }()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	_, err = tx.Exec(`INSERT INTO job (job_id, name, version, update_parallel_count) VALUES ('job-api', 'api', '1.0.0', 1)`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	tx, err = db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, migrateToV4(tx))
+	require.NoError(t, migrateToV4(tx))
+	require.NoError(t, tx.Commit())
+
+	var deployParallel int
+	err = db.QueryRow(`SELECT deploy_parallel_count FROM job WHERE name = 'api'`).Scan(&deployParallel)
+	require.NoError(t, err)
+	assert.Equal(t, 0, deployParallel)
 }
 
 func TestCatDeploymentsViewJoinsAllocationAndHash(t *testing.T) {

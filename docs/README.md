@@ -1,6 +1,6 @@
 # Maand documentation
 
-Maand is an agentless workload orchestrator. State lives in a local **bucket** directory (`maand.db`, KV store, secrets, and staged files). Workers are reached over **SSH** from the **maand CLI host**; job commands run on the host with **python3** and **bun**.
+Maand is an agentless workload orchestrator. State lives in a local **bucket** (`maand.db`, KV, secrets, staged files). Workers are reached over **SSH** from the **CLI host**; job commands run on the host with **python3** and **bun**.
 
 Official site: [maand.sh/latest](https://maand.sh/latest)
 
@@ -10,65 +10,63 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 
 | Document | Description |
 |----------|-------------|
-| [capabilities.md](./capabilities.md) | What maand can do — strengths, limits, and fit |
-| [concepts.md](./concepts.md) | **Worker**, **job**, **allocation**, bucket layout, lifecycle |
-| [tutorials/getting-started.md](./tutorials/getting-started.md) | Hands-on: init → workers → job → build → deploy |
+| [start/overview.md](./start/overview.md) | What maand can do — strengths, limits, fit |
+| [start/concepts.md](./start/concepts.md) | **Worker**, **job**, **allocation**, bucket layout |
+| [start/quickstart.md](./start/quickstart.md) | Hands-on: init → workers → job → build → deploy |
 
 ---
 
-## Tutorials
+## Guides (task-oriented)
 
-| Document | Description |
-|----------|-------------|
-| [tutorials/getting-started.md](./tutorials/getting-started.md) | First bucket and deploy |
-| [tutorials/day-2-operations.md](./tutorials/day-2-operations.md) | Job control, health checks, disable/remove, GC |
-| [tutorials/job-commands.md](./tutorials/job-commands.md) | Python/Bun hooks and CLI commands |
-
----
-
-## Command reference
-
-| Document | Command / topic |
-|----------|-----------------|
-| [commands.md](./commands.md) | Full CLI reference (all commands and flags) |
-| [configuration.md](./configuration.md) | `maand.conf`, `bucket.conf`, `bucket.jobs.conf`, `vars.toml` |
-| [resources-and-placement.md](./resources-and-placement.md) | Job memory/CPU, bucket overrides, environment selectors |
-| [certs.md](./certs.md) | TLS CA, job certificates, auto-rotation, `maand.conf` |
-| [build.md](./build.md) | `maand build` |
-| [deploy.md](./deploy.md) | `maand deploy` |
-| [health-check.md](./health-check.md) | `maand health_check` |
-| [prometheus.md](./prometheus.md) | `_prometheus/` scrape, alerts, runbooks, prometheus job |
-| [job.md](./job.md) | `maand job` (start/stop/restart/run/status/create) |
-| [job-command.md](./job-command.md) | `maand job_command` and hook events |
-| [run-command.md](./run-command.md) | `maand run_command` |
-| [gc.md](./gc.md) | `maand gc` |
-| [info.md](./info.md) | `maand info` |
+| Document | When to read |
+|----------|--------------|
+| [guides/rolling-deploy.md](./guides/rolling-deploy.md) | Rolling upgrades, batch sizes, `deploy_order` |
+| [guides/worker-reboot.md](./guides/worker-reboot.md) | Host OS reboot without losing catalog state |
+| [guides/disable-and-drain.md](./guides/disable-and-drain.md) | Disable workers, jobs, or allocations |
+| [guides/debugging-deploy.md](./guides/debugging-deploy.md) | Deploy skips, partial rollouts, dry-run |
+| [guides/job-commands-tutorial.md](./guides/job-commands-tutorial.md) | Python/Bun hooks walkthrough |
+| [guides/day-2-ops.md](./guides/day-2-ops.md) | Job control, health, GC patterns |
+| [guides/prometheus.md](./guides/prometheus.md) | `_prometheus/` scrape, alerts, runbooks |
 
 ---
 
-## Job and deploy model
+## Reference
+
+### Job model
 
 | Document | Topic |
 |----------|-------|
-| [jobs-and-dependencies.md](./jobs-and-dependencies.md) | Manifest, **demands**, **version**, **`deployment_seq`**, deploy waves |
-| [kv.md](./kv.md) | KV namespaces, secrets, persistence |
-| [kv-variables.md](./kv-variables.md) | Global, worker, and job variables — how to set and read |
-| [templates.md](./templates.md) | `.tpl` rendering at deploy |
-| [rolling-upgrade.md](./rolling-upgrade.md) | Rolling job upgrades and worker reboots |
-| [disabled.md](./disabled.md) | Disable/re-enable workers, jobs, allocations |
-| [deploy-debugging.md](./deploy-debugging.md) | Troubleshoot deploy skips, failures, partial rollouts |
+| [reference/manifest.md](./reference/manifest.md) | **`manifest.json`** schema (canonical) |
+| [reference/deployment-sequence.md](./reference/deployment-sequence.md) | Demands, **`deployment_seq`**, deploy waves |
+| [reference/kv/README.md](./reference/kv/README.md) | KV index |
+| [reference/kv/namespaces.md](./reference/kv/namespaces.md) | KV keys, layers, examples |
+| [reference/kv/persistence.md](./reference/kv/persistence.md) | KV persistence, purge, access |
+| [reference/job-command-api.md](./reference/job-command-api.md) | Runtime HTTP API, Python/Bun helpers |
+| [reference/configuration.md](./reference/configuration.md) | `maand.conf`, `bucket.conf`, `vars.toml` |
+| [reference/templates.md](./reference/templates.md) | `.tpl` rendering |
+| [reference/certs.md](./reference/certs.md) | TLS CA and job certificates |
+| [reference/resources-and-placement.md](./reference/resources-and-placement.md) | Memory, CPU, selectors |
+
+### CLI commands
+
+| Document | Command |
+|----------|---------|
+| [reference/cli/commands.md](./reference/cli/commands.md) | Full CLI index |
+| [reference/cli/build.md](./reference/cli/build.md) | `maand build` |
+| [reference/cli/deploy.md](./reference/cli/deploy.md) | `maand deploy` pipeline |
+| [reference/cli/health-check.md](./reference/cli/health-check.md) | `maand health_check` |
+| [reference/cli/job-command.md](./reference/cli/job-command.md) | Hook events and patterns |
+| [reference/cli/job.md](./reference/cli/job.md) | `maand job` |
+| [reference/cli/run-command.md](./reference/cli/run-command.md) | `maand run_command` |
+| [reference/cli/gc.md](./reference/cli/gc.md) | `maand gc` |
+| [reference/cli/info.md](./reference/cli/info.md) | `maand info` |
 
 ---
 
 ## Typical workflow
 
 ```text
-maand init          # once per bucket directory
-# edit workspace/workers.json, workspace/jobs/*, maand.conf
-maand build         # catalog + KV + certs; post_build hooks
-maand deploy        # rsync + start/restart + hooks
-maand health_check  # optional: worker + job health
-maand gc            # optional: purge removed allocations + old KV
+maand init → edit workspace → maand build → maand deploy → health_check / job ops → gc
 ```
 
 ---
@@ -81,48 +79,52 @@ maand cat workers
 maand cat jobs
 maand cat allocations
 maand cat deployments
-maand cat job_commands
-maand cat job_ports
-maand cat prometheus
-maand cat prometheus get api scrape.yaml
-maand cat prometheus scrape
-maand cat kv
-maand cat kv get <namespace> <key>
-maand cat kv get --reveal secrets/job/<job> <key>
+maand cat kv get maand/job/<job> version
 ```
 
-Rollout debugging: [deploy-debugging.md](./deploy-debugging.md) · Hash columns: [commands.md](./commands.md#maand-cat-deployments)
+Rollout debugging: [guides/debugging-deploy.md](./guides/debugging-deploy.md)
 
 ---
 
-## Bucket layout (after `maand init`)
+## Bucket layout
 
 ```text
 ./                          # bucket root
-├── maand.conf              # SSH, certs, job config selector — see configuration.md
-├── data/maand.db           # SQLite catalog + KV history
+├── maand.conf
+├── data/maand.db
 ├── workspace/
 │   ├── workers.json
 │   ├── disabled.json       # optional
-│   ├── bucket.conf         # port pool + vars → KV
+│   ├── bucket.conf
 │   └── jobs/<job>/
 │       ├── manifest.json
-│       ├── Makefile        # start/stop/restart (default deploy)
-│       ├── _modules/       # command_<name>.py | .ts | .js
-│       └── *.tpl           # optional templates
-├── secrets/                # CA, worker SSH key, kv.key
-├── tmp/                    # staging for deploy / job commands
-└── logs/                   # runtime API logs
+│       ├── Makefile
+│       ├── _modules/
+│       └── *.tpl
+├── secrets/
+├── tmp/
+└── logs/
 ```
 
 ---
 
-## Local integration tests (real workers)
+## Reader paths
 
-Copy [assets/README.md](../assets/README.md) setup, then:
+| Goal | Path |
+|------|------|
+| First deploy | [quickstart](./start/quickstart.md) → [concepts](./start/concepts.md) |
+| Stateful rolling cluster | [rolling-deploy](./guides/rolling-deploy.md) → [manifest](./reference/manifest.md) |
+| Multi-job dependencies | [deployment-sequence](./reference/deployment-sequence.md) → [deploy](./reference/cli/deploy.md) |
+| Something failed on deploy | [debugging-deploy](./guides/debugging-deploy.md) |
+
+---
+
+## Local integration tests
+
+See [assets/README.md](../assets/README.md), then:
 
 ```bash
 go test -tags=integration ./tests/integration/... -v -timeout 25m
 ```
 
-Not run in CI (GitHub Actions runs `make test-unit` and `make build` only).
+Not run in CI.

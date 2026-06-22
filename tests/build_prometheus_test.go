@@ -13,9 +13,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func writePrometheusServerJob(t *testing.T) {
+	t.Helper()
+	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "prometheus")
+	require.NoError(t, os.MkdirAll(jobDir, 0o755))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{
+		"selectors": ["worker"],
+		"resources": {"ports": {"prometheus_http_port": {}}}
+	}`), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "prometheus.yml.tpl"), []byte(`global:
+  scrape_interval: 15s
+scrape_configs:
+{{ scrapeConfigs }}`), 0o644))
+}
+
 func TestBuildPrometheusCatalog_scrapeAndKV(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+	writePrometheusServerJob(t)
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "api")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_prometheus", "alerts"), 0o755))
@@ -64,6 +80,7 @@ groups:
 
 func TestBuildPrometheusCatalog_scrapeWithoutAllocations(t *testing.T) {
 	initFreshBucket(t)
+	writePrometheusServerJob(t)
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "api")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_prometheus"), 0o755))
@@ -89,6 +106,7 @@ func TestBuildPrometheusCatalog_scrapeWithoutAllocations(t *testing.T) {
 func TestBuildPrometheusCatalog_scrapeTemplate(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+	writePrometheusServerJob(t)
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "api")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_prometheus"), 0o755))
@@ -114,6 +132,7 @@ func TestBuildPrometheusCatalog_scrapeTemplate(t *testing.T) {
 
 func TestBuildPrometheusCatalog_scrapeTemplateMutualExclusion(t *testing.T) {
 	initFreshBucket(t)
+	writePrometheusServerJob(t)
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "api")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_prometheus"), 0o755))
@@ -126,9 +145,24 @@ func TestBuildPrometheusCatalog_scrapeTemplateMutualExclusion(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestBuildPrometheusCatalog_optionalWithoutPrometheusJob(t *testing.T) {
+	initFreshBucket(t)
+
+	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "api")
+	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_prometheus"), 0o755))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(`{"selectors":["worker"]}`), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "Makefile"), []byte(Makefile()), 0o644))
+	// Invalid combination must be ignored when no Prometheus server job exists.
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "_prometheus", "scrape.yaml"), []byte("- job_name: api\n"), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "_prometheus", "scrape.yaml.tpl"), []byte("- job_name: api\n"), 0o644))
+
+	require.NoError(t, build.Execute())
+}
+
 func TestBuildPrometheusCatalog_maandJobPlaceholder(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+	writePrometheusServerJob(t)
 
 	for _, jobName := range []string{"keeper_a", "keeper_b"} {
 		jobDir := path.Join(bucket.WorkspaceLocation, "jobs", jobName)
@@ -158,6 +192,7 @@ func TestBuildPrometheusCatalog_maandJobPlaceholder(t *testing.T) {
 func TestBuildPrometheusCatalog_duplicateJobNameFails(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+	writePrometheusServerJob(t)
 
 	for _, jobName := range []string{"a", "b"} {
 		jobDir := path.Join(bucket.WorkspaceLocation, "jobs", jobName)
@@ -197,6 +232,7 @@ func TestBuildPrometheusCatalog_prometheusConfigMutualExclusion(t *testing.T) {
 func TestBuildPrometheusCatalog_runbookValidation(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+	writePrometheusServerJob(t)
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "api")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_prometheus", "alerts"), 0o755))
@@ -219,6 +255,7 @@ groups:
 func TestBuildPrometheusCatalog_duplicateAlertNameFails(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+	writePrometheusServerJob(t)
 
 	for _, jobName := range []string{"a", "b"} {
 		jobDir := path.Join(bucket.WorkspaceLocation, "jobs", jobName)
@@ -241,6 +278,7 @@ groups:
 func TestBuildPrometheusCatalog_recordingRuleAllowed(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+	writePrometheusServerJob(t)
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "api")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_prometheus", "alerts"), 0o755))
@@ -260,6 +298,7 @@ groups:
 func TestBuildPrometheusCatalog_missingExprFails(t *testing.T) {
 	initFreshBucket(t)
 	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+	writePrometheusServerJob(t)
 
 	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "api")
 	require.NoError(t, os.MkdirAll(path.Join(jobDir, "_prometheus", "alerts"), 0o755))

@@ -5,39 +5,38 @@ It is designed to handle a wide variety of workloads within a cluster, automatin
 
 ## Documentation
 
-- **[Docs index](docs/README.md)** — overview and links
-- **[Concepts](docs/concepts.md)** — worker, job, allocation
-- **[Jobs & dependencies](docs/jobs-and-dependencies.md)** — job manifest, demands, **version**, deploy **current/new version**, `deployment_seq`
-- **[Commands](docs/commands.md)** — full CLI reference
-- **[Getting started tutorial](docs/tutorials/getting-started.md)** — step-by-step first deploy
+**[Docs index](docs/README.md)** — start here
 
-### Command guides
+### Start
 
-- [Build](docs/build.md) — `maand build`
-- [Deploy](docs/deploy.md) — `maand deploy`
-- [Health check](docs/health-check.md) — `maand health_check`
-- [Job commands](docs/job-command.md) — manifest commands, runtime API
-- [Job control](docs/job.md) — `maand job`
-- [Run command](docs/run-command.md) — `maand run_command`
-- [GC](docs/gc.md) — `maand gc`
-- [Info](docs/info.md) — `maand info`
+- [Overview](docs/start/overview.md) — capabilities and limits
+- [Concepts](docs/start/concepts.md) — worker, job, allocation
+- [Quickstart](docs/start/quickstart.md) — step-by-step first deploy
 
-### Tutorials
+### Guides
 
-- [Day-2 operations](docs/tutorials/day-2-operations.md)
-- [Job commands](docs/tutorials/job-commands.md)
+- [Rolling deploy](docs/guides/rolling-deploy.md)
+- [Debugging deploy](docs/guides/debugging-deploy.md)
+- [Disable and drain](docs/guides/disable-and-drain.md)
+- [Job commands tutorial](docs/guides/job-commands-tutorial.md)
+- [Day-2 operations](docs/guides/day-2-ops.md)
+
+### Reference
+
+- [Manifest](docs/reference/manifest.md) · [Deployment sequence](docs/reference/deployment-sequence.md)
+- [KV namespaces](docs/reference/kv/namespaces.md)
+- [CLI commands](docs/reference/cli/commands.md)
+- [Build](docs/reference/cli/build.md) · [Deploy](docs/reference/cli/deploy.md)
 
 ## Local integration tests
 
-Requires real workers and files under [`assets/`](../assets/) (not in git). See [assets/README.md](../assets/README.md).
-
-21 integration tests cover init, build, deploy (dry-run, rollout, job filter, hooks), job control, health checks, job commands (CLI/KV/secrets), run_command, GC, and info/cat.
+Requires real workers and files under [`assets/`](assets/README.md) (not in git). See [assets/README.md](assets/README.md).
 
 ```bash
 make test-integration
 ```
 
-# How to build
+## How to build
 
 Maand uses SQLite via CGO (`CGO_ENABLED=1`).
 
@@ -54,4 +53,4 @@ export CGO_ENABLED=1
 go build -o maand .
 ```
 
-Add the binary to your `PATH`, then see [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md).
+Add the binary to your `PATH`, then see [docs/start/quickstart.md](docs/start/quickstart.md).

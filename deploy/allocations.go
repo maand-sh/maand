@@ -15,6 +15,51 @@ import (
 	"maand/utils"
 )
 
+func handleNewAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string) error {
+	newAllocations, err := data.GetNewAllocations(tx, job)
+	if err != nil {
+		return err
+	}
+	if len(newAllocations) == 0 {
+		return nil
+	}
+
+	startCmd := runnerCommand(bucketID, "start", job)
+	startFn := func(workerIP string) error {
+		env, err := allocationVersionEnv(tx, job, workerIP)
+		if err != nil {
+			return err
+		}
+		return runWorkerCommand(rt, workerIP, []string{startCmd}, env)
+	}
+
+	if err := rolloutStartBatches(tx, rt, bucketID, job, newAllocations, startFn); err != nil {
+		return fmt.Errorf("start new allocations: %w", err)
+	}
+	return nil
+}
+
+func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string, force bool) error {
+	updatedAllocations, err := allocationsNeedingRestart(tx, job, force)
+	if err != nil {
+		return err
+	}
+	if len(updatedAllocations) == 0 {
+		return nil
+	}
+
+	restartCmd := runnerCommand(bucketID, "restart", job)
+	restartFn := func(workerIP string) error {
+		env, err := allocationVersionEnv(tx, job, workerIP)
+		if err != nil {
+			return err
+		}
+		return runWorkerCommand(rt, workerIP, []string{restartCmd}, env)
+	}
+
+	return rolloutRestartBatches(tx, rt, bucketID, job, updatedAllocations, restartFn)
+}
+
 func activeWorkers(workers []string, tx *sql.Tx, job string) ([]string, error) {
 	active := make([]string, 0, len(workers))
 	for _, workerIP := range workers {
@@ -29,40 +74,7 @@ func activeWorkers(workers []string, tx *sql.Tx, job string) ([]string, error) {
 	return active, nil
 }
 
-func handleNewAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string) error {
-	newAllocations, err := data.GetNewAllocations(tx, job)
-	if err != nil {
-		return err
-	}
-	if len(newAllocations) == 0 {
-		return nil
-	}
-
-	active, err := activeWorkers(newAllocations, tx, job)
-	if err != nil {
-		return err
-	}
-
-	startCmd := runnerCommand(bucketID, "start", job)
-	if err := runParallelWorkers(active, len(active), func(workerIP string) error {
-		env, err := allocationVersionEnv(tx, job, workerIP)
-		if err != nil {
-			return err
-		}
-		return runWorkerCommand(rt, workerIP, []string{startCmd}, env)
-	}); err != nil {
-		return fmt.Errorf("start new allocations: %w", err)
-	}
-
-	_, err = healthcheck.HealthCheck(tx, rt, true, false, job, true)
-	return err
-}
-
 func allocationsNeedingRestart(tx *sql.Tx, job string, force bool) ([]string, error) {
-	// New allocations (no promoted hash yet) are started by handleNewAllocations and must
-	// never be restarted by the update path. GetVersionPendingAllocations would otherwise
-	// include them on a fresh deploy (current_version empty vs build target), causing a
-	// redundant second rollout right after the initial start.
 	newAllocations, err := data.GetNewAllocations(tx, job)
 	if err != nil {
 		return nil, err
@@ -85,56 +97,6 @@ func allocationsNeedingRestart(tx *sql.Tx, job string, force bool) ([]string, er
 		return nil, err
 	}
 	return utils.Difference(active, newAllocations), nil
-}
-
-func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string, force bool) error {
-	updatedAllocations, err := allocationsNeedingRestart(tx, job, force)
-	if err != nil {
-		return err
-	}
-	if len(updatedAllocations) == 0 {
-		return nil
-	}
-
-	active, err := activeWorkers(updatedAllocations, tx, job)
-	if err != nil {
-		return err
-	}
-
-	parallelism, err := data.GetUpdateParallelCount(tx, job)
-	if err != nil {
-		return err
-	}
-	if parallelism < 1 {
-		parallelism = 1
-	}
-
-	restartCmd := runnerCommand(bucketID, "restart", job)
-	restart := func(workerIP string) error {
-		env, err := allocationVersionEnv(tx, job, workerIP)
-		if err != nil {
-			return err
-		}
-		return runWorkerCommand(rt, workerIP, []string{restartCmd}, env)
-	}
-
-	// Rolling upgrade: restart in batches of update_parallel_count and run the job
-	// health check after each batch so a bad rollout is caught before the next wave.
-	for i := 0; i < len(active); i += parallelism {
-		end := i + parallelism
-		if end > len(active) {
-			end = len(active)
-		}
-		batch := active[i:end]
-		if err := runParallelWorkers(batch, len(batch), restart); err != nil {
-			return fmt.Errorf("restart updated allocations: %w", err)
-		}
-		if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func handleStoppedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID string, jobs []string) error {
@@ -187,6 +149,9 @@ func reconcileStoppedAllocation(
 		} else if err := runWorkerCommand(rt, alloc.WorkerIP, []string{stopCmd}, nil); err != nil {
 			return fmt.Errorf("worker %s job %s: %w", alloc.WorkerIP, alloc.Job, err)
 		}
+		if err := executeAfterAllocationStopped(tx, rt, alloc.Job, alloc.WorkerIP); err != nil {
+			return fmt.Errorf("worker %s job %s: %w", alloc.WorkerIP, alloc.Job, err)
+		}
 		if alloc.Removed {
 			if err := removeJobDeployArtifactsFromWorker(rt, bucketID, alloc.WorkerIP, alloc.Job, assumeDead); err != nil {
 				return err
@@ -203,13 +168,6 @@ func reconcileStoppedAllocation(
 	return nil
 }
 
-// reconcileRemovedAndDisabledAllocations stops removed/disabled allocations. Removed
-// allocations also lose deployed job files (data/ and logs/ preserved until maand gc).
-// Disabled allocations are stopped only; deploy artifacts and hash state are kept for
-// re-enable. maand gc deletes the full jobs/<job>/ tree when purging removed rows.
-// Workers dropped
-// from workers.json also lose the entire /opt/worker/<bucket_id>/ tree once all of their
-// removed allocations are processed.
 func reconcileRemovedAndDisabledAllocations(
 	tx *sql.Tx,
 	rt *bucket.Runtime,
@@ -254,9 +212,6 @@ func reconcileRemovedAndDisabledAllocations(
 		if err != nil {
 			return err
 		}
-		// Health-check the job once at the end whenever any active allocation
-		// remains. Skip only when the job has no active allocations left (fully
-		// removed/disabled), since there is nothing to probe.
 		if activeCount > 0 {
 			if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
 				return err

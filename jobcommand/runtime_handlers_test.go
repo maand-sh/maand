@@ -159,6 +159,49 @@ func TestRuntimeAPI_kvSecretPutGetDelete(t *testing.T) {
 	require.Equal(t, http.StatusOK, del.Code)
 }
 
+func TestRuntimeAPI_deployOrderPutGet(t *testing.T) {
+	tx, _ := setupRuntimeHandlerTest(t)
+
+	put := runtimeRequest(t, tx, http.MethodPut, RouteStoreKeys, storeKeyPayload{
+		Namespace: "maand/job/api",
+		Key:       "deploy_order",
+		Value:     "10.0.0.2,10.0.0.1",
+	}, "pre_deploy")
+	require.Equal(t, http.StatusOK, put.Code)
+
+	get := runtimeRequest(t, tx, http.MethodGet, RouteStoreKeys, storeKeyPayload{
+		Namespace: "maand/job/api",
+		Key:       "deploy_order",
+	}, "pre_deploy")
+	require.Equal(t, http.StatusOK, get.Code)
+
+	var got storeKeyPayload
+	require.NoError(t, json.Unmarshal(get.Body.Bytes(), &got))
+	assert.Equal(t, "10.0.0.2,10.0.0.1", got.Value)
+}
+
+func TestRuntimeAPI_deployOrderWriteDeniedWrongEvent(t *testing.T) {
+	tx, _ := setupRuntimeHandlerTest(t)
+
+	put := runtimeRequest(t, tx, http.MethodPut, RouteStoreKeys, storeKeyPayload{
+		Namespace: "maand/job/api",
+		Key:       "deploy_order",
+		Value:     "10.0.0.1",
+	}, "post_deploy")
+	assert.Equal(t, http.StatusBadRequest, put.Code)
+}
+
+func TestRuntimeAPI_deployOrderWriteDeniedWrongKey(t *testing.T) {
+	tx, _ := setupRuntimeHandlerTest(t)
+
+	put := runtimeRequest(t, tx, http.MethodPut, RouteStoreKeys, storeKeyPayload{
+		Namespace: "maand/job/api",
+		Key:       "workers",
+		Value:     "10.0.0.1",
+	}, "pre_deploy")
+	assert.Equal(t, http.StatusBadRequest, put.Code)
+}
+
 func TestRuntimeAPI_kvWriteBlockedDuringHealthCheck(t *testing.T) {
 	tx, _ := setupRuntimeHandlerTest(t)
 
@@ -182,6 +225,13 @@ func TestRuntimeAPI_kvWriteBlockedDuringHealthCheck(t *testing.T) {
 		Key:       "x",
 	}, "health_check")
 	assert.Equal(t, http.StatusBadRequest, del.Code)
+
+	deployOrder := runtimeRequest(t, tx, http.MethodPut, RouteStoreKeys, storeKeyPayload{
+		Namespace: "maand/job/api",
+		Key:       "deploy_order",
+		Value:     "10.0.0.1",
+	}, "health_check")
+	assert.Equal(t, http.StatusBadRequest, deployOrder.Code)
 }
 
 func TestRuntimeAPI_demandsGet(t *testing.T) {

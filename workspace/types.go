@@ -54,4 +54,5 @@ type Manifest struct {
 	} `json:"certs"`
 	HealthCheck         *ManifestHealthCheck `json:"health_check,omitempty"`
 	UpdateParallelCount int                  `json:"update_parallel_count"`
+	DeployParallelCount int                  `json:"deploy_parallel_count"`
 }

@@ -32,6 +32,23 @@ func JobCommand(
 	verbose bool,
 	extraEnv []string,
 ) error {
+	workerIPs, err := data.GetActiveAllocations(tx, jobName)
+	if err != nil {
+		return err
+	}
+	return JobCommandOnWorkers(tx, rt, jobName, commandName, event, workerIPs, concurrency, verbose, extraEnv)
+}
+
+// JobCommandOnWorkers runs commandName on the given worker IPs for event.
+func JobCommandOnWorkers(
+	tx *sql.Tx,
+	rt *bucket.Runtime,
+	jobName, commandName, event string,
+	workerIPs []string,
+	concurrency int,
+	verbose bool,
+	extraEnv []string,
+) error {
 	allowedCommands, err := data.GetJobCommands(tx, jobName, event)
 	if err != nil {
 		return err
@@ -40,10 +57,6 @@ func JobCommand(
 		return &NotFoundError{Job: jobName, Command: commandName, Event: event}
 	}
 
-	workerIPs, err := data.GetActiveAllocations(tx, jobName)
-	if err != nil {
-		return err
-	}
 	if len(workerIPs) == 0 {
 		return nil
 	}

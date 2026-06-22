@@ -18,6 +18,11 @@ import (
 	"maand/workspace"
 )
 
+const (
+	prometheusServerConfigFile    = "prometheus.yml"
+	prometheusServerConfigTplFile = "prometheus.yml.tpl"
+)
+
 // BuildCatalog aggregates _prometheus/ content from all workspace jobs into KV.
 func BuildCatalog(tx *sql.Tx, jobWorkspace workspace.Workspace) error {
 	jobNames, err := jobWorkspace.ListJobNames()
@@ -25,6 +30,17 @@ func BuildCatalog(tx *sql.Tx, jobWorkspace workspace.Workspace) error {
 		return err
 	}
 	sort.Strings(jobNames)
+
+	if !hasPrometheusServerJob(jobNames) {
+		return syncPrometheusKV(map[string]string{
+			"scrape_configs":     "[]",
+			"scrape_jobs":        "",
+			"scrape_jobs_length": "0",
+			"alert_jobs":         "",
+			"alert_files":        "[]",
+			"runbook_jobs":       "",
+		})
+	}
 
 	allUnexpanded := make([]map[string]interface{}, 0)
 	scrapeJobs := make([]string, 0)
@@ -206,4 +222,19 @@ func difference(existing, present []string) []string {
 		}
 	}
 	return out
+}
+
+func hasPrometheusServerJob(jobNames []string) bool {
+	for _, jobName := range jobNames {
+		jobDir := workspace.JobFilePath(jobName)
+		if pathExists(path.Join(jobDir, prometheusServerConfigFile)) || pathExists(path.Join(jobDir, prometheusServerConfigTplFile)) {
+			return true
+		}
+	}
+	return false
+}
+
+func pathExists(target string) bool {
+	_, err := os.Stat(target)
+	return err == nil
 }

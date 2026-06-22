@@ -147,8 +147,8 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 
 		version := workspace.GetVersion(manifest)
 		upsertJobQuery := `
-			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count, health_check)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count, deploy_parallel_count, health_check)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		_, err = tx.Exec(
 			upsertJobQuery, jobID, jobName, version,
@@ -159,6 +159,7 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			fmt.Sprintf("%v", maxCPUMHZ),
 			fmt.Sprintf("%v", requestedCPUMHz),
 			workspace.GetUpdateParallelCount(manifest),
+			workspace.GetDeployParallelCount(manifest),
 			healthCheckJSON,
 		)
 		if err != nil {
@@ -183,7 +184,10 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			if len(command.ExecutedOn) == 0 {
 				return nil, fmt.Errorf("%w: job %s, job_command %s missing executed_on", bucket.ErrInvalidJobCommandConfiguration, jobName, command.Name)
 			}
-			invalidExecutedOnEvents := utils.Difference(command.ExecutedOn, []string{"post_build", "health_check", "cli", "pre_deploy", "post_deploy", "job_control"})
+			invalidExecutedOnEvents := utils.Difference(command.ExecutedOn, []string{
+				"post_build", "health_check", "cli", "pre_deploy", "post_deploy", "job_control",
+				"after_allocation_started", "after_allocation_stopped",
+			})
 			if len(invalidExecutedOnEvents) > 0 {
 				return nil, fmt.Errorf("%w: job %s, job_command %s invalid executed_on %v", bucket.ErrInvalidJobCommandConfiguration, jobName, command.Name, invalidExecutedOnEvents)
 			}

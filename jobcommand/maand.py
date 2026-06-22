@@ -66,6 +66,29 @@ def get_store_value(namespace, key):
     )
 
 
+def put_deploy_order(order):
+    """PUT deploy_order for the current job (pre_deploy or cli only).
+
+    order: comma-separated worker IPs, or a list/tuple of IPs.
+    """
+    if isinstance(order, (list, tuple)):
+        order = ",".join(str(ip).strip() for ip in order if str(ip).strip())
+    return requests.put(
+        f"{_runtime_api_base_url()}{_ROUTE_STORE_KEYS}",
+        json={
+            "namespace": f"maand/job/{job_name()}",
+            "key": "deploy_order",
+            "value": order,
+        },
+        headers=_runtime_request_headers(),
+    )
+
+
+def get_deploy_order():
+    """GET deploy_order for the current job."""
+    return get_store_value(f"maand/job/{job_name()}", "deploy_order")
+
+
 def put_job_variable(key, value):
     """PUT /kv — write a key under vars/job/<current job>."""
     return requests.put(

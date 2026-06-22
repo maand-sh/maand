@@ -12,7 +12,7 @@ import (
 )
 
 // LatestSchemaVersion is the target schema version applied by MigrateSchema.
-const LatestSchemaVersion = 3
+const LatestSchemaVersion = 4
 
 // CheckSchemaVersion verifies maand.db exists and its schema version matches this binary.
 // Run maand init to create or upgrade the database.
@@ -127,6 +127,8 @@ func applySchemaMigration(tx *sql.Tx, version int) error {
 		return migrateToV2(tx)
 	case 3:
 		return migrateToV3(tx)
+	case 4:
+		return migrateToV4(tx)
 	default:
 		return fmt.Errorf("unsupported schema version %d", version)
 	}
@@ -160,6 +162,10 @@ func migrateToV2(tx *sql.Tx) error {
 // migrateToV3 renames the cat_hashes view to cat_deployments (backs `maand cat deployments`).
 func migrateToV3(tx *sql.Tx) error {
 	return ensureCatDeploymentsView(tx)
+}
+
+func migrateToV4(tx *sql.Tx) error {
+	return ensureTableColumn(tx, "job", "deploy_parallel_count", `ALTER TABLE job ADD COLUMN deploy_parallel_count INT NOT NULL DEFAULT 0`)
 }
 
 func ensureCatHashesView(tx *sql.Tx) error {
@@ -248,6 +254,7 @@ func baseTableDDL() []string {
 			max_cpu_mhz TEXT,
 			current_cpu_mhz TEXT,
 			update_parallel_count INT,
+			deploy_parallel_count INT NOT NULL DEFAULT 0,
 			health_check TEXT,
 			PRIMARY KEY(name)
 		)`,

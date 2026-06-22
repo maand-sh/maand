@@ -1,5 +1,5 @@
 # Maand — local build and test helpers.
-# SQLite requires CGO (see docs/build.md).
+# SQLite requires CGO (see docs/reference/cli/build.md).
 
 CGO_ENABLED ?= 1
 export CGO_ENABLED

@@ -269,6 +269,41 @@ func TestBuildJobs_walksWorkspaceFiles(t *testing.T) {
 	assert.Equal(t, "setting=1", content)
 }
 
+func TestBuildJobs_acceptsAllocationHookEvents(t *testing.T) {
+	root := t.TempDir()
+	orig := bucket.Location
+	bucket.Location = root
+	bucket.UpdatePath()
+	t.Cleanup(func() {
+		bucket.Location = orig
+		bucket.UpdatePath()
+	})
+
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "api")
+	require.NoError(t, os.MkdirAll(path.Join(jobPath, "_modules"), 0o755))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "_modules", "command_rollout.py"), []byte(""), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{
+		"selectors": ["web"],
+		"commands": {"command_rollout": {"executed_on": ["after_allocation_started", "after_allocation_stopped"]}}
+	}`), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "Makefile"), []byte(""), 0o644))
+
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	_, err = BuildJobs(tx, workspace.Default())
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	var count int
+	require.NoError(t, db.QueryRow(
+		`SELECT count(*) FROM job_commands WHERE job = 'api' AND executed_on IN ('after_allocation_started', 'after_allocation_stopped')`,
+	).Scan(&count))
+	assert.Equal(t, 2, count)
+}
+
 func TestBuildJobs_rejectsInvalidCommandName(t *testing.T) {
 	root := t.TempDir()
 	orig := bucket.Location

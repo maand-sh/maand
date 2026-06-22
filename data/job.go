@@ -331,6 +331,19 @@ func GetUpdateParallelCount(tx *sql.Tx, job string) (int, error) {
 	return updateParallelCount, nil
 }
 
+func GetDeployParallelCount(tx *sql.Tx, job string) (int, error) {
+	var deployParallelCount int
+	row := tx.QueryRow("SELECT deploy_parallel_count FROM job WHERE name = ?", job)
+	err := row.Scan(&deployParallelCount)
+	if err != nil {
+		return 0, bucket.DatabaseError(err)
+	}
+	if deployParallelCount < 0 {
+		return 0, nil
+	}
+	return deployParallelCount, nil
+}
+
 func GetJobsByDeploymentSeq(tx *sql.Tx, deploymentSeq int) ([]string, error) {
 	// Only jobs still in the catalog with active allocations. After a workspace job folder
 	// is removed, build deletes the job row and marks allocations removed=1 until gc runs.

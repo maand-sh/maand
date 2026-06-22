@@ -44,6 +44,14 @@ func (m Manifest) JobVersion() string {
 	return m.Version
 }
 
+// ParallelDeployCount returns first-deploy batch size; 0 means all allocations in one batch.
+func (m Manifest) ParallelDeployCount() int {
+	if m.DeployParallelCount < 0 {
+		return 0
+	}
+	return m.DeployParallelCount
+}
+
 // ParallelUpdateCount returns a positive rollout parallelism (minimum 1).
 func (m Manifest) ParallelUpdateCount() int {
 	if m.UpdateParallelCount <= 0 {
@@ -93,6 +101,11 @@ func GetVersion(manifest Manifest) string {
 // GetCommands is deprecated; use Manifest.ListedCommands.
 func GetCommands(manifest Manifest) []JobCommand {
 	return manifest.ListedCommands()
+}
+
+// GetDeployParallelCount returns manifest deploy_parallel_count (0 = all-at-once on first deploy).
+func GetDeployParallelCount(manifest Manifest) int {
+	return manifest.ParallelDeployCount()
 }
 
 // GetUpdateParallelCount is deprecated; use Manifest.ParallelUpdateCount.

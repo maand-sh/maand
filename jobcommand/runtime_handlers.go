@@ -114,7 +114,7 @@ func handleStoreKeyGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 		return
 	}
 
-	if apiErr := validateStoreKeyPayload(tx, payload, jobName, workerIP, false); apiErr != nil {
+	if apiErr := validateStoreKeyPayload(tx, payload, jobName, workerIP, r.Header.Get(HeaderCommandEvent), false); apiErr != nil {
 		apiErr.write(w)
 		return
 	}
@@ -159,7 +159,7 @@ func handleStoreKeyPut(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 		return
 	}
 
-	if apiErr := validateStoreKeyPayload(tx, payload, jobName, workerIP, true); apiErr != nil {
+	if apiErr := validateStoreKeyPayload(tx, payload, jobName, workerIP, r.Header.Get(HeaderCommandEvent), true); apiErr != nil {
 		apiErr.write(w)
 		return
 	}
