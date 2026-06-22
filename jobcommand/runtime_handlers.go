@@ -17,7 +17,6 @@ import (
 	"maand/kv"
 )
 
-
 func serveStoreKeys(tx *sql.Tx) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -121,7 +120,7 @@ func handleStoreKeyGet(w http.ResponseWriter, r *http.Request, tx *sql.Tx) {
 
 	item, err := kv.GetKVStore().Get(payload.Namespace, payload.Key)
 	if err != nil {
-		log.Printf("runtime api store get: %v", err)
+		log.Printf("runtime api store get miss: namespace=%s key=%s err=%v", payload.Namespace, payload.Key, err)
 		runtimeAPIErrors.storeKeyNotFound.write(w)
 		return
 	}
