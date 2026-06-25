@@ -161,7 +161,7 @@ Commit transaction on success (or on failure when --update-hash marked allocatio
 
 1. Stage job files under `tmp/workers/<ip>/jobs/<job>/` (from `job_files` + embedded `maand.py` / `maand.ts` + certs from KV).
 2. Run script on the CLI host with env:
-   - `ALLOCATION_ID`, `ALLOCATION_IP`, `JOB`, `EVENT=health_check`, `COMMAND=<name>`, `DISABLED`
+   - `ALLOCATION_ID`, `ALLOCATION_IP`, `ALLOCATION_INDEX`, `JOB`, `EVENT=health_check`, `COMMAND=<name>`, `DISABLED`
    - `JOB_COMMAND_API_HOST` → `127.0.0.1`
 
 Failures on one worker fail the job; multiple jobs can fail in one run (**batch error**).

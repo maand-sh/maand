@@ -20,6 +20,7 @@ func TestEmbeddedMaandPythonAPI(t *testing.T) {
 		"JOB_COMMAND_API_HOST",
 		"acquire_semaphore",
 		"release_semaphore",
+		"allocation_index",
 		"/semaphore/acquire",
 		"run_runner_target",
 		"load_ssh",
@@ -36,6 +37,7 @@ func TestEmbeddedMaandTypeScriptAPI(t *testing.T) {
 		"JOB_COMMAND_API_HOST",
 		"acquireSemaphore",
 		"releaseSemaphore",
+		"allocationIndex",
 		"putJobVariable",
 		"listCommandDemands",
 	} {

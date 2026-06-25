@@ -124,7 +124,13 @@ func runCommandOnWorkers(
 			defer waitGroup.Done()
 			defer func() { <-semaphore }()
 
-			workerEnv := extraEnv
+			allocationIndex, err := allocationIndexForJobCommand(tx, jobName, alloc.workerIP)
+			if err != nil {
+				failureMu.Lock()
+				failures = append(failures, WorkerFailure{WorkerIP: alloc.workerIP, Err: err})
+				failureMu.Unlock()
+				return
+			}
 			versionEnv, err := allocationVersionEnvForJobCommand(tx, jobName, alloc.workerIP)
 			if err != nil {
 				failureMu.Lock()
@@ -132,13 +138,14 @@ func runCommandOnWorkers(
 				failureMu.Unlock()
 				return
 			}
-			workerEnv = append(append([]string(nil), extraEnv...), versionEnv...)
+			workerEnv := append(append([]string(nil), extraEnv...), versionEnv...)
 
 			err = runCommandOnWorker(
 				rt,
 				alloc.id,
 				jobName,
 				alloc.workerIP,
+				allocationIndex,
 				alloc.disabled,
 				commandName,
 				event,

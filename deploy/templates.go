@@ -128,24 +128,23 @@ func templateFuncMap(tx *sql.Tx, job string, allowedNamespaces []string) templat
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
 		"join":  strings.Join,
-		"add":   func(a, b int) int { return a + b },
-		"sub":   func(a, b int) int { return a - b },
-		"mul":   func(a, b int) int { return a * b },
-		"div":   func(a, b int) int { return a / b },
-		"int": func(s any) int {
-			switch v := s.(type) {
-			case int:
-				return v
-			case string:
-				i, err := strconv.Atoi(v)
-				if err != nil {
-					panic(err)
-				}
-				return i
-			default:
-				panic("expected a string or an int")
+		"add": func(a, b int) int { return a + b },
+		"sub": func(a, b int) int { return a - b },
+		"mul": func(a, b int) int { return a * b },
+		"div": func(a, b int) int { return a / b },
+		"min": func(a, b int) int {
+			if a < b {
+				return a
 			}
+			return b
 		},
+		"max": func(a, b int) int {
+			if a > b {
+				return a
+			}
+			return b
+		},
+		"int": templateInt,
 		"scrapeConfigs": func() string {
 			if len(utils.Difference([]string{promconfig.KVNamespace}, allowedNamespaces)) > 0 {
 				panic(fmt.Sprintf("%s namespace is not available for job %s", promconfig.KVNamespace, job))
@@ -163,6 +162,23 @@ func templateFuncMap(tx *sql.Tx, job string, allowedNamespaces []string) templat
 			}
 			return yamlFragment
 		},
+	}
+}
+
+func templateInt(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case string:
+		i, err := strconv.Atoi(strings.TrimSpace(n))
+		if err != nil {
+			panic(err)
+		}
+		return i
+	default:
+		panic("int: expected string or integer")
 	}
 }
 

@@ -49,6 +49,8 @@ func TestTemplateFuncMap_mathAndStringHelpers(t *testing.T) {
 	assert.Equal(t, 1, funcs["sub"].(func(int, int) int)(3, 2))
 	assert.Equal(t, 12, funcs["mul"].(func(int, int) int)(3, 4))
 	assert.Equal(t, 2, funcs["div"].(func(int, int) int)(8, 4))
+	assert.Equal(t, 3, funcs["min"].(func(int, int) int)(3, 8))
+	assert.Equal(t, 8, funcs["max"].(func(int, int) int)(3, 8))
 	assert.Equal(t, []string{"a", "b"}, funcs["split"].(func(string, string) []string)("a,b", ","))
 	assert.Equal(t, "hello", funcs["lower"].(func(string) string)("HELLO"))
 	assert.Equal(t, "a-b", funcs["join"].(func([]string, string) string)([]string{"a", "b"}, "-"))

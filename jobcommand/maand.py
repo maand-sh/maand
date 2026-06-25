@@ -28,6 +28,10 @@ def allocation_ip():
     return os.environ.get("ALLOCATION_IP")
 
 
+def allocation_index():
+    return os.environ.get("ALLOCATION_INDEX")
+
+
 def is_allocation_disabled():
     return os.environ.get("DISABLED") == "1"
 
@@ -202,6 +206,10 @@ def get_allocation_id():
 
 def get_allocation_ip():
     return allocation_ip()
+
+
+def get_allocation_index():
+    return allocation_index()
 
 
 def get_event():

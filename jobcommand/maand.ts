@@ -21,6 +21,10 @@ export function allocationIp(): string | undefined {
   return process.env.ALLOCATION_IP;
 }
 
+export function allocationIndex(): string | undefined {
+  return process.env.ALLOCATION_INDEX;
+}
+
 export function isAllocationDisabled(): boolean {
   return process.env.DISABLED === "1";
 }
@@ -203,6 +207,7 @@ export async function semaphoreStatus(name: string): Promise<Response> {
 // Backward-compatible aliases for older job command scripts.
 export const getAllocationId = allocationId;
 export const getAllocationIp = allocationIp;
+export const getAllocationIndex = allocationIndex;
 export const getEvent = commandEvent;
 export const getCommand = commandName;
 export const getJob = jobName;

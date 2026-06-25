@@ -45,11 +45,14 @@ Equivalent KV:
 | `join` | `{{ join .Labels "," }}` | Slice → string |
 | `upper` / `lower` | `{{ upper "hello" }}` | Case conversion |
 | `add` / `sub` / `mul` / `div` | `{{ add 1 2 }}` | Integer math |
-| `int` | `{{ int "42" }}` | Parse string or pass through int |
+| `min` / `max` | `{{ min 128 (max 4 (div $memMB 64)) }}` | Integer bounds |
+| `int` | `{{ int (get "vars/job/postgres" "memory") }}` | Parse string or pass through int |
 | `scrapeConfigs` | `{{ scrapeConfigs }}` | Expands catalog scrape jobs at deploy render (live allocations + ports) |
 | `ruleFiles` | `{{ ruleFiles }}` | Lists assembled alert rule paths at deploy render (`rules/<job>/<file>.yaml`) |
 
 Missing keys or disallowed namespaces **panic** at render time (deploy fails for that job).
+
+Go **`text/template`** built-ins are also available: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `printf`, `and`, `or`, `not`, `len`, `index`, `range`, `if`, `define`, `template`.
 
 ---
 
@@ -67,6 +70,32 @@ Missing keys or disallowed namespaces **panic** at render time (deploy fails for
 ```
 
 Populate **`vars/job/api`** via **`vars.toml`**, **`pre_deploy`** hooks, or **`post_build`** before deploy.
+
+### Memory sizing (postgres-style)
+
+**`workspace/jobs/postgres/postgresql.conf.tpl`:**
+
+```text
+{{ define "pgMemUnit" -}}
+{{- $mb := int . -}}
+{{- if ge $mb 1024 -}}
+{{- div $mb 1024 -}}GB
+{{- else -}}
+{{- $mb -}}MB
+{{- end -}}
+{{- end }}
+{{- $memMB := int (get "vars/job/postgres" "memory") -}}
+{{- $sharedMB := div $memMB 4 -}}
+{{- $cacheMB := div (mul $memMB 3) 4 -}}
+{{- $maintMB := min 2048 (div $memMB 16) -}}
+{{- $workMB := min 128 (max 4 (div $memMB 64)) -}}
+shared_buffers = {{ template "pgMemUnit" $sharedMB }}
+effective_cache_size = {{ template "pgMemUnit" $cacheMB }}
+maintenance_work_mem = {{ $maintMB }}MB
+work_mem = {{ $workMB }}MB
+```
+
+Use **`{{ get (printf "maand/worker/%s" .WorkerIP) "postgres_allocation_index" }}`** for per-worker metadata from build.
 
 ---
 

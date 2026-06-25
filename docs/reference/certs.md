@@ -289,6 +289,28 @@ Build regenerates leaf certs in the last 30 days of their 90-day life. Pair with
 
 ---
 
+## Inspecting certificates (`maand cat certs`)
+
+List the bucket CA and every job leaf cert stored in KV with expiration and renewal status:
+
+```bash
+maand cat certs
+maand cat certs --jobs api,postgres
+maand cat certs --workers 10.0.0.1
+```
+
+| Column | Meaning |
+|--------|---------|
+| `scope` | `ca` (bucket CA in `secrets/`) or `job` (leaf cert in KV) |
+| `job` / `worker` | Allocation (blank for CA) |
+| `cert` | Cert name from manifest (`tls`, `client`, …) or `ca` |
+| `common_name` | X.509 subject CN |
+| `not_after` | Certificate expiry (UTC) |
+| `days_left` | Whole days until expiry (negative if expired) |
+| `status` | `ok`, `expiring` (within `certs_renewal_buffer` days of `not_after`), `expired`, or `invalid` |
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause |

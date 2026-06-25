@@ -29,6 +29,7 @@ Important details:
 |----------|---------|
 | `ALLOCATION_ID` | Stable allocation UUID |
 | `ALLOCATION_IP` | Worker host for this invocation |
+| `ALLOCATION_INDEX` | Zero-based index among non-removed peers (same as `<job>_allocation_index` in per-allocation KV) |
 | `JOB` | Job name |
 | `EVENT` | Event name (`pre_deploy`, `cli`, …) |
 | `COMMAND` | Command name |
@@ -253,6 +254,7 @@ Embedded **`maand.py`** / **`maand.ts`** wrap the HTTP API. Prefer these over ra
 |--------|-----|---------|
 | `allocation_id()` | `allocationId()` | `ALLOCATION_ID` |
 | `allocation_ip()` | `allocationIp()` | `ALLOCATION_IP` |
+| `allocation_index()` | `allocationIndex()` | `ALLOCATION_INDEX` |
 | `job_name()` | `jobName()` | `JOB` |
 | `command_event()` | `commandEvent()` | `EVENT` |
 | `command_name()` | `commandName()` | `COMMAND` |
