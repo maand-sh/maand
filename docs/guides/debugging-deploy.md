@@ -78,6 +78,7 @@ Columns **`current_version`** / **`new_version`**: version-only rollout when has
 | No workspace change since last successful deploy | Expected; edit job or use **`--force`** |
 | Edited workspace but only ran deploy | Run **`maand build`** then **`maand deploy`** |
 | Version bump without content change | **`build`** sets **`new_version`**; deploy should restart — check **`cat deployments`** for version mismatch |
+| TLS cert expired or expiring soon | **`maand cat certs`** — then **`maand build && maand deploy`** — [certs.md](../reference/certs.md) |
 | Job fully **disabled** | No active allocations; enable or use **`--jobs`** on active jobs only |
 
 ### Job not in deploy wave at all

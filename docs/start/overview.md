@@ -53,6 +53,7 @@ See [README.md](../README.md#typical-workflow) for the command sequence.
 | Single-writer migration across nodes | Runtime **semaphore** (`capacity=1`) | [job-command.md](../reference/job-command-api.md#semaphores) |
 | Drain one node for maintenance | `disabled.json` → build → deploy (stops, no restart) | [disabled.md](../guides/disable-and-drain.md) |
 | mTLS or app TLS on workers | Manifest `certs` + auto-rotation on build | [certs.md](../reference/certs.md) |
+| Inspect TLS expiry | `maand cat certs` | [certs.md](../reference/certs.md#inspecting-certificates-maand-cat-certs) |
 | Debug “why didn’t deploy run?” | `--dry-run`, `maand cat deployments`, [deploy-debugging.md](../guides/debugging-deploy.md) | [deploy-debugging.md](../guides/debugging-deploy.md) |
 | One-off operator script | `maand job_command` (event **`cli`**) | [job-command-api.md](../reference/job-command-api.md) |
 

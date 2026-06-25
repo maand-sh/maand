@@ -20,6 +20,7 @@ maand cat jobs
 maand cat allocations
 maand cat job_commands
 maand cat job_ports
+maand cat certs
 maand cat kv
 ```
 
@@ -28,6 +29,13 @@ Filter allocations:
 ```bash
 maand cat allocations --jobs api,worker
 maand cat allocations --workers 10.0.0.1
+```
+
+Check TLS expiry (CA + job leaf certs):
+
+```bash
+maand cat certs
+maand cat certs --jobs api,postgres
 ```
 
 Read one KV key:

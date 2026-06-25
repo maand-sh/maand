@@ -105,10 +105,11 @@ Shared pool jobs use `"selectors": ["worker"]`. Environment-specific jobs add la
 | Layer | When | Where | Meaning |
 |-------|------|-------|---------|
 | **Target** | `maand build` | `job.version`, `maand/job/<job>/version` | From manifest (**`0.0.0`** when omitted) |
-| **Per allocation** | build / deploy | `hash.current_version`, `allocations.new_version` | Running vs build target |
-| **KV** | deploy plan | `maand/job/<job>/worker/<ip>/current_version`, `new_version` | Same values for templates |
+| **Per allocation** | build / deploy | `hash.current_version`, `allocations.new_version` | Running vs build target (catalog) |
+| **Per-allocation KV** | deploy plan | `maand/job/<job>/worker/<ip>/version` | Target version for templates and `maand cat kv` |
+| **Templates (`.tpl`)** | deploy | `{{ .CurrentVersion }}`, `{{ .NewVersion }}` | Running vs target on allocation context |
 
-After deploy **promote**, `current_version` becomes `new_version`. First deploy starts at **`current_version = 0.0.0`**.
+After deploy **promote**, catalog **`current_version`** becomes **`new_version`**. Per-allocation KV **`version`** holds the build target. First deploy starts at **`current_version = 0.0.0`**.
 
 Worker **`make start`/`restart`** and job commands receive **`CURRENT_VERSION`** and **`NEW_VERSION`**. Details: [cli/deploy.md](./cli/deploy.md#allocation-version-tracking).
 
@@ -137,7 +138,8 @@ Build validates **`demands.config.min_version`** / **`max_version`** against ups
 
 ```bash
 maand cat kv get maand/job/database version
-maand cat kv get maand/job/api/worker/10.0.0.1 current_version
+maand cat kv get maand/job/api/worker/10.0.0.1 version
+maand cat certs --jobs api
 ```
 
 ---

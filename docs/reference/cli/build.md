@@ -301,6 +301,7 @@ maand cat workers
 maand cat jobs
 maand cat allocations
 maand cat job_commands
+maand cat certs
 maand cat kv
 ```
 

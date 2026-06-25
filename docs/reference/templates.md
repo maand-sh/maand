@@ -54,6 +54,8 @@ Missing keys or disallowed namespaces **panic** at render time (deploy fails for
 
 Go **`text/template`** built-ins are also available: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `printf`, `and`, `or`, `not`, `len`, `index`, `range`, `if`, `define`, `template`.
 
+Job command scripts receive the same allocation context via env — see [job-command-api.md](job-command-api.md#environment-variables-job-command-scripts) (`ALLOCATION_INDEX`, `CURRENT_VERSION`, `NEW_VERSION`, …).
+
 ---
 
 ## Example

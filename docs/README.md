@@ -79,6 +79,7 @@ maand cat workers
 maand cat jobs
 maand cat allocations
 maand cat deployments
+maand cat certs
 maand cat kv get maand/job/<job> version
 ```
 

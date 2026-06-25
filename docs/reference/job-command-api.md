@@ -38,7 +38,7 @@ Important details:
 | `NEW_VERSION` | Target version from the current build/deploy plan |
 | `JOB_COMMAND_API_HOST` | Host to reach runtime API (`127.0.0.1`) |
 
-Per-allocation KV also exposes `current_version` and `new_version` under `maand/job/<job>/worker/<ip>/`.
+Per-allocation KV exposes **`version`** (build target) under `maand/job/<job>/worker/<ip>/`. Running vs target for rollout logic lives in the catalog (`hash.current_version`, `allocations.new_version`) and template fields **`.CurrentVersion`** / **`.NewVersion`**.
 
 Deploy **`job_control`** also sets:
 

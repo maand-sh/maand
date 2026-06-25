@@ -26,6 +26,7 @@ Configuration files: [configuration.md](../configuration.md) · KV: [KV persiste
 | `maand cat deployments` | Allocation `current_hash` / `previous_hash` and rollout state (`--jobs`, `--workers`) |
 | `maand cat job_commands` | Commands from manifests |
 | `maand cat job_ports` | Declared ports per job |
+| `maand cat certs` | TLS CA and leaf certs with expiry (`--jobs`, `--workers`) — [certs.md](../certs.md#inspecting-certificates-maand-cat-certs) |
 | `maand cat prometheus` | `_prometheus/` catalog (`get`, `scrape` subcommands) |
 | `maand cat kv` | List KV keys (`--jobs`, `--active`, `--deleted`; or `maand cat kv get <ns> <key> [--reveal]`) |
 
@@ -207,6 +208,7 @@ maand cat allocations [--jobs api] [--workers 10.0.0.1]
 maand cat deployments [--jobs vault] [--workers 10.0.0.1]
 maand cat job_commands
 maand cat job_ports
+maand cat certs [--jobs api] [--workers 10.0.0.1]
 maand cat prometheus [--jobs j1,j2]
 maand cat prometheus get <job> <path>
 maand cat prometheus scrape [--jobs j1,j2]
@@ -233,6 +235,14 @@ maand cat deployments [--jobs j1,j2] [--workers ip,...] [--active]
 | `--active` | Only active allocations (`removed=0`, `disabled=0`) |
 
 Shows `current_hash`, `previous_hash`, versions, and rollout state per allocation. **Rollout** is `removed`, `disabled`, or `disabled_restart` when the allocation flag applies; otherwise hash/version state (`new`, `restart`, `promoted`, `health_failed`). **`deploy`** clears hash rows for removed allocations. See [deploy.md](deploy.md#inspect-state) and [deploy-debugging.md](../../guides/debugging-deploy.md).
+
+### `maand cat certs`
+
+```bash
+maand cat certs [--jobs j1,j2] [--workers ip,...]
+```
+
+Lists the bucket CA (`secrets/ca.crt`) and job leaf certificates from KV with **common name**, **not_after**, **days_left**, and **status** (`ok`, `expiring`, `expired`, `invalid`). Uses `certs_renewal_buffer` from `maand.conf` for the expiring window. See [certs.md](../certs.md#inspecting-certificates-maand-cat-certs).
 
 ### `maand cat kv`
 

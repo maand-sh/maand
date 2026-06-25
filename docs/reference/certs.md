@@ -190,7 +190,9 @@ Restart or reload the job if it caches TLS material (e.g. **`make restart`** on 
 Inspect:
 
 ```bash
-maand cat kv --jobs api --workers 10.0.0.1
+maand cat certs --jobs api
+maand cat certs --workers 10.0.0.1
+maand cat kv get maand/job/api/worker/10.0.0.1 certs/tls.crt   # raw PEM (truncated in list)
 ```
 
 Job commands and templates may read PEMs from the allocation namespace (prefer **file paths on the worker** for large certs in production).
@@ -320,7 +322,7 @@ maand cat certs --workers 10.0.0.1
 | All certs regenerated | CA file changed, manifest `certs` edited, or cert entered renewal window |
 | Build OK, worker has old cert | Run **`maand deploy`** after build |
 | `ErrInvalidManifest` on cert | Invalid `subject` JSON |
-| App rejects peer cert | Worker still using old `ca.crt` — redeploy after CA rotation |
+| App rejects peer cert | Worker still using old `ca.crt` — redeploy after CA rotation; check **`maand cat certs`** |
 | Disabled allocation missing certs in KV | Run **`maand build`** — disabled rows still get cert material |
 
 ---

@@ -128,7 +128,7 @@ During a **rolling deploy**, allocations on different workers can briefly differ
 | Surface | Keys / fields |
 |---------|----------------|
 | Job-level KV (target) | `maand cat kv get maand/job/<job> version` |
-| Per-allocation KV | `maand/job/<job>/worker/<ip>/current_version`, `new_version` |
+| Per-allocation KV | `maand/job/<job>/worker/<ip>/version` (target from build) |
 | Templates (`.tpl`) | `{{ .CurrentVersion }}`, `{{ .NewVersion }}` on allocation context |
 | Worker **`make`** env | `CURRENT_VERSION`, `NEW_VERSION` on `start` / `restart` |
 | Job command scripts | Same env vars (plus `NEW_ALLOCATIONS` / `UPDATED_ALLOCATIONS` for `job_control`) |

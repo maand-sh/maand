@@ -165,7 +165,7 @@ Dedicated jobs can omit manifest selectors when the worker carries the job name 
 | `removed` | `1` when worker or job left the workspace (soft delete until deploy/GC) |
 | `deployment_seq` | Wave order during deploy (from command **demands**) |
 
-Each allocation tracks **`current_version`** (last promoted, in **`hash`**) and **`new_version`** (build target, in **`allocations`**) — see [deploy.md](../reference/cli/deploy.md#allocation-version-tracking).
+Each allocation tracks catalog **`current_version`** (last promoted, in **`hash`**) and **`new_version`** (build target, in **`allocations`**). Per-allocation KV stores a single **`version`** key (target). Templates and job commands expose running vs target via **`.CurrentVersion`** / **`.NewVersion`** and **`CURRENT_VERSION`** / **`NEW_VERSION`** — see [deploy.md](../reference/cli/deploy.md#allocation-version-tracking).
 
 ### Active vs inactive
 

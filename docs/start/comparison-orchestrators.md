@@ -130,7 +130,7 @@ deploy_parallel_count: 1  (or any N)
 ## Cluster visibility and operations
 
 ### maand
-- **CLI-first**: `maand cat` for inspection (jobs, workers, allocations, KV, deployments, health).
+- **CLI-first**: `maand cat` for inspection (jobs, workers, allocations, KV, deployments, certs, health).
 - **Real-time logs**: `maand logs`, `maand run_command` for SSH batch execution.
 - **Single source of truth**: SQLite catalog (workers, jobs, allocations, versions, KV).
 - **Rollout transparency**: `maand deploy --dry-run` shows exactly what will change.

@@ -55,7 +55,7 @@ Requires **`cli`** in manifest **`executed_on`**. KV commits on success.
 
 ### Batch env (allocation hooks)
 
-See [job-command-api.md](../job-command-api.md#environment-variables-job-command-scripts) for `BATCH_*`, `DEPLOY_PHASE`, `DEPLOY_ORDER`.
+See [job-command-api.md](../job-command-api.md#environment-variables-job-command-scripts) for per-allocation env (`ALLOCATION_ID`, `ALLOCATION_IP`, **`ALLOCATION_INDEX`**, `CURRENT_VERSION`, `NEW_VERSION`, …) and batch hooks (`BATCH_*`, `DEPLOY_PHASE`, `DEPLOY_ORDER`).
 
 **`pre_deploy`** may override **`deploy_order`** with **`put_deploy_order()`** for one deploy; build resets it on the next **`maand build`**. See [job-command-api.md](../job-command-api.md).
 
