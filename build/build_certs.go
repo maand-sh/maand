@@ -299,8 +299,7 @@ func certPEMExpiringSoon(certPEM []byte, renewalBufferDays int) (bool, error) {
 		return true, fmt.Errorf("%w: %w", bucket.ErrUnexpectedError, err)
 	}
 
-	expiryDate := cert.NotAfter.UTC().Add(time.Duration(renewalBufferDays) * 24 * time.Hour)
-	return expiryDate.Before(time.Now().UTC()), nil
+	return CertNeedsRenewal(cert.NotAfter, renewalBufferDays, time.Now().UTC()), nil
 }
 
 func buildSharedCertPEM(

@@ -125,7 +125,7 @@ certs_renewal_buffer = 10
 | Field | Default in code | Purpose |
 |-------|-----------------|--------|
 | `certs_ttl` | `60` (days) if unset or `0` | Validity period for **newly generated** leaf certificates |
-| `certs_renewal_buffer` | `0` if unset | Regenerate a stored cert when `NotAfter + buffer` is before now |
+| `certs_renewal_buffer` | `0` if unset | Regenerate a stored cert when within this many days of `NotAfter` (`0` = only after expiry) |
 
 ### Auto-rotation at build time
 
@@ -134,20 +134,23 @@ Rotation is **not** a background daemon. **`maand build`** checks each stored le
 1. **Missing** — no `certs/<name>.crt` or `.key` in KV  
 2. **CA changed** — `secrets/ca.crt` hash differs from last promoted build  
 3. **Manifest changed** — `certs` section hash differs (`build_certs` namespace)  
-4. **Expiring soon** — `NotAfter + certs_renewal_buffer < now` (see below)
+4. **Expiring soon** — `now >= NotAfter - certs_renewal_buffer` (see below)
 
 If none apply, existing PEMs are **reused** (repeat builds without config changes do not churn certificates).
 
 **Renewal buffer math**
 
 ```text
-regenerate when:  cert.NotAfter + (certs_renewal_buffer days) < now
+regenerate when:  now >= cert.NotAfter - (certs_renewal_buffer days)
+                 (or now >= NotAfter when buffer is 0)
 ```
 
 | `certs_renewal_buffer` | Effect |
 |------------------------|--------|
 | `10` | Regenerate when within **10 days** of expiry (recommended for scheduled builds) |
 | `0` | Regenerate only **after** `NotAfter` has passed |
+
+If **`certs_renewal_buffer` ≥ `certs_ttl`**, every leaf cert is always in the renewal window (regenerated on each **`maand build`**).
 
 Set both values explicitly in `maand.conf`. Example from [configuration.md](configuration.md):
 
@@ -309,7 +312,7 @@ maand cat certs --workers 10.0.0.1
 | `common_name` | X.509 subject CN |
 | `not_after` | Certificate expiry (UTC) |
 | `days_left` | Whole days until expiry (negative if expired) |
-| `status` | `ok`, `expiring` (within `certs_renewal_buffer` days of `not_after`), `expired`, or `invalid` |
+| `status` | `ok`, `expiring` (same window as **`maand build`** renewal), `expired`, or `invalid` |
 
 ---
 

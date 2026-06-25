@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"maand/bucket"
+	"maand/build"
 	"maand/data"
 	"maand/utils"
 
@@ -224,11 +225,8 @@ func certExpiryStatus(notAfter time.Time, renewalBufferDays int, now time.Time) 
 	if now.After(notAfter) {
 		return certStatusExpired
 	}
-	if renewalBufferDays > 0 {
-		renewalWindowStart := notAfter.Add(-time.Duration(renewalBufferDays) * 24 * time.Hour)
-		if !now.Before(renewalWindowStart) {
-			return certStatusExpiring
-		}
+	if build.CertNeedsRenewal(notAfter, renewalBufferDays, now) {
+		return certStatusExpiring
 	}
 	return certStatusOK
 }

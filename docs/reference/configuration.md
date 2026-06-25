@@ -38,7 +38,7 @@ job_config_selector = ""
 | `ssh_port` | `22` | SSH port for worker connections and worker health checks |
 | `use_sudo` | `true` | Prefix remote rsync and some commands with `sudo` |
 | `certs_ttl` | `60` | Days until generated job certs expire |
-| `certs_renewal_buffer` | `0` if omitted | Regenerate leaf certs when `NotAfter + buffer` is in the past (use `10` for early renewal) |
+| `certs_renewal_buffer` | `0` if omitted | Regenerate leaf certs when within this many days of expiry (`0` = only after `NotAfter`) |
 
 Full TLS guide: [certs.md](certs.md).
 | `job_config_selector` | `""` | Suffix for **`bucket.jobs.<selector>.conf`** (see below) |
