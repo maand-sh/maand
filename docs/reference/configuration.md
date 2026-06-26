@@ -39,9 +39,9 @@ job_config_selector = ""
 | `use_sudo` | `true` | Prefix remote rsync and some commands with `sudo` |
 | `certs_ttl` | `60` | Days until generated job certs expire |
 | `certs_renewal_buffer` | `0` if omitted | Regenerate leaf certs when within this many days of expiry (`0` = only after `NotAfter`) |
+| `job_config_selector` | `""` | Suffix for **`bucket.jobs.<selector>.conf`** (see below) |
 
 Full TLS guide: [certs.md](certs.md).
-| `job_config_selector` | `""` | Suffix for **`bucket.jobs.<selector>.conf`** (see below) |
 
 Path on disk: **`<bucket>/maand.conf`**. Worker key path used at runtime: **`secrets/<ssh_key>`**.
 

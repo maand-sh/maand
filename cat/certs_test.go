@@ -2,7 +2,6 @@ package cat
 
 import (
 	"crypto/x509/pkix"
-	"database/sql"
 	"os"
 	"path"
 	"testing"
@@ -10,32 +9,30 @@ import (
 
 	"maand/bucket"
 	"maand/build"
-	"maand/data"
+	"maand/certs"
 	"maand/initialize"
 	"maand/kv"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestParseJobWorkerCertNamespace(t *testing.T) {
-	job, worker, ok := parseJobWorkerCertNamespace("maand/job/api/worker/10.0.0.1")
+	job, worker, ok := certs.ParseJobWorkerCertNamespace("maand/job/api/worker/10.0.0.1")
 	require.True(t, ok)
 	assert.Equal(t, "api", job)
 	assert.Equal(t, "10.0.0.1", worker)
 
-	_, _, ok = parseJobWorkerCertNamespace("vars/job/api")
+	_, _, ok = certs.ParseJobWorkerCertNamespace("vars/job/api")
 	assert.False(t, ok)
 }
 
 func TestCertExpiryStatus(t *testing.T) {
 	now := time.Date(2026, 6, 1, 12, 0, 0, 0, time.UTC)
 
-	assert.Equal(t, certStatusExpired, certExpiryStatus(now.Add(-24*time.Hour), 30, now))
-	assert.Equal(t, certStatusExpiring, certExpiryStatus(now.Add(10*24*time.Hour), 30, now))
-	assert.Equal(t, certStatusOK, certExpiryStatus(now.Add(90*24*time.Hour), 30, now))
+	assert.Equal(t, certs.StatusExpired, certs.CertExpiryStatus(now.Add(-24*time.Hour), 30, now))
+	assert.Equal(t, certs.StatusExpiring, certs.CertExpiryStatus(now.Add(10*24*time.Hour), 30, now))
+	assert.Equal(t, certs.StatusOK, certs.CertExpiryStatus(now.Add(90*24*time.Hour), 30, now))
 }
 
 func TestCerts_listsCAAndJobCertificates(t *testing.T) {
@@ -106,28 +103,25 @@ func TestCerts_filtersByJob(t *testing.T) {
 }
 
 func TestCerts_notFoundWithoutJobCerts(t *testing.T) {
-	db, err := sql.Open("sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared")
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	require.NoError(t, data.MigrateSchema(tx))
-	require.NoError(t, tx.Commit())
-
+	root := t.TempDir()
 	orig := bucket.Location
-	bucket.Location = t.TempDir()
+	bucket.Location = root
 	bucket.UpdatePath()
 	t.Cleanup(func() {
 		bucket.Location = orig
 		bucket.UpdatePath()
 	})
 
-	err = Certs("", "")
-	assert.Error(t, err)
+	require.NoError(t, os.MkdirAll(bucket.WorkspaceLocation, 0o755))
+	require.NoError(t, os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte("[]"), 0o644))
+	require.NoError(t, initialize.Execute())
+	require.NoError(t, os.Remove(path.Join(bucket.SecretLocation, "ca.crt")))
+
+	err := Certs("", "")
+	assert.ErrorIs(t, err, bucket.ErrNotFound)
 }
 
-func TestCertEntryFromPEM(t *testing.T) {
+func TestCertMetricFromPEM(t *testing.T) {
 	t.Cleanup(kv.ResetStoreForTest)
 	dir := t.TempDir()
 	bucket.Location = dir
@@ -142,9 +136,9 @@ func TestCertEntryFromPEM(t *testing.T) {
 	require.NoError(t, err)
 
 	now := time.Now().UTC()
-	entry, err := certEntryFromPEM("job", "api", "10.0.0.1", "tls", pemBytes, 30, now)
+	entry, err := certs.MetricFromPEM("job", "api", "10.0.0.1", "tls", pemBytes, 30, now)
 	require.NoError(t, err)
-	assert.Equal(t, "test.local", entry.commonName)
-	assert.Equal(t, certStatusOK, entry.status)
-	assert.Greater(t, entry.daysLeft, 300)
+	assert.Equal(t, "test.local", entry.CommonName)
+	assert.Equal(t, certs.StatusOK, entry.Status)
+	assert.Greater(t, entry.DaysLeft, 300)
 }

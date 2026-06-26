@@ -20,12 +20,22 @@ func RenderRuleFilesYAML(tx *sql.Tx) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if len(entries) == 0 {
+	hasPrometheusJob, err := data.JobHasPrometheusServerConfig(tx, "prometheus")
+	if err != nil {
+		return "", err
+	}
+	if len(entries) == 0 && !hasPrometheusJob {
 		return "", nil
 	}
 
 	var b strings.Builder
 	b.WriteString("rule_files:\n")
+	if hasPrometheusJob {
+		_, err := fmt.Fprintf(&b, "  - rules/%s/%s\n", MaandAlertsJob, MaandCertAlertsFile)
+		if err != nil {
+			return "", err
+		}
+	}
 	for _, entry := range entries {
 		_, err := fmt.Fprintf(&b, "  - rules/%s/%s\n", entry.Job, path.Base(entry.Rel))
 		if err != nil {

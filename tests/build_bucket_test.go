@@ -753,7 +753,7 @@ func TestCertUpdateAfterExpire(t *testing.T) {
 	conf, err := bucket.GetMaandConf()
 	assert.NoError(t, err)
 
-	conf.CertsRenewalBuffer = -60
+	conf.CertsRenewalBuffer = conf.CertsTTL
 	_ = os.Remove(path.Join(bucket.Location, "maand.conf"))
 
 	err = bucket.WriteMaandConf(&conf)

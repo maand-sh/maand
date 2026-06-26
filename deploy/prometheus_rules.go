@@ -43,5 +43,19 @@ func assemblePrometheusAlertRules(tx *sql.Tx, prometheusJobDir, workerIP string)
 			return bucket.UnexpectedError(err)
 		}
 	}
+	if err := writeMaandCertAlertRules(prometheusJobDir); err != nil {
+		return err
+	}
+	return nil
+}
+
+func writeMaandCertAlertRules(prometheusJobDir string) error {
+	dest := path.Join(prometheusJobDir, "rules", promconfig.MaandAlertsJob, promconfig.MaandCertAlertsFile)
+	if err := os.MkdirAll(path.Dir(dest), 0o755); err != nil {
+		return bucket.UnexpectedError(err)
+	}
+	if err := os.WriteFile(dest, promconfig.MaandCertAlertsYAML, 0o644); err != nil {
+		return bucket.UnexpectedError(err)
+	}
 	return nil
 }

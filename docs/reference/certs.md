@@ -179,6 +179,22 @@ After deploy, apps read updated files from:
 
 Restart or reload the job if it caches TLS material (e.g. **`make restart`** on the next deploy wave, or your own hook).
 
+### Prometheus metrics (optional)
+
+When a **prometheus** job ships `prometheus.yml` or `prometheus.yml.tpl`, **`maand deploy`** pushes certificate expiry gauges to Prometheus remote write (`/api/v1/write`). Push is **best-effort** — failures are logged and do not fail deploy.
+
+| Metric | Meaning |
+|--------|---------|
+| `maand_cert_not_after_seconds` | Unix timestamp of certificate `NotAfter` |
+| `maand_cert_expiring` | `1` when within `certs_renewal_buffer` of expiry (same window as build renewal) |
+| `maand_cert_expired` | `1` when past `NotAfter` |
+
+Labels: `scope` (`ca` or `job`), `job`, `worker`, `cert`, `common_name`, `status`.
+
+**Remote write URL** — auto-discovered from the **prometheus** job in the workspace: first non-removed allocation IP and **`prometheus_port_http`** → `http://<worker>:<port>/api/v1/write`. No `maand.conf` setting; if there is no prometheus job with server config, push is skipped.
+
+Prometheus must run with **`--web.enable-remote-write-receiver`**. Deploy also writes embedded cert alert rules to **`rules/maand/certs.yaml`** on the prometheus worker. See [prometheus.md](../guides/prometheus.md#certificate-alerts).
+
 ---
 
 ## Where certificates live

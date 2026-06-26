@@ -16,9 +16,9 @@ import (
 )
 
 // assemblePrometheusRunbooks renders catalog runbooks to HTML under
-// <prometheusJobDir>/consoles/runbooks/<job>/<slug>.html for Prometheus console hosting.
-// With --web.console.templates=/etc/prometheus/consoles and ./consoles mounted there,
-// runbooks are served at /consoles/runbooks/<job>/<slug>.html in the Prometheus UI.
+// <prometheusJobDir>/consoles/runbooks/<job>/<slug>.html (not under workspace maand/).
+// Mount ./consoles to /etc/prometheus/consoles; pages are served at
+// /consoles/runbooks/<job>/<slug>.html in the Prometheus UI.
 func assemblePrometheusRunbooks(tx *sql.Tx, prometheusJobDir string) error {
 	runbooksDir := path.Join(prometheusJobDir, "consoles", "runbooks")
 	paths, err := data.ListRunbookFiles(tx)

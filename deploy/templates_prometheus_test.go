@@ -17,13 +17,15 @@ func TestTranspile_scrapeConfigsTemplate(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)
 	env.seedMakefileJob(t, tx, "prometheus", "10.0.0.1", 0)
+	_, err := tx.Exec(`INSERT INTO job_ports (job_id, name, port) VALUES ('job-prometheus', 'prometheus_port_http', 9090)`)
+	require.NoError(t, err)
 	apiJobID := env.insertJob(t, tx, "api", 0, 1)
 	env.insertAllocation(t, tx, "alloc-api-10.0.0.1", "10.0.0.1", "api", 0, 0, 0)
 	env.insertJobFile(t, tx, apiJobID, path.Join("api", "manifest.json"), `{
 		"selectors": ["worker"],
 		"resources": {"ports": {"api_metrics_port": {}}}
 	}`, false)
-	_, err := tx.Exec(`INSERT INTO job_ports (job_id, name, port) VALUES (?, 'api_metrics_port', 30421)`, apiJobID)
+	_, err = tx.Exec(`INSERT INTO job_ports (job_id, name, port) VALUES (?, 'api_metrics_port', 30421)`, apiJobID)
 	require.NoError(t, err)
 
 	jobID := "job-prometheus"
@@ -73,8 +75,15 @@ func TestTranspile_ruleFilesTemplate(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)
 	env.seedMakefileJob(t, tx, "prometheus", "10.0.0.1", 0)
+	_, err := tx.Exec(`INSERT INTO job_ports (job_id, name, port) VALUES ('job-prometheus', 'prometheus_port_http', 9090)`)
+	require.NoError(t, err)
 	apiJobID := env.insertJob(t, tx, "api", 0, 1)
-	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "alerts", "slo.yaml"), "groups: []\n", false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "alerts", "slo.yaml"), `groups:
+  - name: api
+    rules:
+      - alert: ApiDown
+        expr: up == 0
+`, false)
 
 	tpl := `global:
   scrape_interval: 15s
@@ -91,6 +100,7 @@ func TestTranspile_ruleFilesTemplate(t *testing.T) {
 	require.NoError(t, err)
 	text := string(content)
 	assert.Contains(t, text, "rule_files:")
+	assert.Contains(t, text, "  - rules/maand/certs.yaml")
 	assert.Contains(t, text, "  - rules/api/slo.yaml")
 }
 
@@ -123,6 +133,11 @@ func TestAssemblePrometheusAlertRules(t *testing.T) {
 	text := string(content)
 	assert.Contains(t, text, "runbook_url: http://10.0.0.1:9090/consoles/runbooks/api/ApiDown.html")
 	assert.NotContains(t, text, "runbook:")
+
+	maandAlerts := path.Join(dest, "rules", "maand", "certs.yaml")
+	content, err = os.ReadFile(maandAlerts)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "maand_cert_expiring")
 }
 
 func TestAssemblePrometheusRunbooks(t *testing.T) {
@@ -149,4 +164,7 @@ func TestAssemblePrometheusRunbooks(t *testing.T) {
 
 	_, err = os.Stat(path.Join(dest, "consoles", "runbooks", "style.css"))
 	require.NoError(t, err)
+
+	_, err = os.Stat(path.Join(dest, "maand", "runbooks"))
+	assert.True(t, os.IsNotExist(err), "runbooks must not be written under maand/")
 }

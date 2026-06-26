@@ -29,6 +29,7 @@ import (
 	"os"
 
 	"maand/bucket"
+	"maand/certs"
 	"maand/data"
 	"maand/jobcommand"
 	"maand/kv"
@@ -214,5 +215,8 @@ func Execute(jobsFilter []string, force bool) error {
 	if err := tx.Commit(); err != nil {
 		return bucket.DatabaseError(err)
 	}
+
+	certs.PushMetrics(db)
+
 	return joinErrors("deploy failed", deployFailures)
 }

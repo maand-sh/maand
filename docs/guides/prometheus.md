@@ -237,28 +237,53 @@ maand deploy --jobs prometheus
 
 Prometheus should run with **`--web.enable-lifecycle`** so config reload works after deploy.
 
+### Certificate alerts
+
+When the **prometheus** job ships server config, deploy assembles **`rules/maand/certs.yaml`** alongside per-job alert files. These rules fire on pushed cert metrics (`maand_cert_expiring`, `maand_cert_expired`, etc.) — see [certs.md](../reference/certs.md#prometheus-metrics-optional).
+
+After **`maand deploy`**, maand pushes current cert expiry gauges via Prometheus remote write to:
+
+```text
+http://<prometheus-allocation>:<prometheus_port_http>/api/v1/write
+```
+
+Discovery uses the **prometheus** job from the workspace (first non-removed allocation). If that job has no `prometheus.yml` / `prometheus.yml.tpl`, or has no allocations, push is skipped.
+
+Requires **`--web.enable-remote-write-receiver`** on Prometheus (in addition to lifecycle):
+
+```yaml
+command:
+  - '--web.enable-lifecycle'
+  - '--web.enable-remote-write-receiver'
+```
+
 ---
 
 ## Runbooks
 
 During **`maand deploy`**, when staging the **prometheus** job, maand renders every catalog runbook to HTML under **`consoles/runbooks/<job>/<slug>.html`** (plus **`consoles/runbooks/index.html`** and **`consoles/runbooks/style.css`**). Source markdown stays in **`job_files`** from build; it is not rsynced from workspace.
 
-Mount **`./consoles`** into Prometheus console templates (runbooks are generated inside that tree):
+Runbooks are **not** written under workspace **`maand/`** — that folder is for optional custom console pages you check in (for example `maand/workers.html`).
+
+Mount deploy-generated runbooks and optional custom pages separately:
 
 ```yaml
 # docker-compose.yml.tpl (prometheus job)
 volumes:
-  - ./consoles:/etc/prometheus/consoles:z
-  - ./console_libraries:/etc/prometheus/console_libraries:z
+  - ./consoles:/etc/prometheus/consoles:z          # deploy writes consoles/runbooks/ here
+  - ./maand:/etc/prometheus/consoles/maand:z        # optional custom pages from workspace
+  - ./maand_libraries:/etc/prometheus/console_libraries:z
   # ...
 command:
   - '--web.console.templates=/etc/prometheus/consoles'
+  - '--web.console.libraries=/etc/prometheus/console_libraries'
 ```
 
 | URL (Prometheus UI) | File on worker |
 |---------------------|----------------|
 | `/consoles/runbooks/` | `consoles/runbooks/index.html` |
 | `/consoles/runbooks/<job>/<slug>.html` | `consoles/runbooks/<job>/<slug>.html` |
+| `/consoles/maand/workers.html` | `maand/workers.html` (workspace, not deploy-generated) |
 
 Link from alert annotations with **`runbook`** in workspace source only — deploy removes **`runbook`** and sets **`runbook_url`**:
 
