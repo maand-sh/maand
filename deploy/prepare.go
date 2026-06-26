@@ -139,7 +139,11 @@ func prepareJobOnWorker(tx *sql.Tx, job, workerIP string) error {
 		return err
 	}
 	if hasPrometheusConfig {
-		if err := assemblePrometheusAlertRules(tx, path.Join(workerDirPath, "jobs", job)); err != nil {
+		prometheusJobDir := path.Join(workerDirPath, "jobs", job)
+		if err := assemblePrometheusAlertRules(tx, prometheusJobDir, workerIP); err != nil {
+			return err
+		}
+		if err := assemblePrometheusRunbooks(tx, prometheusJobDir); err != nil {
 			return err
 		}
 	}

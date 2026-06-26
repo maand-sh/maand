@@ -128,14 +128,10 @@ After adding or changing scrape configs:
 ```bash
 maand build
 maand deploy --jobs api,...      # app jobs first
-maand deploy --jobs prometheus   # refresh scrape config + alert rules
+maand deploy --jobs prometheus   # refresh scrape config, alert rules, runbook HTML
 ```
 
-Serve runbooks locally:
-
-```bash
-maand runbooks serve --addr :8080
-```
+Runbooks are served from the Prometheus UI after deploy (`/consoles/runbooks/...`) — see [prometheus.md](prometheus.md#runbooks).
 
 ---
 

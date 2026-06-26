@@ -31,7 +31,7 @@ workspace/jobs/api/
 | `_prometheus/alerts/*.yaml` | Alerting rule groups (multiple files OK) |
 | `_prometheus/runbooks/*.md` | Runbooks linked from alert annotations |
 
-**Not synced to workers** — `_prometheus/` is excluded from deploy rsync (like `_modules`). Content is stored in `job_files` at build for the catalog and runbooks server.
+**Not synced to workers** — `_prometheus/` is excluded from deploy rsync (like `_modules`). Content is stored in `job_files` at build for the catalog and deploy-time runbook HTML.
 
 ---
 
@@ -135,7 +135,7 @@ groups:
 
 Each rule must define **`expr`** and exactly one of **`alert`** or **`record`**.
 
-If `annotations.runbook` is set, `_prometheus/runbooks/<name>.md` must exist.
+If `annotations.runbook` is set, `_prometheus/runbooks/<name>.md` must exist. During **`maand deploy --jobs prometheus`**, maand removes **`runbook`** and adds **`runbook_url`** pointing at the rendered console page unless you set **`runbook_url`** yourself.
 
 ---
 
@@ -241,19 +241,38 @@ Prometheus should run with **`--web.enable-lifecycle`** so config reload works a
 
 ## Runbooks
 
-Serve runbooks from the build catalog over HTTP:
+During **`maand deploy`**, when staging the **prometheus** job, maand renders every catalog runbook to HTML under **`consoles/runbooks/<job>/<slug>.html`** (plus **`consoles/runbooks/index.html`** and **`consoles/runbooks/style.css`**). Source markdown stays in **`job_files`** from build; it is not rsynced from workspace.
 
-```bash
-maand runbooks serve --addr :8080
+Mount **`./consoles`** into Prometheus console templates (runbooks are generated inside that tree):
+
+```yaml
+# docker-compose.yml.tpl (prometheus job)
+volumes:
+  - ./consoles:/etc/prometheus/consoles:z
+  - ./console_libraries:/etc/prometheus/console_libraries:z
+  # ...
+command:
+  - '--web.console.templates=/etc/prometheus/consoles'
 ```
 
-| Route | Response |
-|-------|----------|
-| `GET /` | Index of `/{job}/{slug}` paths |
-| `GET /{job}/{slug}` | Markdown from `job_files` |
-| `GET /{job}/{slug}/raw` | Same content as plain text |
+| URL (Prometheus UI) | File on worker |
+|---------------------|----------------|
+| `/consoles/runbooks/` | `consoles/runbooks/index.html` |
+| `/consoles/runbooks/<job>/<slug>.html` | `consoles/runbooks/<job>/<slug>.html` |
 
-Link from alert annotations (e.g. set `runbook_url` in Alertmanager) to `http://<host>:8080/{job}/{slug}`.
+Link from alert annotations with **`runbook`** in workspace source only — deploy removes **`runbook`** and sets **`runbook_url`**:
+
+```yaml
+# workspace source
+annotations:
+  runbook: container_restarting
+
+# deployed rules (prometheus worker)
+annotations:
+  runbook_url: http://10.48.198.160:9090/consoles/runbooks/node_agent/container_restarting.html
+```
+
+Override **`runbook_url`** in the alert YAML when you need a different base URL.
 
 ---
 
@@ -310,8 +329,7 @@ Or on shared workers:
 | Command | Role |
 |---------|------|
 | `maand build` | Aggregate `_prometheus/` → KV |
-| `maand deploy --jobs prometheus` | Render config + assemble rules |
-| `maand runbooks serve` | HTTP runbooks from catalog |
+| `maand deploy --jobs prometheus` | Render config, assemble rules, generate runbook HTML |
 | `maand cat kv get maand/prometheus …` | Inspect catalog KV |
 | `maand cat prometheus` | List jobs with `_prometheus/` (scrape, alerts, runbooks) |
 | `maand cat prometheus get <job> <path>` | Print one `_prometheus/` file (catalog or workspace; `scrape` → `scrape.yaml`) |

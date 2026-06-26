@@ -12,7 +12,6 @@ Configuration files: [configuration.md](../configuration.md) · KV: [KV persiste
 | `maand build` | Read workspace → update `maand.db`, KV, certs; run `post_build` hooks | [build.md](build.md) |
 | `maand deploy` | Push jobs to workers, roll out, run deploy hooks | [deploy.md](deploy.md) · [rolling-deploy](../../guides/rolling-deploy.md) · [deploy-debugging.md](../../guides/debugging-deploy.md) |
 | `maand health_check` | Worker SSH gate + per-job health (manifest probes or commands) | [health-check.md](health-check.md) |
-| `maand runbooks serve` | Serve `_prometheus/runbooks` markdown from catalog | [prometheus.md](../../guides/prometheus.md) |
 | `maand gc` | Purge removed allocations, worker data, old KV history | [gc.md](gc.md) |
 
 ## Inspect commands
@@ -162,16 +161,6 @@ maand health_check [--jobs j1,j2] [--wait] [--verbose] [--update-hash]
 | `--update-hash` | Mark failed allocations for redeploy (command-based health only) |
 
 See [health-check.md](health-check.md).
-
----
-
-## `maand runbooks serve`
-
-```bash
-maand runbooks serve [--addr :8080]
-```
-
-Serves `_prometheus/runbooks/*.md` from the build catalog over HTTP. See [prometheus.md](../../guides/prometheus.md).
 
 ---
 

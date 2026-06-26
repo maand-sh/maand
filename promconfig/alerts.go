@@ -134,6 +134,56 @@ func validateAlertRule(
 	return nil
 }
 
+// RunbookConsolePath returns the Prometheus UI path for a deployed runbook page.
+func RunbookConsolePath(jobName, slug string) string {
+	return fmt.Sprintf("/consoles/runbooks/%s/%s.html", jobName, slug)
+}
+
+// RunbookConsoleURL returns the full Prometheus UI URL for a deployed runbook page.
+func RunbookConsoleURL(baseURL, jobName, slug string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	return baseURL + RunbookConsolePath(jobName, slug)
+}
+
+// InjectRunbookURLs adds runbook_url for alerts that declare runbook and removes runbook
+// from deployed rules. baseURL is the Prometheus UI origin, e.g. http://10.0.0.1:9090.
+func InjectRunbookURLs(jobName string, data []byte, baseURL string) ([]byte, error) {
+	parsed, err := parseAlertRuleFile(jobName, "alerts", data)
+	if err != nil {
+		return nil, err
+	}
+
+	changed := false
+	for groupIdx := range parsed.Groups {
+		for ruleIdx := range parsed.Groups[groupIdx].Rules {
+			rule := &parsed.Groups[groupIdx].Rules[ruleIdx]
+			if strings.TrimSpace(rule.Alert) == "" {
+				continue
+			}
+			if rule.Annotations == nil {
+				continue
+			}
+			runbook := strings.TrimSpace(rule.Annotations["runbook"])
+			if runbook == "" {
+				continue
+			}
+			if strings.TrimSpace(rule.Annotations["runbook_url"]) == "" {
+				rule.Annotations["runbook_url"] = RunbookConsoleURL(baseURL, jobName, runbook)
+			}
+			delete(rule.Annotations, "runbook")
+			changed = true
+		}
+	}
+	if !changed {
+		return data, nil
+	}
+	out, err := yaml.Marshal(&parsed)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ListRunbookSlugs returns basenames of markdown files in _prometheus/runbooks/.
 func ListRunbookSlugs(jobName string) (map[string]struct{}, error) {
 	dir := path.Join(JobPrometheusDir(jobName), RunbooksDir)

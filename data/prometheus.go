@@ -245,20 +245,3 @@ func ListRunbookFiles(tx *sql.Tx) ([]string, error) {
 	}
 	return paths, nil
 }
-
-// RunbookLookup resolves job/slug to a job_files path.
-func RunbookLookup(tx *sql.Tx, job, slug string) (string, error) {
-	filePath := job + "/_prometheus/runbooks/" + slug + ".md"
-	var exists int
-	err := tx.QueryRow(
-		`SELECT count(*) FROM job_files WHERE path = ? AND isdir = 0`,
-		filePath,
-	).Scan(&exists)
-	if err != nil {
-		return "", bucket.DatabaseError(err)
-	}
-	if exists == 0 {
-		return "", sql.ErrNoRows
-	}
-	return filePath, nil
-}

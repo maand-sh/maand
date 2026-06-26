@@ -81,6 +81,7 @@ func TestTranspile_ruleFilesTemplate(t *testing.T) {
 {{ ruleFiles }}
 `
 	env.insertJobFile(t, tx, "job-prometheus", path.Join("prometheus", "prometheus.yml.tpl"), tpl, false)
+	require.NoError(t, kv.Initialize(tx))
 	require.NoError(t, prepareJobsFiles(tx, []string{"prometheus"}))
 	require.NoError(t, transpile(tx, "prometheus", "10.0.0.1"))
 	require.NoError(t, tx.Rollback())
@@ -96,16 +97,56 @@ func TestTranspile_ruleFilesTemplate(t *testing.T) {
 func TestAssemblePrometheusAlertRules(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)
+	require.NoError(t, kv.Initialize(tx))
 	env.seedMakefileJob(t, tx, "prometheus", "10.0.0.1", 0)
+	promJobID := "job-prometheus"
+	_, err := tx.Exec(`INSERT INTO job_ports (job_id, name, port) VALUES (?, 'prometheus_port_http', 9090)`, promJobID)
+	require.NoError(t, err)
 	apiJobID := env.insertJob(t, tx, "api", 0, 1)
-	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "alerts", "slo.yaml"), "groups: []\n", false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "alerts", "slo.yaml"), `groups:
+  - name: api
+    rules:
+      - alert: ApiDown
+        expr: up == 0
+        annotations:
+          runbook: ApiDown
+`, false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "runbooks", "ApiDown.md"), "# Api Down\n", false)
 	require.NoError(t, prepareJobsFiles(tx, []string{"prometheus"}))
 	dest := path.Join(env.root, "tmp", "workers", "10.0.0.1", "jobs", "prometheus")
-	require.NoError(t, assemblePrometheusAlertRules(tx, dest))
+	require.NoError(t, assemblePrometheusAlertRules(tx, dest, "10.0.0.1"))
 	require.NoError(t, tx.Rollback())
 
 	out := path.Join(dest, "rules", "api", "slo.yaml")
 	content, err := os.ReadFile(out)
 	require.NoError(t, err)
-	assert.Equal(t, "groups: []\n", string(content))
+	text := string(content)
+	assert.Contains(t, text, "runbook_url: http://10.0.0.1:9090/consoles/runbooks/api/ApiDown.html")
+	assert.NotContains(t, text, "runbook:")
+}
+
+func TestAssemblePrometheusRunbooks(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	require.NoError(t, kv.Initialize(tx))
+	env.seedMakefileJob(t, tx, "prometheus", "10.0.0.1", 0)
+	apiJobID := env.insertJob(t, tx, "api", 0, 1)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "runbooks", "ApiDown.md"), "# Api Down\n", false)
+	require.NoError(t, prepareJobsFiles(tx, []string{"prometheus"}))
+	dest := path.Join(env.root, "tmp", "workers", "10.0.0.1", "jobs", "prometheus")
+	require.NoError(t, assemblePrometheusRunbooks(tx, dest))
+	require.NoError(t, tx.Rollback())
+
+	runbookHTML := path.Join(dest, "consoles", "runbooks", "api", "ApiDown.html")
+	content, err := os.ReadFile(runbookHTML)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), "<h1>Api Down</h1>")
+
+	indexHTML := path.Join(dest, "consoles", "runbooks", "index.html")
+	content, err = os.ReadFile(indexHTML)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), `href="api/ApiDown.html"`)
+
+	_, err = os.Stat(path.Join(dest, "consoles", "runbooks", "style.css"))
+	require.NoError(t, err)
 }

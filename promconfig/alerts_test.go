@@ -66,6 +66,39 @@ func TestAlertRelPath(t *testing.T) {
 	assert.Equal(t, "alerts/slo.yaml", rel)
 }
 
+func TestInjectRunbookURLs(t *testing.T) {
+	data := []byte(`
+groups:
+  - name: api
+    rules:
+      - alert: ApiDown
+        expr: up == 0
+        annotations:
+          runbook: ApiDown
+      - alert: ApiSlow
+        expr: latency > 1
+        annotations:
+          runbook: ApiSlow
+          runbook_url: http://custom.example/runbook
+      - record: api:up:sum
+        expr: sum(up{job="api"})
+`)
+	out, err := InjectRunbookURLs("api", data, "http://10.0.0.1:9090")
+	require.NoError(t, err)
+	text := string(out)
+	wantURL := "http://10.0.0.1:9090/consoles/runbooks/api/ApiDown.html"
+	assert.Contains(t, text, "runbook_url: "+wantURL)
+	assert.NotContains(t, text, "runbook:")
+	assert.NotContains(t, text, "Runbook:")
+	assert.Contains(t, text, "runbook_url: http://custom.example/runbook")
+	assert.NotContains(t, text, "runbook: ApiSlow")
+}
+
+func TestRunbookConsolePath(t *testing.T) {
+	assert.Equal(t, "/consoles/runbooks/node_agent/container_restarting.html",
+		RunbookConsolePath("node_agent", "container_restarting"))
+}
+
 func TestRunbookSlugFromPath(t *testing.T) {
 	job, slug, ok := RunbookSlugFromPath("api/_prometheus/runbooks/ApiDown.md")
 	require.True(t, ok)
