@@ -91,7 +91,7 @@ func purgeStaleJobAllocationVariables(tx *sql.Tx, jobName string) error {
 			continue
 		}
 		namespace := fmt.Sprintf("maand/job/%s/worker/%s", jobName, workerIP)
-		if err := syncAllocationKeyValues(namespace, map[string]string{}); err != nil {
+		if err := syncKeyValues(tx, namespace, map[string]string{}); err != nil {
 			return err
 		}
 	}

@@ -88,13 +88,24 @@ func buildJobCerts(tx *sql.Tx, jobName string, caChanged bool) error {
 	}
 
 	if len(certSpecs) == 0 {
-		if err := purgeJobAllocationCertKV(tx, jobName, workerIPs); err != nil {
+		allocatedWorkers, err := data.GetAllocatedWorkers(tx, jobName)
+		if err != nil {
+			return err
+		}
+		if err := purgeJobAllocationCertKV(tx, jobName, allocatedWorkers); err != nil {
 			return err
 		}
 		return data.PromoteHash(tx, "build_certs", jobName)
 	}
 
 	if len(workerIPs) == 0 {
+		allocatedWorkers, err := data.GetAllocatedWorkers(tx, jobName)
+		if err != nil {
+			return err
+		}
+		if err := purgeJobAllocationCertKV(tx, jobName, allocatedWorkers); err != nil {
+			return err
+		}
 		return data.PromoteHash(tx, "build_certs", jobName)
 	}
 
@@ -430,12 +441,18 @@ func GenerateCert(certPath, name string, subject pkix.Name, ipAddresses []string
 	}
 
 	caCertBlock, _ := pem.Decode(caCertPEM)
+	if caCertBlock == nil {
+		return fmt.Errorf("%w: decoding ca.crt: no PEM block found", bucket.ErrUnexpectedError)
+	}
 	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
 	if err != nil {
 		return fmt.Errorf("%w: decoding ca.crt %w", bucket.ErrUnexpectedError, err)
 	}
 
 	caKeyBlock, _ := pem.Decode(caKeyPEM)
+	if caKeyBlock == nil {
+		return fmt.Errorf("%w: decoding ca.key: no PEM block found", bucket.ErrUnexpectedError)
+	}
 	caKey, err := x509.ParsePKCS1PrivateKey(caKeyBlock.Bytes)
 	if err != nil {
 		return fmt.Errorf("%w: decoding ca.key %w", bucket.ErrUnexpectedError, err)

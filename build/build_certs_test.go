@@ -162,6 +162,41 @@ func TestBuildCerts_purgesCertKVWhenJobHasNoSpecs(t *testing.T) {
 	assert.NotContains(t, keys, "certs/tls.crt")
 }
 
+func TestBuildCerts_purgesCertKVWhenAllAllocationsRemoved(t *testing.T) {
+	setupBuildCertSecrets(t)
+	t.Cleanup(kv.ResetStoreForTest)
+
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+	_, err := db.Exec(`
+		INSERT INTO bucket (bucket_id, update_seq) VALUES ('bucket-1', 0);
+		INSERT INTO job (
+			job_id, name, version,
+			min_memory_mb, max_memory_mb, current_memory_mb,
+			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
+			update_parallel_count, health_check
+		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
+		INSERT INTO job_certs (job_id, name, pkcs8, one, subject)
+		VALUES ('job-api', 'tls', 1, 0, '{"common_name":"api"}');
+		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
+		VALUES ('a1', '10.0.0.1', 'api', 0, 1, 0, '0.0.0');
+	`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	kv.GetKVStore().Put("maand/job/api/worker/10.0.0.1", "certs/tls.crt", "OLD", 0)
+	kv.GetKVStore().Put("maand/job/api/worker/10.0.0.1", "certs/tls.key", "OLD-KEY", 0)
+	require.NoError(t, BuildCerts(tx))
+	require.NoError(t, tx.Commit())
+
+	keys, err := kv.GetKVStore().GetKeys("maand/job/api/worker/10.0.0.1")
+	require.NoError(t, err)
+	assert.NotContains(t, keys, "certs/tls.crt")
+	assert.NotContains(t, keys, "certs/tls.key")
+}
+
 func TestLoadJobCertSpecs(t *testing.T) {
 	db := openBuildAllocationsTestDB(t)
 	defer func() { _ = db.Close() }()
