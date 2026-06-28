@@ -6,6 +6,7 @@ package deploy
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -106,6 +107,29 @@ func templateFuncMap(tx *sql.Tx, job string, allowedNamespaces []string) templat
 			}
 			return value.Value
 		},
+		"getOptional": func(ns, key string) string {
+			if len(utils.Difference([]string{ns}, allowedNamespaces)) > 0 {
+				panic(fmt.Sprintf("%s namespace is not available for job %s", ns, job))
+			}
+			if kv.IsSecretNamespace(ns) {
+				value, err := store.GetSecret(ns, key)
+				if err != nil {
+					if errors.Is(err, kv.ErrNotFound) {
+						return ""
+					}
+					panic(err)
+				}
+				return value
+			}
+			value, err := store.Get(ns, key)
+			if err != nil {
+				if errors.Is(err, kv.ErrNotFound) {
+					return ""
+				}
+				panic(err)
+			}
+			return value.Value
+		},
 		"keys": func(ns string) []string {
 			if len(utils.Difference([]string{ns}, allowedNamespaces)) > 0 {
 				panic(fmt.Sprintf("%s namespace is not available for job %s", ns, job))
@@ -125,6 +149,7 @@ func templateFuncMap(tx *sql.Tx, job string, allowedNamespaces []string) templat
 			return value
 		},
 		"split": strings.Split,
+		"trim":  strings.TrimSpace,
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
 		"join":  strings.Join,

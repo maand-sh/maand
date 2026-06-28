@@ -10,6 +10,7 @@ Canonical schema for **`workspace/jobs/<name>/manifest.json`**. For concepts (wo
 workspace/jobs/database/
 ├── manifest.json       # required
 ├── Makefile            # required unless deploy uses only job_control commands
+├── Makefile.tpl        # alternative to Makefile (rendered at deploy)
 ├── vars.toml           # optional application config → vars/job/<job>
 ├── _modules/           # optional: command_<name>.py | .ts | .js
 ├── *.tpl               # optional Go templates (rendered at deploy)

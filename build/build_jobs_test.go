@@ -585,3 +585,34 @@ func TestBuildJobsSyncsCertsFromManifest(t *testing.T) {
 	require.NoError(t, db.QueryRow(`SELECT count(*) FROM job_certs WHERE name = 'tls'`).Scan(&certCount))
 	assert.Equal(t, 1, certCount)
 }
+
+func TestBuildJobs_acceptsMakefileTemplate(t *testing.T) {
+	root := t.TempDir()
+	orig := bucket.Location
+	bucket.Location = root
+	bucket.UpdatePath()
+	t.Cleanup(func() {
+		bucket.Location = orig
+		bucket.UpdatePath()
+	})
+
+	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "echo_server")
+	require.NoError(t, os.MkdirAll(jobPath, 0o755))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{
+		"selectors": ["worker"]
+	}`), 0o644))
+	require.NoError(t, os.WriteFile(path.Join(jobPath, "Makefile.tpl"), []byte("start:\n"), 0o644))
+
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	_, err = BuildJobs(tx, workspace.Default())
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	var jobCount int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM job WHERE name = 'echo_server'`).Scan(&jobCount))
+	assert.Equal(t, 1, jobCount)
+}

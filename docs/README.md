@@ -26,7 +26,7 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 | [guides/debugging-deploy.md](./guides/debugging-deploy.md) | Deploy skips, partial rollouts, dry-run |
 | [guides/job-commands-tutorial.md](./guides/job-commands-tutorial.md) | Python/Bun hooks walkthrough |
 | [guides/day-2-ops.md](./guides/day-2-ops.md) | Job control, health, GC patterns |
-| [guides/prometheus.md](./guides/prometheus.md) | `_prometheus/` scrape, alerts, runbooks |
+| [guides/prometheus.md](./guides/prometheus.md) | `_prometheus/` — scrape, alerts, runbooks, dashboards (optional per job) |
 
 ---
 
@@ -101,6 +101,7 @@ Rollout debugging: [guides/debugging-deploy.md](./guides/debugging-deploy.md)
 │       ├── manifest.json
 │       ├── Makefile
 │       ├── _modules/
+│       ├── _prometheus/        # optional — see guides/prometheus.md
 │       └── *.tpl
 ├── secrets/
 ├── tmp/
@@ -117,6 +118,7 @@ Rollout debugging: [guides/debugging-deploy.md](./guides/debugging-deploy.md)
 | Stateful rolling cluster | [rolling-deploy](./guides/rolling-deploy.md) → [manifest](./reference/manifest.md) |
 | Multi-job dependencies | [deployment-sequence](./reference/deployment-sequence.md) → [deploy](./reference/cli/deploy.md) |
 | Something failed on deploy | [debugging-deploy](./guides/debugging-deploy.md) |
+| Prometheus / metrics | [prometheus](./guides/prometheus.md) → [deploy](./reference/cli/deploy.md#prometheus-job-staging) |
 
 ---
 

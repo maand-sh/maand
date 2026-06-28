@@ -169,7 +169,9 @@ Each allocation tracks catalog **`current_version`** (last promoted, in **`hash`
 
 ### Active vs inactive
 
-An allocation is **active** when `removed = 0` and `disabled = 0`. A **disabled** allocation (`removed = 0`, `disabled = 1`) is still a full member of the job’s allocation set — build writes the same job and per-allocation KV, certs, and hashes; deploy still stages and promotes content. The only difference is runtime: disabled allocations are **never started** (no start/restart/rsync on deploy).
+An allocation is **active** when `removed = 0` and `disabled = 0`. A **disabled** allocation (`removed = 0`, `disabled = 1`) still gets build KV (certs, per-allocation metadata, deploy staging). Deploy **never starts** disabled allocations (no start/restart/rsync).
+
+**KV nuance:** `maand/job/<job>/workers`, `maand/job/<job>/deploy_order`, and `maand/worker/<ip>/jobs` list **active** allocations only. Per-allocation keys such as **`peer_workers`** use **non-removed** peers (disabled peers may still appear). See [KV namespaces](../reference/kv/namespaces.md).
 
 Only **active** allocations receive:
 

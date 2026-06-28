@@ -64,7 +64,7 @@ func TestBuildVariablesSyncsWorkerAndBucketKV(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, keys, "worker_ip")
 
-	keys, err = store.GetKeys("maand")
+	keys, err = store.GetKeys("maand/bucket")
 	require.NoError(t, err)
 	assert.Contains(t, keys, "bucket_id")
 

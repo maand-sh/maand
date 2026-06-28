@@ -234,7 +234,16 @@ func buildBucketVariables(tx *sql.Tx) error {
 	}
 
 	maandVariables := make(map[string]string)
+	activeJobNames := make([]string, 0, len(jobNames))
 	for _, jobName := range jobNames {
+		hasActive, err := data.JobHasActiveAllocations(tx, jobName)
+		if err != nil {
+			return err
+		}
+		if !hasActive {
+			continue
+		}
+		activeJobNames = append(activeJobNames, jobName)
 		portMap, err := data.GetJobPortMap(tx, jobName)
 		if err != nil {
 			return err
@@ -244,6 +253,7 @@ func buildBucketVariables(tx *sql.Tx) error {
 		}
 	}
 	maandVariables["jobs"] = strings.Join(jobNames, ",")
+	maandVariables["activejobs"] = strings.Join(activeJobNames, ",")
 	bucketID, err := data.GetBucketID(tx)
 	if err != nil {
 		return err
@@ -254,7 +264,7 @@ func buildBucketVariables(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	err = syncKeyValues(tx, "maand", maandVariables)
+	err = syncKeyValues(tx, data.BucketKVNamespace, maandVariables)
 	if err != nil {
 		return err
 	}
@@ -338,7 +348,7 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string, purgeJobCommandKV bool)
 			continue
 		}
 
-		workersForVars, err := data.GetNonRemovedAllocationsOrdered(tx, jobName)
+		workersForVars, err := data.GetActiveAllocationsOrdered(tx, jobName)
 		if err != nil {
 			return err
 		}
@@ -516,6 +526,7 @@ func syncKeyValues(tx *sql.Tx, namespace string, keyValues map[string]string) er
 // bucket.jobs.conf => vars/bucket/job/a
 // bucket.jobs.conf (memory, cpu) => maand/job/a
 // job resources (memory and cpu) => maand/job/a
-// job ports => maand
+// job ports (active allocations only) => maand/bucket
+// activejobs => maand/bucket
 // job meta (workers, version, resources) => maand/job/a
 // job certs => maand/job/a/worker/10.0.0.1

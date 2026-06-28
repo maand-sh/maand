@@ -30,17 +30,19 @@ func TestBuildKVJobAndAllocationVariables(t *testing.T) {
 	assert.Equal(t, "10.0.0.2", worker0)
 	assert.Equal(t, "10.0.0.1", worker1)
 
-	httpPort, _ := GetKey("maand", "svc_http_port")
-	cqlPort, _ := GetKey("maand", "svc_cql_port")
+	httpPort, _ := GetKey("maand/bucket", "svc_http_port")
+	cqlPort, _ := GetKey("maand/bucket", "svc_cql_port")
 	assert.NotEmpty(t, httpPort)
 	assert.NotEmpty(t, cqlPort)
 
 	_, err := GetKey("maand/job/svc", "ports_json")
 	assert.Error(t, err)
 
-	jobs, _ := GetKey("maand", "jobs")
+	jobs, _ := GetKey("maand/bucket", "jobs")
 	assert.Equal(t, "svc", jobs)
-	bucketID, _ := GetKey("maand", "bucket_id")
+	activeJobs, _ := GetKey("maand/bucket", "activejobs")
+	assert.Equal(t, "svc", activeJobs)
+	bucketID, _ := GetKey("maand/bucket", "bucket_id")
 	assert.NotEmpty(t, bucketID)
 
 	position, _ := GetKey("maand/worker/10.0.0.1", "position")

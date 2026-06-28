@@ -102,7 +102,7 @@ Embedded **`maand.py`** / **`maand.ts`** set these headers automatically from en
 
 | Namespace pattern | GET `/kv` | PUT/DELETE `/kv` | PUT/DELETE `/kv/secret` |
 |-------------------|-----------|------------------|-------------------------|
-| `maand`, `maand/worker`, `maand/worker/<ip>`, tags | ✓ | ✗ | ✗ |
+| `maand/bucket`, `maand/worker`, `maand/worker/<ip>`, tags | ✓ | ✗ | ✗ |
 | `vars/bucket`, `vars/bucket/job/<job>` | ✓ | ✗ | ✗ |
 | `maand/job/<job>/worker/<ip>` | ✓ | ✗ | ✗ |
 | `maand/job/<job>` key **`deploy_order`** only | ✓ | ✓ on **`pre_deploy`** or **`cli`** | ✗ |

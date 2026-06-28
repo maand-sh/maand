@@ -22,12 +22,12 @@ func TestIntegrationJobPortsStableAcrossRebuild(t *testing.T) {
 
 	portName := "integapp_port_http"
 	port1 := jobAssignedPort(t, integrationJobName, portName)
-	kv1 := latestKVValue(t, "maand", portName)
+	kv1 := latestKVValue(t, "maand/bucket", portName)
 	assert.Equal(t, port1, kv1)
 
 	executeBuild(t)
 	port2 := jobAssignedPort(t, integrationJobName, portName)
-	kv2 := latestKVValue(t, "maand", portName)
+	kv2 := latestKVValue(t, "maand/bucket", portName)
 	assert.Equal(t, port1, port2)
 	assert.Equal(t, port1, kv2)
 
@@ -36,7 +36,7 @@ func TestIntegrationJobPortsStableAcrossRebuild(t *testing.T) {
 
 	executeBuild(t)
 	port3 := jobAssignedPort(t, integrationJobName, portName)
-	kv3 := latestKVValue(t, "maand", portName)
+	kv3 := latestKVValue(t, "maand/bucket", portName)
 	assert.Equal(t, port1, port3)
 	assert.Equal(t, port1, kv3)
 }

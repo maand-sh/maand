@@ -9,6 +9,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestScrapeConfigsRequireActiveAllocations(t *testing.T) {
+	configs, err := ParseScrapeFile([]byte(`
+- job_name: api
+  static_configs:
+    - targets:
+        - maand:port/api_metrics_port
+`))
+	require.NoError(t, err)
+	assert.True(t, ScrapeConfigsRequireActiveAllocations(configs))
+
+	literal, err := ParseScrapeFile([]byte(`
+- job_name: external
+  static_configs:
+    - targets:
+        - blackbox.internal:9115
+`))
+	require.NoError(t, err)
+	assert.False(t, ScrapeConfigsRequireActiveAllocations(literal))
+}
+
+func TestExpandScrapeConfigs_noActiveAllocations(t *testing.T) {
+	configs, err := ParseScrapeFile([]byte(`
+- job_name: api
+  static_configs:
+    - targets:
+        - maand:port/api_metrics_port
+`))
+	require.NoError(t, err)
+
+	ports := workspace.ManifestPorts{"api_metrics_port": {}}
+	_, err = ExpandScrapeConfigs("api", configs, ports, map[string]int{"api_metrics_port": 30421}, nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNoActiveScrapeTargets)
+}
+
 func TestResolveMetricsPortKey(t *testing.T) {
 	ports := workspace.ManifestPorts{
 		"api_metrics_port": {},

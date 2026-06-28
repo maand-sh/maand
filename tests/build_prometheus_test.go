@@ -72,9 +72,8 @@ groups:
 	_, err = GetKey(promconfig.KVNamespace, "scrape_configs_yaml")
 	assert.Error(t, err)
 
-	alertJobs, err := GetKey(promconfig.KVNamespace, "alert_jobs")
-	require.NoError(t, err)
-	assert.Equal(t, "api", alertJobs)
+	_, err = GetKey(promconfig.KVNamespace, "alert_jobs")
+	assert.Error(t, err)
 }
 
 func TestBuildPrometheusCatalog_scrapeWithoutAllocations(t *testing.T) {
@@ -97,9 +96,21 @@ func TestBuildPrometheusCatalog_scrapeWithoutAllocations(t *testing.T) {
 
 	runBuild(t)
 
+	scrapeJobs, err := GetKey(promconfig.KVNamespace, "scrape_jobs")
+	require.NoError(t, err)
+	assert.Empty(t, scrapeJobs)
+
 	scrapeConfigs, err := GetKey(promconfig.KVNamespace, "scrape_configs")
 	require.NoError(t, err)
-	assert.Contains(t, scrapeConfigs, "maand:port/api_metrics_port")
+	assert.Equal(t, "[]", scrapeConfigs)
+
+	perJob, err := GetKey(promconfig.KVNamespace, "scrape/api")
+	require.NoError(t, err)
+	assert.Contains(t, perJob, "maand:port/api_metrics_port")
+
+	jobName, err := GetKey("maand/job/api", "job_name")
+	require.NoError(t, err)
+	assert.Equal(t, "api", jobName)
 }
 
 func TestBuildPrometheusCatalog_scrapeTemplate(t *testing.T) {

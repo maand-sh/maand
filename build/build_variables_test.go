@@ -101,6 +101,42 @@ func TestBuildJobVariablesSyncsDeployOrder(t *testing.T) {
 	assert.Equal(t, "10.0.0.1,10.0.0.2", order.Value)
 }
 
+func TestBuildJobVariables_emptyWorkersWhenDisabledOnly(t *testing.T) {
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := db.Exec(`
+		INSERT INTO worker (worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position)
+		VALUES ('w1', '10.0.0.1', '1024', '2000', 0);
+		INSERT INTO job (
+			job_id, name, version,
+			min_memory_mb, max_memory_mb, current_memory_mb,
+			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
+			update_parallel_count, deploy_parallel_count, health_check
+		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, 0, '');
+		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
+		VALUES ('a1', '10.0.0.1', 'api', 1, 0, 0, '0.0.0');
+	`)
+	require.NoError(t, err)
+
+	kv.ResetStoreForTest()
+	t.Cleanup(kv.ResetStoreForTest)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, buildJobVariables(tx, nil, false))
+	require.NoError(t, tx.Commit())
+
+	workers, err := kv.GetKVStore().Get("maand/job/api", "workers")
+	require.NoError(t, err)
+	assert.Empty(t, workers.Value)
+
+	length, err := kv.GetKVStore().Get("maand/job/api", "workers_length")
+	require.NoError(t, err)
+	assert.Equal(t, "0", length.Value)
+}
+
 func TestBuildJobVariablesPurgesCommandKVWhenRequested(t *testing.T) {
 	db := openBuildVariablesTestDB(t)
 	defer func() { _ = db.Close() }()
@@ -281,6 +317,8 @@ func TestBuildBucketVariablesSyncsBucketConf(t *testing.T) {
 			update_parallel_count, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO job_ports (job_id, name, port) VALUES ('job-api', 'http_port', 9090);
+		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
+		VALUES ('a1', '10.0.0.1', 'api', 0, 0, 0, '1.0.0');
 	`)
 	require.NoError(t, err)
 
@@ -298,9 +336,66 @@ func TestBuildBucketVariablesSyncsBucketConf(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "deploy", sshUser.Value)
 
-	httpPort, err := store.Get("maand", "http_port")
+	httpPort, err := store.Get("maand/bucket", "http_port")
 	require.NoError(t, err)
 	assert.Equal(t, "9090", httpPort.Value)
+
+	activeJobs, err := store.Get("maand/bucket", "activejobs")
+	require.NoError(t, err)
+	assert.Equal(t, "api", activeJobs.Value)
+}
+
+func TestBuildBucketVariables_skipsPortsWithoutActiveAllocations(t *testing.T) {
+	root := t.TempDir()
+	orig := bucket.Location
+	bucket.Location = root
+	bucket.UpdatePath()
+	t.Cleanup(func() {
+		bucket.Location = orig
+		bucket.UpdatePath()
+		kv.ResetStoreForTest()
+	})
+
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+	_, err := db.Exec(`
+		INSERT INTO bucket (bucket_id, update_seq) VALUES ('bucket-1', 1);
+		INSERT INTO job (
+			job_id, name, version,
+			min_memory_mb, max_memory_mb, current_memory_mb,
+			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
+			update_parallel_count, health_check
+		) VALUES
+			('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, ''),
+			('job-idle', 'idle', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
+		INSERT INTO job_ports (job_id, name, port) VALUES
+			('job-api', 'http_port', 9090),
+			('job-idle', 'idle_port', 9091);
+		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
+		VALUES ('a1', '10.0.0.1', 'api', 0, 0, 0, '1.0.0');
+	`)
+	require.NoError(t, err)
+
+	kv.ResetStoreForTest()
+	t.Cleanup(kv.ResetStoreForTest)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, buildBucketVariables(tx))
+	require.NoError(t, tx.Commit())
+
+	store := kv.GetKVStore()
+	httpPort, err := store.Get("maand/bucket", "http_port")
+	require.NoError(t, err)
+	assert.Equal(t, "9090", httpPort.Value)
+
+	_, err = store.Get("maand/bucket", "idle_port")
+	assert.Error(t, err)
+
+	activeJobs, err := store.Get("maand/bucket", "activejobs")
+	require.NoError(t, err)
+	assert.Equal(t, "api", activeJobs.Value)
 }
 
 func TestPurgeBuildJobKVNamespaces(t *testing.T) {

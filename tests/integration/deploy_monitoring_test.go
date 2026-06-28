@@ -28,7 +28,7 @@ func TestIntegrationDeployPrometheusNodeExporterConnected(t *testing.T) {
 	assert.NotEmpty(t, jobAssignedPort(t, monitoringJobPrometheus, "prometheus_http_port"))
 	assert.Equal(
 		t,
-		latestKVValue(t, "maand", "node_exporter_metrics_port"),
+		latestKVValue(t, "maand/bucket", "node_exporter_metrics_port"),
 		jobAssignedPort(t, monitoringJobNodeExporter, "node_exporter_metrics_port"),
 	)
 

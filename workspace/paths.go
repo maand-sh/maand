@@ -60,3 +60,14 @@ func shouldSkipJobWalk(rel string, d fs.DirEntry) bool {
 	}
 	return false
 }
+
+// JobHasMakefileOrTemplate reports whether the job defines Makefile or Makefile.tpl.
+func JobHasMakefileOrTemplate(jobName string) bool {
+	jobDir := JobFilePath(jobName)
+	for _, name := range []string{"Makefile", "Makefile.tpl"} {
+		if _, err := os.Stat(path.Join(jobDir, name)); err == nil {
+			return true
+		}
+	}
+	return false
+}

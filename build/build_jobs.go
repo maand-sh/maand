@@ -219,9 +219,8 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			}
 		}
 
-		_, err = os.Stat(path.Join(workspace.GetJobFilePath(jobName), "Makefile"))
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("%w: job %s, Makefile not found", bucket.ErrInvalidJob, jobName)
+		if !workspace.JobHasMakefileOrTemplate(jobName) {
+			return nil, fmt.Errorf("%w: job %s, Makefile or Makefile.tpl not found", bucket.ErrInvalidJob, jobName)
 		}
 
 		_, err = os.Stat(path.Join(workspace.GetJobFilePath(jobName), "data"))

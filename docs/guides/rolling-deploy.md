@@ -82,7 +82,7 @@ maand cat jobs                    # deployment_seq column
 maand deploy --jobs api,worker    # still respects seq order
 ```
 
-See [deployment-sequence.md](../reference/deployment-sequence.md)).
+See [deployment-sequence.md](../reference/deployment-sequence.md).
 
 ### `job_control` custom rollout
 

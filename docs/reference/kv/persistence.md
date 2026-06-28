@@ -18,7 +18,7 @@ maand cat kv get --reveal secrets/job/api db_password
 
 | Namespace | Written by | Survives rebuild? | Notes |
 |-----------|------------|-------------------|-------|
-| `maand` | build | yes (synced) | Global: `bucket_id`, `jobs`, port names |
+| `maand/bucket` | build | yes (synced) | Global: `bucket_id`, `jobs`, `activejobs`, port names |
 | `maand/worker/<ip>` | build | yes | Worker metadata, labels, peers |
 | `maand/worker/<ip>/tags/<key>` | build | yes | From `workers.json` tags |
 | `maand/job/<job>` | build | yes (when job active) | Job metadata, `version`, `deploy_order`, workers |
@@ -27,7 +27,7 @@ maand cat kv get --reveal secrets/job/api db_password
 | `vars/bucket/job/<job>` | build | yes (when job active) | From `bucket.jobs*.conf` |
 | `vars/job/<job>` | build + job commands | **yes** | App config; not wiped on rebuild |
 | `secrets/job/<job>` | job commands | **yes** | AES-256-GCM encrypted |
-| `maand/prometheus` | build | yes (synced) | Scrape configs — [guides/prometheus](../../guides/prometheus.md) |
+| `maand/prometheus` | build | yes (synced) | **Scrape configs only** — alerts/runbooks/dashboards stay in `job_files` — [prometheus](../../guides/prometheus.md) |
 
 When a job has **no active allocations**, build and deploy purge build-owned namespaces; **`vars/job`** and **`secrets/job`** are retained unless **`maand build --purge-job-kv`** or deploy reconcile removes them. **`maand gc`** purges remainder. See [cli/gc.md](../cli/gc.md).
 
@@ -37,7 +37,7 @@ When a job has **no active allocations**, build and deploy purge build-owned nam
 
 **Job commands** and **templates** on allocation `(job, worker_ip)` may read:
 
-- `maand`, `vars/bucket`
+- `maand/bucket`, `vars/bucket`
 - `maand/worker`, `maand/worker/<ip>`, `maand/worker/<ip>/tags`
 - `maand/job/<job>`, `vars/bucket/job/<job>`, `vars/job/<job>`, `secrets/job/<job>`
 - `maand/job/<job>/worker/<ip>`

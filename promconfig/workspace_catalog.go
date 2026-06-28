@@ -78,7 +78,13 @@ func workspacePrometheusSummary(jobName string) (data.PrometheusJobSummary, bool
 	}
 	summary.Runbooks = len(runbookSlugs)
 
-	if !summary.Scrape && summary.Alerts == 0 && summary.Runbooks == 0 {
+	dashboardFiles, err := ListDashboardFiles(jobName)
+	if err != nil {
+		return data.PrometheusJobSummary{}, false, err
+	}
+	summary.Dashboards = len(dashboardFiles)
+
+	if !summary.Scrape && summary.Alerts == 0 && summary.Runbooks == 0 && summary.Dashboards == 0 {
 		return data.PrometheusJobSummary{}, false, nil
 	}
 	return summary, true, nil
@@ -210,6 +216,9 @@ func MergePrometheusSummaries(dbList, wsList []data.PrometheusJobSummary) []data
 		}
 		if summary.Runbooks > existing.Runbooks {
 			existing.Runbooks = summary.Runbooks
+		}
+		if summary.Dashboards > existing.Dashboards {
+			existing.Dashboards = summary.Dashboards
 		}
 		byJob[summary.Job] = existing
 	}

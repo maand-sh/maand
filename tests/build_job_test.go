@@ -260,7 +260,7 @@ func TestJobDisabled(t *testing.T) {
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE disabled = 0")
 	assert.Equal(t, 0, count)
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 40, count)
+	assert.Equal(t, 37, count)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{}}`), os.ModePerm)
 
@@ -295,7 +295,7 @@ func TestAllocationDisabled(t *testing.T) {
 	assert.Equal(t, 0, count)
 
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 40, count)
+	assert.Equal(t, 37, count)
 
 	// jobs is still disabled
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{"a":{"workers":[]}}}`), os.ModePerm)
@@ -304,7 +304,7 @@ func TestAllocationDisabled(t *testing.T) {
 	count = GetRowCount("SELECT count(1) FROM allocations WHERE disabled = 0")
 	assert.Equal(t, 0, count)
 	count = GetRowCount("SELECT count(1) FROM cat_kv WHERE deleted = 0")
-	assert.Equal(t, 40, count)
+	assert.Equal(t, 37, count)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "disabled.json"), []byte(`{"jobs":{}}`), os.ModePerm)
 	err = executeBuildErr(t)
@@ -481,9 +481,11 @@ func TestJobPortFixedInManifest(t *testing.T) {
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "api")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{
+		"selectors": ["worker"],
 		"resources": {"ports": {"api_http_port": 30010, "api_metrics_port": {}}}
 	}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte("start:\n"), os.ModePerm)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"}]`), os.ModePerm)
 
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
@@ -494,8 +496,8 @@ func TestJobPortFixedInManifest(t *testing.T) {
 	assert.Equal(t, 30010, httpPort)
 	assert.NotEqual(t, 30010, metricsPort)
 
-	kvHTTP, _ := GetKey("maand", "api_http_port")
-	kvMetrics, _ := GetKey("maand", "api_metrics_port")
+	kvHTTP, _ := GetKey("maand/bucket", "api_http_port")
+	kvMetrics, _ := GetKey("maand/bucket", "api_metrics_port")
 	assert.Equal(t, "30010", kvHTTP)
 	assert.Equal(t, strconv.Itoa(metricsPort), kvMetrics)
 
@@ -548,7 +550,7 @@ func TestJobPortFixedToProvisionedOutsidePool(t *testing.T) {
 	assert.LessOrEqual(t, port, 39999)
 	assert.NotEqual(t, 9500, port)
 
-	kvPort, err := GetKey("maand", "node_agent_port_metrics")
+	kvPort, err := GetKey("maand/bucket", "node_agent_port_metrics")
 	assert.NoError(t, err)
 	assert.Equal(t, strconv.Itoa(port), kvPort)
 }
@@ -585,13 +587,14 @@ func TestJobPortsStableAcrossRebuilds(t *testing.T) {
 	writeJobWithPorts := func(job, portName string) {
 		jobPath := path.Join(bucket.WorkspaceLocation, "jobs", job)
 		_ = os.MkdirAll(jobPath, os.ModePerm)
-		manifest := fmt.Sprintf(`{"resources":{"ports": {"%s": {}}}}`, portName)
+		manifest := fmt.Sprintf(`{"selectors": ["worker"], "resources":{"ports": {"%s": {}}}}`, portName)
 		_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(manifest), os.ModePerm)
 		_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte("start:\n"), os.ModePerm)
 	}
 
 	writeJobWithPorts("api", "api_http_port")
 	writeJobWithPorts("database", "database_port")
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"}]`), os.ModePerm)
 
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
@@ -600,8 +603,8 @@ func TestJobPortsStableAcrossRebuilds(t *testing.T) {
 	GetRowValues("SELECT port FROM job_ports WHERE name = 'api_http_port'", &apiPort)
 	GetRowValues("SELECT port FROM job_ports WHERE name = 'database_port'", &dbPort)
 
-	kvAPI, _ := GetKey("maand", "api_http_port")
-	kvDB, _ := GetKey("maand", "database_port")
+	kvAPI, _ := GetKey("maand/bucket", "api_http_port")
+	kvDB, _ := GetKey("maand/bucket", "database_port")
 	assert.Equal(t, strconv.Itoa(apiPort), kvAPI)
 	assert.Equal(t, strconv.Itoa(dbPort), kvDB)
 
@@ -629,8 +632,8 @@ func TestJobPortsStableAcrossRebuilds(t *testing.T) {
 	assert.Equal(t, apiPort, apiPortAfter)
 	assert.Equal(t, dbPort, dbPortAfter)
 
-	kvAPI, _ = GetKey("maand", "api_http_port")
-	kvDB, _ = GetKey("maand", "database_port")
+	kvAPI, _ = GetKey("maand/bucket", "api_http_port")
+	kvDB, _ = GetKey("maand/bucket", "database_port")
 	assert.Equal(t, strconv.Itoa(apiPort), kvAPI)
 	assert.Equal(t, strconv.Itoa(dbPort), kvDB)
 }
@@ -650,7 +653,7 @@ func TestJobKVCountJobRemovedNoWorker(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 25, count)
+	assert.Equal(t, 23, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "jobs", "a"))
 
@@ -658,7 +661,7 @@ func TestJobKVCountJobRemovedNoWorker(t *testing.T) {
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 11, count)
+	assert.Equal(t, 9, count)
 }
 
 func TestJobKVCountJobRemoved(t *testing.T) {
@@ -678,7 +681,7 @@ func TestJobKVCountJobRemoved(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 40, count)
+	assert.Equal(t, 38, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "jobs", "a"))
 
@@ -686,7 +689,7 @@ func TestJobKVCountJobRemoved(t *testing.T) {
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 23, count)
+	assert.Equal(t, 21, count)
 }
 
 func TestJobKVCountWorkerJSONRemovedLater(t *testing.T) {
@@ -701,14 +704,14 @@ func TestJobKVCountWorkerJSONRemovedLater(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 23, count)
+	assert.Equal(t, 21, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "workers.json"))
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 11, count)
+	assert.Equal(t, 9, count)
 
 	err = cat.KV("", false, false)
 	assert.NoError(t, err)
@@ -731,21 +734,21 @@ func TestCountKVWorkerJSONAndJobRemoved(t *testing.T) {
 	assert.NoError(t, err)
 
 	count := GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 40, count)
+	assert.Equal(t, 38, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "workers.json"))
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 11, count)
+	assert.Equal(t, 9, count)
 
 	_ = os.RemoveAll(path.Join(bucket.WorkspaceLocation, "jobs", "a"))
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
 	count = GetRowCount("SELECT count(*) FROM cat_kv where deleted = 0")
-	assert.Equal(t, 11, count)
+	assert.Equal(t, 9, count)
 }
 
 func TestJobKVMemoryCPUJobConf(t *testing.T) {

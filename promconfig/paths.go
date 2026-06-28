@@ -19,6 +19,7 @@ const (
 	ScrapeFileTplName = "scrape.yaml.tpl"
 	AlertsDir      = "alerts"
 	RunbooksDir    = "runbooks"
+	DashboardsDir  = "dashboards"
 
 	PortPlaceholderPrefix = "maand:port/"
 	JobPlaceholder        = "maand:job"
@@ -78,4 +79,19 @@ func RunbookSlugFromPath(jobFilePath string) (job, slug string, ok bool) {
 		return "", "", false
 	}
 	return job, strings.TrimSuffix(base, ".md"), true
+}
+
+// DashboardRelFromPath returns the job name and path under dashboards/ from a job_files path.
+func DashboardRelFromPath(jobFilePath string) (job, rel string, ok bool) {
+	const marker = "/_prometheus/dashboards/"
+	idx := strings.Index(jobFilePath, marker)
+	if idx < 0 {
+		return "", "", false
+	}
+	job = jobFilePath[:idx]
+	rel = jobFilePath[idx+len(marker):]
+	if rel == "" {
+		return "", "", false
+	}
+	return job, rel, true
 }

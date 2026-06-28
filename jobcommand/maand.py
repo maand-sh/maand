@@ -326,7 +326,7 @@ def run_runner_target(
     """Run runner.py <target> --jobs <job> on a worker (same as deploy)."""
     worker_ip = worker_ip or allocation_ip()
     job = job or job_name()
-    bucket_id = get_kv_value("maand", "bucket_id")
+    bucket_id = get_kv_value("maand/bucket", "bucket_id")
     remote = (
         f"python3 /opt/worker/{bucket_id}/bin/runner.py "
         f"{bucket_id} {target} --jobs {job}"
@@ -344,6 +344,6 @@ def run_make_target(
     """Run make <target> in the job directory on a worker."""
     worker_ip = worker_ip or allocation_ip()
     job = job or job_name()
-    bucket_id = get_kv_value("maand", "bucket_id")
+    bucket_id = get_kv_value("maand/bucket", "bucket_id")
     remote = f"make -C /opt/worker/{bucket_id}/jobs/{job} {target}"
     return run_ssh(worker_ip, remote, timeout=timeout)

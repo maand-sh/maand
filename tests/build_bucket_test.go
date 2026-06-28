@@ -112,11 +112,11 @@ func TestEmptyBucketConf(t *testing.T) {
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
-	key, _ := GetKey("maand", "a")
+	key, _ := GetKey("maand/bucket", "a")
 	assert.Equal(t, "", key)
 
 	kvcount := GetRowCount("select count(1) from key_value")
-	assert.Equal(t, 9, kvcount)
+	assert.Equal(t, 7, kvcount)
 }
 
 func TestBucketConfAdded(t *testing.T) {
@@ -128,7 +128,7 @@ func TestBucketConfAdded(t *testing.T) {
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
-	key, _ := GetKey("maand", "a")
+	key, _ := GetKey("maand/bucket", "a")
 	assert.Equal(t, "", key)
 
 	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "bucket.conf"), []byte(`a="1"`), os.ModePerm)
@@ -347,41 +347,42 @@ func TestJobPortOpsKV(t *testing.T) {
 
 	jobPath := path.Join(bucket.WorkspaceLocation, "jobs", "a")
 	_ = os.MkdirAll(jobPath, os.ModePerm)
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port": {}}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors": ["worker"], "resources":{"ports": {"web_port": {}}}}`), os.ModePerm)
 	_ = os.WriteFile(path.Join(jobPath, "Makefile"), []byte(``), os.ModePerm)
+	_ = os.WriteFile(path.Join(bucket.WorkspaceLocation, "workers.json"), []byte(`[{"host":"10.0.0.1"}]`), os.ModePerm)
 
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
-	value, _ := GetKey("maand", "web_port")
+	value, _ := GetKey("maand/bucket", "web_port")
 	firstPort := value
 	assert.NotEmpty(t, firstPort)
 
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
-	value, _ = GetKey("maand", "web_port")
+	value, _ = GetKey("maand/bucket", "web_port")
 	assert.Equal(t, firstPort, value)
 
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port": {}, "web_port2": {}}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors": ["worker"], "resources":{"ports": {"web_port": {}, "web_port2": {}}}}`), os.ModePerm)
 
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
-	value, _ = GetKey("maand", "web_port")
+	value, _ = GetKey("maand/bucket", "web_port")
 	assert.Equal(t, firstPort, value)
-	value, _ = GetKey("maand", "web_port2")
+	value, _ = GetKey("maand/bucket", "web_port2")
 	assert.NotEmpty(t, value)
 	assert.NotEqual(t, firstPort, value)
 
-	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"resources":{"ports": {"web_port2": {}}}}`), os.ModePerm)
+	_ = os.WriteFile(path.Join(jobPath, "manifest.json"), []byte(`{"selectors": ["worker"], "resources":{"ports": {"web_port2": {}}}}`), os.ModePerm)
 
 	err = executeBuildErr(t)
 	assert.NoError(t, err)
 
-	value, _ = GetKey("maand", "web_port")
+	value, _ = GetKey("maand/bucket", "web_port")
 	assert.Equal(t, "", value)
-	value, _ = GetKey("maand", "web_port2")
+	value, _ = GetKey("maand/bucket", "web_port2")
 	assert.NotEmpty(t, value)
 }
 
@@ -779,7 +780,7 @@ func TestMakefileNotFound(t *testing.T) {
 	err = executeBuildErr(t)
 
 	assert.Error(t, err)
-	assert.ErrorContains(t, err, "invalid job: job a, Makefile not found")
+	assert.ErrorContains(t, err, "invalid job: job a, Makefile or Makefile.tpl not found")
 }
 
 func TestInvalidmanifestJSON(t *testing.T) {

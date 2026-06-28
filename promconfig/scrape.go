@@ -5,6 +5,7 @@
 package promconfig
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -14,6 +15,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// ErrNoActiveScrapeTargets is returned when maand:port placeholders expand to zero targets.
+var ErrNoActiveScrapeTargets = errors.New("no active allocation targets after expanding scrape config")
 
 var forbiddenServiceDiscoveryKeys = []string{
 	"kubernetes_sd_configs",
@@ -111,6 +115,44 @@ func ValidateScrapePortReferences(jobName string, configs []map[string]interface
 		}
 	}
 	return nil
+}
+
+// ScrapeConfigsRequireActiveAllocations reports whether any static_configs target uses maand:port placeholders.
+func ScrapeConfigsRequireActiveAllocations(configs []map[string]interface{}) bool {
+	for _, cfg := range configs {
+		rawStatic, ok := cfg["static_configs"]
+		if !ok {
+			continue
+		}
+		staticSlice, ok := rawStatic.([]interface{})
+		if !ok {
+			continue
+		}
+		for _, block := range staticSlice {
+			blockMap, ok := block.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			rawTargets, ok := blockMap["targets"]
+			if !ok {
+				continue
+			}
+			targetList, ok := rawTargets.([]interface{})
+			if !ok {
+				continue
+			}
+			for _, rawTarget := range targetList {
+				target, ok := rawTarget.(string)
+				if !ok {
+					continue
+				}
+				if strings.HasPrefix(target, PortPlaceholderPrefix) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func validatePortPlaceholder(jobName string, cfgIdx, blockIdx, targetIdx int, target string, ports workspace.ManifestPorts) error {
@@ -284,7 +326,7 @@ func expandStaticConfigs(
 			}
 		}
 		if len(expandedTargets) == 0 {
-			return fmt.Errorf("%w: job %s has no active allocation targets after expanding scrape.yaml", bucket.ErrInvalidJob, jobName)
+			return fmt.Errorf("%w: job %s", ErrNoActiveScrapeTargets, jobName)
 		}
 		copyBlock["targets"] = expandedTargets
 		newStatic = append(newStatic, copyBlock)

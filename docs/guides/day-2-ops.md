@@ -118,20 +118,21 @@ Add **`_prometheus/`** under each job that exposes metrics (see [prometheus.md](
 
 ```text
 workspace/jobs/api/_prometheus/
-├── scrape.yaml
-├── alerts/
-└── runbooks/
+├── scrape.yaml              # optional
+├── alerts/                  # optional
+├── runbooks/                # optional
+└── dashboards/              # optional
 ```
 
-After adding or changing scrape configs:
+After adding or changing `_prometheus/` content:
 
 ```bash
 maand build
 maand deploy --jobs api,...      # app jobs first
-maand deploy --jobs prometheus   # refresh scrape config, alert rules, runbook HTML
+maand deploy --jobs prometheus   # assemble rules, runbooks, dashboards, scrape config
 ```
 
-Runbooks are served from the Prometheus UI after deploy (`/consoles/runbooks/...`) — see [prometheus.md](prometheus.md#runbooks).
+Console pages: runbooks at `/consoles/runbooks/...`, dashboards at `/consoles/dashboards/...` — see [prometheus.md](prometheus.md).
 
 ---
 

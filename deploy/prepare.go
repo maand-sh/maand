@@ -146,6 +146,9 @@ func prepareJobOnWorker(tx *sql.Tx, job, workerIP string) error {
 		if err := assemblePrometheusRunbooks(tx, prometheusJobDir); err != nil {
 			return err
 		}
+		if err := assemblePrometheusDashboards(tx, prometheusJobDir); err != nil {
+			return err
+		}
 	}
 	return updateCerts(tx, job, workerIP)
 }

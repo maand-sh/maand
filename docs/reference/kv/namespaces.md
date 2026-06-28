@@ -22,7 +22,7 @@ Persistence and purge: [persistence.md](./persistence.md) · Index: [README.md](
 
 ```text
 GLOBAL
-  maand                          ← build: bucket_id, jobs, all job port names
+  maand/bucket                   ← build: bucket_id, jobs, activejobs, job port names (active allocations)
   vars/bucket                    ← bucket.conf (your keys)
 
 WORKER
@@ -32,6 +32,7 @@ WORKER
 
 JOB
   maand/job/<job>                ← build: catalog metadata (synced)
+  maand/prometheus               ← build: scrape catalog only (when prometheus server job exists)
   vars/bucket/job/<job>          ← bucket.jobs*.conf section (synced)
   vars/job/<job>                 ← vars.toml + hooks (merge, not wiped)
   secrets/job/<job>              ← hooks only (encrypted)
@@ -44,7 +45,7 @@ ALLOCATION (job on one worker)
 
 | Namespace | On rebuild | Stale keys removed? |
 |-----------|------------|-------------------|
-| `maand`, `maand/worker*`, `maand/job/<job>` | Refreshed from workspace/DB | **Yes** (`syncKeyValues`) |
+| `maand/bucket`, `maand/worker*`, `maand/job/<job>` | Refreshed from workspace/DB | **Yes** (`syncKeyValues`) |
 | `vars/bucket`, `vars/bucket/job/<job>` | Refreshed from TOML | **Yes** |
 | `vars/job/<job>` | `vars.toml` merged; hook keys kept | **No** (put-only merge) |
 | `secrets/job/<job>` | Unchanged unless hooks/GC | **No** |
@@ -77,7 +78,7 @@ Use in templates:
 {{ get "vars/bucket" "log_level" }}
 ```
 
-### `maand` — system global metadata
+### `maand/bucket` — system global metadata
 
 **Source:** build (not edited directly).
 
@@ -85,14 +86,15 @@ Use in templates:
 |-----|---------|---------|
 | `bucket_id` | `a1b2c3…` | Bucket UUID |
 | `jobs` | `api,worker` | Comma-separated job names |
-| `<port_name>` | `30042` | Flat map of **all** jobs’ assigned ports (from manifests) |
+| `activejobs` | `api` | Comma-separated job names with at least one **active** allocation |
+| `<port_name>` | `30042` | Assigned port for jobs with **active** allocations only |
 
 ```bash
-maand cat kv get maand bucket_id
-maand cat kv get maand api_http_port
+maand cat kv get maand/bucket bucket_id
+maand cat kv get maand/bucket api_http_port
 ```
 
-Port numbers live **only** in **`maand`**. Use `get "maand" "<port_name>"` in templates and job commands (including cross-job reads; no `demands` required).
+Port numbers live **only** in **`maand/bucket`**. Use `get "maand/bucket" "<port_name>"` in templates and job commands (including cross-job reads; no `demands` required).
 
 ---
 
@@ -168,21 +170,21 @@ Three namespaces serve different purposes.
 | `job_name` | Prometheus scrape `job_name` when `_prometheus/scrape.yaml` exists; otherwise the maand job name |
 | `version` | Target version from manifest |
 | `selectors` | Job selectors |
-| `workers`, `workers_length`, `worker_0`, … | Allocated worker IPs (ordered) |
-| `deploy_order` | Comma-separated worker IPs for rollout order (synced from catalog on build). Override for one deploy via **`put_deploy_order`** in **`pre_deploy`** or **`cli`** — [job-command-api.md](../job-command-api.md) |
+| `workers`, `workers_length`, `worker_0`, … | **Active** worker IPs (ordered); disabled allocations omitted |
+| `deploy_order` | Comma-separated **active** worker IPs for rollout order (synced from catalog on build). Override for one deploy via **`put_deploy_order`** in **`pre_deploy`** or **`cli`** — [job-command-api.md](../job-command-api.md) |
 | `memory`, `cpu` | Current reservation |
 | `min_memory_mb`, `max_memory_mb`, `min_cpu_mhz`, `max_cpu_mhz` | Manifest bounds |
 
 ```bash
 maand cat kv --jobs api
 maand cat kv get maand/job/api workers
-maand cat kv get maand api_http_port
+maand cat kv get maand/bucket api_http_port
 ```
 
 Template (port from global namespace):
 
 ```text
-{{ get "maand" "api_http_port" }}
+{{ get "maand/bucket" "api_http_port" }}
 ```
 
 ### `vars/bucket/job/<job>` — bucket overrides per job
@@ -260,8 +262,8 @@ Namespace: **`maand/job/<job>/worker/<ip>`**
 | Key | Set by | Meaning |
 |-----|--------|---------|
 | `certs/<name>.crt`, `.key` | build | TLS material — [certs.md](../certs.md) |
-| `<job>_allocation_index` | build | Index among job peers |
-| `peer_workers` | build | Comma-separated peer IPs for this job |
+| `<job>_allocation_index` | build | Index among **non-removed** job peers |
+| `peer_workers` | build | Comma-separated peer IPs for this job (**non-removed**, includes disabled) |
 | `version` | build + deploy | Target deploy version for this allocation |
 
 ```bash
@@ -352,7 +354,7 @@ service_name = "api-gateway"
 {
   "env": "{{ get "vars/bucket" "environment" }}",
   "service": "{{ get "vars/job/api" "service_name" }}",
-  "listen": "{{ get "maand" "api_http_port" }}",
+  "listen": "{{ get "maand/bucket" "api_http_port" }}",
   "peers": "{{ get (printf "maand/job/api/worker/%s" .WorkerIP) "peer_workers" }}",
   "version": "{{ .NewVersion }}"
 }
@@ -393,7 +395,7 @@ Persisted when deploy checkpoints KV for that job.
 | Per-job bucket override | `workspace/bucket.jobs*.conf` | `vars/bucket/job/<job>` |
 | App config in git | `workspace/jobs/<job>/vars.toml` | `vars/job/<job>` |
 | Secret | job command hook | `secrets/job/<job>` |
-| Port numbers | `manifest.json` + build | `maand` |
+| Port numbers | `manifest.json` + build | `maand/bucket` |
 | Workers / version | `manifest.json` + build | `maand/job/<job>` |
 | Host metadata | `workers.json` + build | `maand/worker/<ip>` |
 | Peers / certs on one node | automatic at build/deploy | `maand/job/<job>/worker/<ip>` |

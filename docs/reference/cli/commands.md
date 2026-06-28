@@ -26,7 +26,7 @@ Configuration files: [configuration.md](../configuration.md) · KV: [KV persiste
 | `maand cat job_commands` | Commands from manifests |
 | `maand cat job_ports` | Declared ports per job |
 | `maand cat certs` | TLS CA and leaf certs with expiry (`--jobs`, `--workers`) — [certs.md](../certs.md#inspecting-certificates-maand-cat-certs) |
-| `maand cat prometheus` | `_prometheus/` catalog (`get`, `scrape` subcommands) |
+| `maand cat prometheus` | `_prometheus/` participation (scrape, alerts, runbooks, dashboards); `get`, `scrape` subcommands |
 | `maand cat kv` | List KV keys (`--jobs`, `--active`, `--deleted`; or `maand cat kv get <ns> <key> [--reveal]`) |
 
 ## Job control
@@ -241,11 +241,11 @@ maand cat kv [--jobs j1,j2] [--active] [--deleted]
 
 | Flag | Description |
 |------|-------------|
-| `--jobs` | Comma-separated job names; limits output to KV namespaces accessible to that job (same as job commands/templates: `maand`, `vars/bucket`, worker/allocation namespaces, upstream demand jobs) |
+| `--jobs` | Comma-separated job names; limits output to KV namespaces accessible to that job (same as job commands/templates: `maand/bucket`, `vars/bucket`, worker/allocation namespaces, upstream demand jobs) |
 | `--active` | Only keys with `deleted=0` |
 | `--deleted` | Only keys with `deleted=1` |
 
-With **`--jobs`**, lists every KV namespace the job can read: shared `maand` and `vars/bucket`, each allocated worker's `maand/worker/<ip>` and tags, job/allocation namespaces, and upstream jobs referenced in command **demands**.
+With **`--jobs`**, lists every KV namespace the job can read: shared `maand/bucket` and `vars/bucket`, each allocated worker's `maand/worker/<ip>` and tags, job/allocation namespaces, and upstream jobs referenced in command **demands**.
 
 ---
 

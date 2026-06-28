@@ -79,7 +79,7 @@ func writeNodeExporterJob(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "Makefile"), []byte(nodeExporterMakefile()), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "config.env.tpl"), []byte(
-		`METRICS_PORT={{ get "maand" "node_exporter_metrics_port" }}`+"\n",
+		`METRICS_PORT={{ get "maand/bucket" "node_exporter_metrics_port" }}`+"\n",
 	), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "docker-compose.yml.tpl"), []byte(nodeExporterCompose()), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(modulesDir, "command_ready.py"), []byte(`print("node-exporter-ready")`), 0o644))
@@ -109,7 +109,7 @@ func writePrometheusJob(t *testing.T) {
 
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "Makefile"), []byte(prometheusMakefile()), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "config.env.tpl"), []byte(
-		`PROMETHEUS_PORT={{ get "maand" "prometheus_http_port" }}`+"\n",
+		`PROMETHEUS_PORT={{ get "maand/bucket" "prometheus_http_port" }}`+"\n",
 	), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "docker-compose.yml.tpl"), []byte(prometheusCompose()), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "prometheus.yml.tpl"), []byte(prometheusScrapeConfig()), 0o644))
@@ -211,7 +211,7 @@ func nodeExporterCompose() string {
     image: prom/node-exporter:v1.8.2
     restart: unless-stopped
     ports:
-      - "{{ get "maand" "node_exporter_metrics_port" }}:9100"
+      - "{{ get "maand/bucket" "node_exporter_metrics_port" }}:9100"
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -230,7 +230,7 @@ func prometheusCompose() string {
     image: prom/prometheus:v2.54.1
     restart: unless-stopped
     ports:
-      - "{{ get "maand" "prometheus_http_port" }}:9090"
+      - "{{ get "maand/bucket" "prometheus_http_port" }}:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./rules:/etc/prometheus/rules:ro

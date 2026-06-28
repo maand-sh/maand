@@ -71,6 +71,9 @@ func renderScrapeConfigsFromKV(tx *sql.Tx, jobsFilter []string) (string, error) 
 
 		expanded, err := expandScrapeConfigsForJob(tx, jobName, configs)
 		if err != nil {
+			if errors.Is(err, ErrNoActiveScrapeTargets) {
+				continue
+			}
 			return "", err
 		}
 		allExpanded = append(allExpanded, expanded...)
@@ -97,6 +100,9 @@ func renderScrapeConfigsFromWorkspace(tx *sql.Tx, jobsFilter []string) (string, 
 		}
 		expanded, err := expandScrapeConfigsForJob(tx, jobName, configs)
 		if err != nil {
+			if errors.Is(err, ErrNoActiveScrapeTargets) {
+				continue
+			}
 			return "", err
 		}
 		allExpanded = append(allExpanded, expanded...)

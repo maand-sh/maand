@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"maand/bucket"
+	"maand/data"
 	"maand/kv"
 	"maand/workspace"
 )
@@ -23,7 +24,7 @@ const (
 	prometheusServerConfigTplFile = "prometheus.yml.tpl"
 )
 
-// BuildCatalog aggregates _prometheus/ content from all workspace jobs into KV.
+// BuildCatalog validates _prometheus/ content and aggregates scrape configs into KV.
 func BuildCatalog(tx *sql.Tx, jobWorkspace workspace.Workspace) error {
 	jobNames, err := jobWorkspace.ListJobNames()
 	if err != nil {
@@ -36,17 +37,11 @@ func BuildCatalog(tx *sql.Tx, jobWorkspace workspace.Workspace) error {
 			"scrape_configs":     "[]",
 			"scrape_jobs":        "",
 			"scrape_jobs_length": "0",
-			"alert_jobs":         "",
-			"alert_files":        "[]",
-			"runbook_jobs":       "",
 		})
 	}
 
 	allUnexpanded := make([]map[string]interface{}, 0)
 	scrapeJobs := make([]string, 0)
-	alertJobs := make([]string, 0)
-	runbookJobs := make([]string, 0)
-	alertFiles := make([]AlertFileEntry, 0)
 	prometheusJobNames := make(map[string]string)
 	alertNames := make(map[string]string)
 
@@ -64,47 +59,31 @@ func BuildCatalog(tx *sql.Tx, jobWorkspace workspace.Workspace) error {
 		if err != nil {
 			return err
 		}
-		if len(runbookSlugs) > 0 {
-			runbookJobs = append(runbookJobs, jobName)
-			for slug := range runbookSlugs {
-				kvValues[fmt.Sprintf("runbooks/%s/%s", jobName, slug)] = fmt.Sprintf(
-					`{"file":%q}`, path.Join(jobName, "_prometheus", RunbooksDir, slug+".md"))
-			}
-		}
 
 		alertPaths, err := ListAlertFiles(jobName)
 		if err != nil {
 			return err
 		}
-		if len(alertPaths) > 0 {
-			alertJobs = append(alertJobs, jobName)
-			for _, rel := range alertPaths {
-				filePath := path.Join(jobName, "_prometheus", rel)
-				content, err := os.ReadFile(workspace.JobFilePath(filePath))
-				if err != nil {
-					return err
-				}
-				if err := ValidateAlertFile(jobName, rel, content, runbookSlugs); err != nil {
-					return err
-				}
-				names, err := AlertNamesFromFile(content)
-				if err != nil {
-					return fmt.Errorf("job %s: %w", jobName, err)
-				}
-				for _, alertName := range names {
-					if owner, exists := alertNames[alertName]; exists {
-						return fmt.Errorf("%w: duplicate alert name %q (jobs %s and %s)",
-							bucket.ErrInvalidJob, alertName, owner, jobName)
-					}
-					alertNames[alertName] = jobName
-				}
-				alertFiles = append(alertFiles, AlertFileEntry{
-					Job:  jobName,
-					Path: filePath,
-					Rel:  rel,
-				})
+		for _, rel := range alertPaths {
+			filePath := path.Join(jobName, "_prometheus", rel)
+			content, err := os.ReadFile(workspace.JobFilePath(filePath))
+			if err != nil {
+				return err
 			}
-			kvValues[fmt.Sprintf("alerts/%s/files", jobName)] = strings.Join(alertPaths, ",")
+			if err := ValidateAlertFile(jobName, rel, content, runbookSlugs); err != nil {
+				return err
+			}
+			names, err := AlertNamesFromFile(content)
+			if err != nil {
+				return fmt.Errorf("job %s: %w", jobName, err)
+			}
+			for _, alertName := range names {
+				if owner, exists := alertNames[alertName]; exists {
+					return fmt.Errorf("%w: duplicate alert name %q (jobs %s and %s)",
+						bucket.ErrInvalidJob, alertName, owner, jobName)
+				}
+				alertNames[alertName] = jobName
+			}
 		}
 
 		if err := ValidateScrapeFiles(jobName); err != nil {
@@ -152,6 +131,15 @@ func BuildCatalog(tx *sql.Tx, jobWorkspace workspace.Workspace) error {
 			return err
 		}
 		kvValues[fmt.Sprintf("scrape/%s", jobName)] = string(perJobJSON)
+
+		activeWorkers, err := data.GetActiveAllocations(tx, jobName)
+		if err != nil {
+			return err
+		}
+		if ScrapeConfigsRequireActiveAllocations(configs) && len(activeWorkers) == 0 {
+			continue
+		}
+
 		scrapeJobs = append(scrapeJobs, jobName)
 		allUnexpanded = append(allUnexpanded, configs...)
 	}
@@ -160,17 +148,10 @@ func BuildCatalog(tx *sql.Tx, jobWorkspace workspace.Workspace) error {
 	if err != nil {
 		return err
 	}
-	alertFilesJSON, err := json.Marshal(alertFiles)
-	if err != nil {
-		return err
-	}
 
 	kvValues["scrape_configs"] = string(scrapeConfigsJSON)
 	kvValues["scrape_jobs"] = strings.Join(scrapeJobs, ",")
 	kvValues["scrape_jobs_length"] = fmt.Sprintf("%d", len(scrapeJobs))
-	kvValues["alert_jobs"] = strings.Join(alertJobs, ",")
-	kvValues["alert_files"] = string(alertFilesJSON)
-	kvValues["runbook_jobs"] = strings.Join(runbookJobs, ",")
 
 	return syncPrometheusKV(kvValues)
 }

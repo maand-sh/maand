@@ -181,7 +181,7 @@ Restart or reload the job if it caches TLS material (e.g. **`make restart`** on 
 
 ### Prometheus metrics (optional)
 
-When a **prometheus** job ships `prometheus.yml` or `prometheus.yml.tpl`, **`maand deploy`** pushes certificate expiry gauges to Prometheus remote write (`/api/v1/write`). Push is **best-effort** — failures are logged and do not fail deploy.
+When a **prometheus** job ships `prometheus.yml` or `prometheus.yml.tpl`, **`maand deploy`** (after commit) pushes certificate expiry gauges to Prometheus remote write (`/api/v1/write`). Push runs **only at deploy**, not at **`maand build`**. Failures are **best-effort** — logged, deploy still succeeds.
 
 | Metric | Meaning |
 |--------|---------|

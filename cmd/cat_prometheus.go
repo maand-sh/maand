@@ -14,7 +14,7 @@ import (
 
 var catPrometheusCmd = &cobra.Command{
 	Use:   "prometheus",
-	Short: "Show _prometheus/ catalog (scrape, alerts, runbooks)",
+	Short: "Show _prometheus/ catalog (scrape, alerts, runbooks, dashboards)",
 	Long: `List jobs that ship _prometheus/ content from the build catalog.
 
 Use get to print one file under job/_prometheus/.
@@ -29,6 +29,7 @@ var catPrometheusGetCmd = &cobra.Command{
   scrape.yaml  (or shorthand: scrape)
   alerts/slo.yaml
   runbooks/ApiDown.md
+  dashboards/overview.html
 
 Reads from the build catalog when available; otherwise from workspace/jobs/<job>/_prometheus/.`,
 	Args: cobra.ExactArgs(2),

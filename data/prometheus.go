@@ -17,10 +17,11 @@ const prometheusAlertsMarker = "/_prometheus/alerts/"
 
 // PrometheusJobSummary describes _prometheus/ participation for one job.
 type PrometheusJobSummary struct {
-	Job      string
-	Scrape   bool
-	Alerts   int
-	Runbooks int
+	Job        string
+	Scrape     bool
+	Alerts     int
+	Runbooks   int
+	Dashboards int
 }
 
 // PrometheusFileEntry is one file stored under job/_prometheus/ in job_files.
@@ -54,6 +55,8 @@ func ListPrometheusJobSummaries(tx *sql.Tx, jobsFilter []string) ([]PrometheusJo
 			summary.Alerts++
 		case strings.HasPrefix(entry.Rel, "runbooks/"):
 			summary.Runbooks++
+		case strings.HasPrefix(entry.Rel, "dashboards/"):
+			summary.Dashboards++
 		}
 	}
 
@@ -239,6 +242,39 @@ func ListRunbookFiles(tx *sql.Tx) ([]string, error) {
 			return nil, bucket.DatabaseError(err)
 		}
 		paths = append(paths, filePath)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return paths, nil
+}
+
+// PrometheusDashboardFileEntry indexes one dashboard file stored in job_files.
+type PrometheusDashboardFileEntry struct {
+	Path string
+}
+
+// ListDashboardFiles returns all dashboard file paths in the catalog.
+func ListDashboardFiles(tx *sql.Tx) ([]PrometheusDashboardFileEntry, error) {
+	rows, err := tx.Query(
+		`SELECT path FROM job_files
+		 WHERE isdir = 0 AND path LIKE '%/_prometheus/dashboards/%'
+		 ORDER BY path`,
+	)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	paths := make([]PrometheusDashboardFileEntry, 0)
+	for rows.Next() {
+		var filePath string
+		if err := rows.Scan(&filePath); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		paths = append(paths, PrometheusDashboardFileEntry{Path: filePath})
 	}
 	if err := rowsErr(rows); err != nil {
 		return nil, err

@@ -1,8 +1,8 @@
 # Prometheus monitoring (`_prometheus/`)
 
-Jobs opt in to monitoring by adding a **`_prometheus/`** folder under `workspace/jobs/<job>/`. Nothing goes in `manifest.json` for scrape, alerts, or runbooks.
+Jobs opt in to monitoring by adding a **`_prometheus/`** folder under `workspace/jobs/<job>/`. Each subfolder or file is optional: scrape config, alerts, runbooks, and dashboards are independent.
 
-Maand **build** discovers these files, expands scrape targets, and aggregates a catalog into KV (`maand/prometheus/*`). The **prometheus job** renders its config at deploy; other jobs never need edits when a new job is added.
+Maand **build** validates `_prometheus/` content, stores files in `job_files`, and writes **scrape configs only** to KV (`maand/prometheus/*`). The **prometheus job** renders its config at deploy; alerts, runbooks, and dashboards are assembled from `job_files`.
 
 Related: [build.md](../reference/cli/build.md) · [deploy.md](../reference/cli/deploy.md) · [templates.md](../reference/templates.md) · [health-check.md](../reference/cli/health-check.md)
 
@@ -19,8 +19,10 @@ workspace/jobs/api/
 │   ├── alerts/
 │   │   ├── slo.yaml
 │   │   └── errors.yaml
-│   └── runbooks/            # optional
-│       └── ApiDown.md
+│   ├── runbooks/            # optional
+│   │   └── ApiDown.md
+│   └── dashboards/          # optional Prometheus console pages
+│       └── overview.html
 └── ...
 ```
 
@@ -30,8 +32,22 @@ workspace/jobs/api/
 | `_prometheus/scrape.yaml.tpl` | Optional template rendered at **build** (see below) |
 | `_prometheus/alerts/*.yaml` | Alerting rule groups (multiple files OK) |
 | `_prometheus/runbooks/*.md` | Runbooks linked from alert annotations |
+| `_prometheus/dashboards/**` | Prometheus console HTML (and assets) copied at deploy |
 
-**Not synced to workers** — `_prometheus/` is excluded from deploy rsync (like `_modules`). Content is stored in `job_files` at build for the catalog and deploy-time runbook HTML.
+**Not synced to workers** — `_prometheus/` is excluded from deploy rsync (like `_modules`). Build copies content into **`job_files`**. Deploy assembles alerts, runbooks, dashboards, and expanded scrape config when staging the **prometheus** job.
+
+---
+
+## Prerequisites
+
+| Requirement | Effect |
+|-------------|--------|
+| **Prometheus server job** in workspace (`prometheus.yml` or `prometheus.yml.tpl`) | Enables `_prometheus/` **validation** and scrape **KV** at build; enables deploy-time assembly (rules, consoles, `{{ scrapeConfigs }}`) |
+| No prometheus server job | `_prometheus/` on app jobs is **ignored** at build (invalid scrape.yaml + scrape.yaml.tpl pairs are not rejected); scrape KV is cleared |
+| Active allocations (for `maand:port/*` scrape targets) | Job appears in aggregate **`scrape_jobs`** / **`scrape_configs`**; without active allocations the job is omitted from aggregate KV but **`scrape/<job>`** per-job KV is still written |
+| Literal `host:port` scrape targets | No active allocations required — job always included in scrape catalog |
+
+Nothing in `_prometheus/` is required on any job. A job may ship scrape only, alerts only, runbooks only, dashboards only, or any combination.
 
 ---
 
@@ -86,16 +102,7 @@ Service discovery configs (`kubernetes_sd_configs`, etc.) are **not** supported 
 
 Use **`scrape.yaml.tpl`** instead of **`scrape.yaml`** when you need Go templates at build time. **Do not define both** — build fails like `prometheus.yml` / `prometheus.yml.tpl`.
 
-Rendered during **`maand build`** (after job KV is synced). Supports the same template functions as deploy `.tpl` files except **`scrapeConfigs`** (not available here). Per-allocation fields such as **`{{ .WorkerIP }}`** are **not** available — use **`maand:port/*`** for targets.
-
-| Field | Available |
-|-------|-----------|
-| `{{ .Job }}` | yes |
-| `{{ .NewVersion }}`, `{{ .CurrentVersion }}` | yes (manifest version) |
-| `{{ get "maand/job/<job>" "…" }}` | yes |
-| `{{ get "vars/job/<job>" "…" }}` | yes |
-| `{{ getSecret "…" }}` | yes |
-| `{{ .WorkerIP }}`, worker certs | no |
+Rendered during **`maand build`** (after job KV is synced). Supports **`get`**, **`getSecret`**, **`keys`** — not **`getOptional`**, **`scrapeConfigs`**, or per-allocation fields such as **`{{ .WorkerIP }}`**. Use **`maand:port/*`** for targets.
 
 ```yaml
 # _prometheus/scrape.yaml.tpl
@@ -139,19 +146,30 @@ If `annotations.runbook` is set, `_prometheus/runbooks/<name>.md` must exist. Du
 
 ---
 
-## Build aggregation
+## Build (`maand build`)
 
-During **`maand build`**, after allocations and ports are known:
+Runs only when a **prometheus server job** exists in the workspace.
+
+### Validation (all jobs)
+
+- Scrape YAML shape, port references, forbidden SD configs
+- Alert YAML shape, global unique alert names, runbook file references
+- Mutual exclusion: `scrape.yaml` vs `scrape.yaml.tpl`; `prometheus.yml` vs `prometheus.yml.tpl`
+
+All `_prometheus/` files are stored in **`job_files`**. Alerts, runbooks, and dashboards are **not** written to KV.
+
+### Scrape KV (`maand/prometheus/*`)
 
 | KV key | Content |
 |--------|---------|
-| `maand/prometheus/scrape_configs` | JSON array of unexpanded scrape configs (`maand:port/*` placeholders preserved) |
-| `maand/prometheus/scrape/<job>` | Per-job unexpanded scrape configs |
-| `maand/prometheus/scrape_jobs` | Comma-separated maand jobs with scrape.yaml |
-| `maand/prometheus/alert_files` | JSON index of alert file paths |
-| `maand/prometheus/runbooks/<job>/<slug>` | Runbook metadata |
+| `scrape_configs` | JSON array of unexpanded configs for jobs in **`scrape_jobs`** |
+| `scrape/<job>` | Per-job unexpanded scrape configs (always written when scrape file exists) |
+| `scrape_jobs` | Comma-separated jobs included in the aggregate catalog |
+| `scrape_jobs_length` | Count of `scrape_jobs` |
 
-Build validates scrape structure, port references, alert rule shape, runbook links, and **global uniqueness** of Prometheus `job_name` and alert rule names.
+**Aggregate inclusion:** a job with `maand:port/*` targets is listed in `scrape_jobs` / `scrape_configs` only when it has at least one **active** allocation. Jobs with only literal targets are always included.
+
+At deploy, jobs with zero expanded targets are **skipped** (not an error).
 
 Inspect after build:
 
@@ -160,7 +178,29 @@ maand cat prometheus
 maand cat prometheus get api scrape.yaml
 maand cat prometheus scrape
 maand cat kv get maand/prometheus scrape_jobs
-maand cat kv get maand/prometheus scrape_configs
+maand cat kv get maand/prometheus scrape/<job>
+```
+
+---
+
+## Deploy assembly
+
+When staging the prometheus job (see [deploy.md](../reference/cli/deploy.md#prometheus-job-staging)):
+
+1. **Alert rules** — copy each `_prometheus/alerts/*.yaml` from `job_files` to `rules/<maand_job>/`; inject **`runbook_url`** from **`runbook`** annotation; add **`rules/maand/certs.yaml`** when server config exists
+2. **Runbooks** — render markdown to `consoles/runbooks/<job>/<slug>.html` (+ index, CSS)
+3. **Dashboards** — copy `consoles/dashboards/<job>/<path>` preserving subdirectories
+4. **Config** — render `prometheus.yml.tpl` with **`{{ scrapeConfigs }}`** and **`{{ ruleFiles }}`**
+5. **Cert metrics** — after deploy commit, best-effort remote write of cert expiry gauges (not at build)
+
+Mount on the prometheus container:
+
+```yaml
+volumes:
+  - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+  - ./rules:/etc/prometheus/rules:ro
+  - ./consoles:/etc/prometheus/consoles:z
+  - ./maand:/etc/prometheus/consoles/maand:z   # optional workspace custom pages
 ```
 
 ---
@@ -218,7 +258,7 @@ If **`prometheus.yml`** exists and **`prometheus.yml.tpl` does not**, the file i
 
 ### Alert rules at deploy
 
-When a job ships `prometheus.yml` or `prometheus.yml.tpl`, deploy **assembles** alert YAML from every job's `_prometheus/alerts/` into `rules/<maand_job>/` under the prometheus staging tree.
+Deploy **assembles** alert YAML from every job's `_prometheus/alerts/` in `job_files` into `rules/<maand_job>/` under the prometheus staging tree (see [Deploy assembly](#deploy-assembly) above).
 
 ---
 
@@ -247,7 +287,7 @@ After **`maand deploy`**, maand pushes current cert expiry gauges via Prometheus
 http://<prometheus-allocation>:<prometheus_port_http>/api/v1/write
 ```
 
-Discovery uses the **prometheus** job from the workspace (first non-removed allocation). If that job has no `prometheus.yml` / `prometheus.yml.tpl`, or has no allocations, push is skipped.
+Push runs **only at deploy** (not **`maand build`**). Discovery uses the **prometheus** job from the workspace (first non-removed allocation). If that job has no server config or no allocations, push is skipped.
 
 Requires **`--web.enable-remote-write-receiver`** on Prometheus (in addition to lifecycle):
 
@@ -301,14 +341,30 @@ Override **`runbook_url`** in the alert YAML when you need a different base URL.
 
 ---
 
+## Dashboards
+
+During **`maand deploy`**, when staging the **prometheus** job, maand copies every file under **`_prometheus/dashboards/`** to **`consoles/dashboards/<job>/<path>`**, preserving subdirectories. Source files stay in **`job_files`** from build; they are not rsynced from workspace.
+
+Use Prometheus [console templates](https://prometheus.io/docs/visualization/consoles/) (HTML plus optional JS/CSS in the same tree). Dashboards are **not** written under workspace **`maand/`** — that folder remains for optional custom pages you check in.
+
+| URL (Prometheus UI) | File on worker |
+|---------------------|----------------|
+| `/consoles/dashboards/<job>/overview.html` | `consoles/dashboards/<job>/overview.html` |
+| `/consoles/dashboards/<job>/slo/latency.html` | `consoles/dashboards/<job>/slo/latency.html` |
+
+The same **`./consoles:/etc/prometheus/consoles`** mount serves runbooks and dashboards.
+
+---
+
 ## Participation
 
-| Job has | Scraped | Rules loaded | Runbooks |
-|---------|---------|--------------|----------|
-| `_prometheus/scrape.yaml` only | yes | no | no |
-| `_prometheus/alerts/` only | no | yes | no |
-| both | yes | yes | optional |
-| neither | no | no | no |
+| Job has | Scraped | Rules loaded | Runbooks | Dashboards |
+|---------|---------|--------------|----------|------------|
+| `_prometheus/scrape.yaml` only | yes | no | no | no |
+| `_prometheus/alerts/` only | no | yes | no | no |
+| `_prometheus/dashboards/` only | no | no | no | yes |
+| both scrape + alerts | yes | yes | optional | optional |
+| neither | no | no | no | no |
 
 ---
 
@@ -353,9 +409,9 @@ Or on shared workers:
 
 | Command | Role |
 |---------|------|
-| `maand build` | Aggregate `_prometheus/` → KV |
-| `maand deploy --jobs prometheus` | Render config, assemble rules, generate runbook HTML |
-| `maand cat kv get maand/prometheus …` | Inspect catalog KV |
-| `maand cat prometheus` | List jobs with `_prometheus/` (scrape, alerts, runbooks) |
-| `maand cat prometheus get <job> <path>` | Print one `_prometheus/` file (catalog or workspace; `scrape` → `scrape.yaml`) |
-| `maand cat prometheus scrape [--jobs …]` | Preview expanded scrape configs at deploy time |
+| `maand build` | Validate `_prometheus/`; store in `job_files`; write scrape KV (when prometheus server job exists) |
+| `maand deploy --jobs prometheus` | Assemble rules, runbooks, dashboards; render config; cert metric push |
+| `maand cat kv get maand/prometheus scrape_jobs` | Inspect scrape catalog |
+| `maand cat prometheus` | List jobs with `_prometheus/` content (from `job_files` / workspace) |
+| `maand cat prometheus get <job> <path>` | Print one `_prometheus/` file |
+| `maand cat prometheus scrape [--jobs …]` | Preview expanded scrape configs (same logic as deploy) |

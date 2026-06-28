@@ -64,13 +64,14 @@ func Prometheus(jobsCSV string) error {
 		return bucket.NotFoundError("prometheus")
 	}
 
-	t := utils.GetTable(table.Row{"job", "scrape", "alerts", "runbooks"})
+	t := utils.GetTable(table.Row{"job", "scrape", "alerts", "runbooks", "dashboards"})
 	for _, summary := range summaries {
 		t.AppendRows([]table.Row{{
 			summary.Job,
 			boolMark(summary.Scrape),
 			strconv.Itoa(summary.Alerts),
 			strconv.Itoa(summary.Runbooks),
+			strconv.Itoa(summary.Dashboards),
 		}})
 	}
 	t.Render()

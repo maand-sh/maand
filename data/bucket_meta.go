@@ -13,6 +13,9 @@ import (
 	"maand/utils"
 )
 
+// BucketKVNamespace holds build-synced global bucket metadata (ports, jobs, bucket_id).
+const BucketKVNamespace = "maand/bucket"
+
 // BucketInitialized reports whether the bucket table has a bucket_id row.
 func BucketInitialized(tx *sql.Tx) (bool, error) {
 	var bucketID string
@@ -94,7 +97,7 @@ func JobKVNamespaces(job string) []string {
 
 func AllowedKVNamespaces(job, workerIP string) []string {
 	return []string{
-		"maand",
+		BucketKVNamespace,
 		"vars/bucket",
 		"maand/worker",
 		fmt.Sprintf("maand/worker/%s", workerIP),
@@ -143,7 +146,7 @@ func UpstreamDemandKVNamespaces(tx *sql.Tx, job string) ([]string, error) {
 // BuildScrapeTemplateNamespaces returns KV namespaces available when rendering scrape.yaml.tpl at build.
 func BuildScrapeTemplateNamespaces(tx *sql.Tx, job string) ([]string, error) {
 	namespaces := []string{
-		"maand",
+		BucketKVNamespace,
 		"vars/bucket",
 		fmt.Sprintf("maand/job/%s", job),
 		fmt.Sprintf("vars/bucket/job/%s", job),

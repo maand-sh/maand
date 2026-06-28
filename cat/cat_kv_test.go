@@ -152,7 +152,7 @@ func TestKVJobFilter(t *testing.T) {
 		{"secrets/job/vault", "root_token", "enc:v1:x"},
 		{"maand/job/vault", "version", "1.0.0"},
 		{"maand/job/vault/worker/10.0.0.1", "vault_allocation_index", "0"},
-		{"maand", "bucket_id", "bucket-1"},
+		{"maand/bucket", "bucket_id", "bucket-1"},
 		{"vars/bucket", "port_min", "1024"},
 		{"maand/worker/10.0.0.1", "worker_ip", "10.0.0.1"},
 		{"vars/job/postgres", "version", "2.0.0"},
@@ -209,7 +209,7 @@ func TestKVJobFilterDisabledJob(t *testing.T) {
 	_, err = db.Exec(`
 		INSERT INTO key_value (namespace, key, value, version, ttl, created_date, deleted)
 		VALUES ('vars/job/vault', 'cluster_initialized', 'true', 1, 0, ?, 0),
-		       ('maand', 'bucket_id', 'bucket-1', 1, 0, ?, 0)`, now, now)
+		       ('maand/bucket', 'bucket_id', 'bucket-1', 1, 0, ?, 0)`, now, now)
 	require.NoError(t, err)
 
 	stdout := captureStdout(t, func() {
@@ -252,7 +252,7 @@ func TestKVJobFilterRemovedOnlyReturnsNotFound(t *testing.T) {
 	now := time.Now().Unix()
 	_, err = db.Exec(`
 		INSERT INTO key_value (namespace, key, value, version, ttl, created_date, deleted)
-		VALUES ('maand', 'bucket_id', 'bucket-1', 1, 0, ?, 0)`, now)
+		VALUES ('maand/bucket', 'bucket_id', 'bucket-1', 1, 0, ?, 0)`, now)
 	require.NoError(t, err)
 
 	assert.Error(t, KV("gone", false, false))

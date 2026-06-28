@@ -38,10 +38,12 @@ Equivalent KV:
 
 | Function | Usage | Notes |
 |----------|-------|-------|
-| `get` | `{{ get "vars/job/api" "cluster_name" }}` | Namespace must be allowed for this job/allocation |
-| `getSecret` | `{{ getSecret "db_password" }}` | Shorthand for `secrets/job/<job>` |
+| `get` | `{{ get "vars/job/api" "cluster_name" }}` | Namespace must be allowed; **panics** if key missing |
+| `getOptional` | `{{ getOptional "maand/job/clickhouse" "workers" }}` | Same namespace rules; returns **`""`** if key or namespace entry missing (still panics on disallowed namespace) |
+| `getSecret` | `{{ getSecret "db_password" }}` | Shorthand for `secrets/job/<job>`; panics if missing |
 | `keys` | `{{ range keys "vars/job/api" }}...{{ end }}` | List keys in a namespace |
 | `split` | `{{ split "a,b" "," }}` | String → slice |
+| `trim` | `{{ trim "  host  " }}` | `strings.TrimSpace` |
 | `join` | `{{ join .Labels "," }}` | Slice → string |
 | `upper` / `lower` | `{{ upper "hello" }}` | Case conversion |
 | `add` / `sub` / `mul` / `div` | `{{ add 1 2 }}` | Integer math |
@@ -50,7 +52,11 @@ Equivalent KV:
 | `scrapeConfigs` | `{{ scrapeConfigs }}` | Expands catalog scrape jobs at deploy render (live allocations + ports) |
 | `ruleFiles` | `{{ ruleFiles }}` | Lists assembled alert rule paths at deploy render (`rules/<job>/<file>.yaml`) |
 
-Missing keys or disallowed namespaces **panic** at render time (deploy fails for that job).
+Missing keys or disallowed namespaces **panic** at render time (deploy fails for that job), except **`getOptional`** which returns an empty string.
+
+**Deploy `.tpl` only:** `get`, `getOptional`, `getSecret`, `scrapeConfigs`, and `ruleFiles` are available on job templates at staging time.
+
+**`_prometheus/scrape.yaml.tpl`** (build time) uses a smaller func map: `get`, `getSecret`, `keys` — **no** `getOptional`, **no** `scrapeConfigs`, **no** `.WorkerIP`. See [prometheus.md](../guides/prometheus.md).
 
 Go **`text/template`** built-ins are also available: `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `printf`, `and`, `or`, `not`, `len`, `index`, `range`, `if`, `define`, `template`.
 
@@ -67,7 +73,7 @@ Job command scripts receive the same allocation context via env — see [job-com
   "cluster": "{{ get "vars/job/api" "cluster_name" }}",
   "version": "{{ .NewVersion }}",
   "worker": "{{ .WorkerIP }}",
-  "listen_port": "{{ get "maand" "http_port" }}"
+  "listen_port": "{{ get "maand/bucket" "http_port" }}"
 }
 ```
 
@@ -118,7 +124,7 @@ scrape_configs:
 {{ scrapeConfigs }}
 ```
 
-See [prometheus.md](../guides/prometheus.md) for `_prometheus/` layout, alerts, and runbooks.
+See [prometheus.md](../guides/prometheus.md) for `_prometheus/` layout, alerts, runbooks, and dashboards.
 
 ---
 
@@ -137,7 +143,7 @@ password = {{ getSecret "db_password" }}
 | Symptom | Fix |
 |---------|-----|
 | Template panic: namespace not available | Key is outside allowed namespaces for this job — see [KV persistence](kv/persistence.md#who-can-read-which-namespaces) |
-| Template panic: key not found | Run hook that writes KV before deploy, or add **`vars.toml`** |
+| Template panic: key not found | Use **`getOptional`** when upstream job KV may be empty; otherwise run hook that writes KV before deploy, or add **`vars.toml`** |
 | Stale value after hook | Ensure hook runs in **`pre_deploy`** (before stage) or value is in build-time KV |
 
 Debugging: [deploy-debugging.md](../guides/debugging-deploy.md#template--kv-errors-during-stage).

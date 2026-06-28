@@ -72,7 +72,7 @@ Return joined errors if any job failed
 
 Jobs with the same **`deployment_seq`** (from build) are processed in the same wave. Lower sequences complete before higher ones. This respects **`demands`** between job commands (e.g. job B depends on job A).
 
-Reference: [deployment-sequence.md](../deployment-sequence.md)) — demand graph, `deployment_seq` algorithm, `update_parallel_count` within a wave, examples.
+Reference: [deployment-sequence.md](../deployment-sequence.md) — demand graph, `deployment_seq` algorithm, `update_parallel_count` within a wave, examples.
 
 Within one sequence, jobs are independent except they share worker staging directories under `tmp/workers/<ip>/`.
 
@@ -250,6 +250,24 @@ You implement rollout logic inside your scripts.
 ### Templates (`.tpl`)
 
 Files under `jobs/<job>/` ending in **`.tpl`** are rendered at staging time. Full reference: [templates.md](../templates.md).
+
+### Prometheus job staging
+
+When the staged job ships **`prometheus.yml`** or **`prometheus.yml.tpl`**, maand assembles monitoring artifacts **before** rsync (from **`job_files`**, not from `maand/prometheus` KV except scrape expansion):
+
+| Output (under `jobs/prometheus/` on worker) | Source |
+|---------------------------------------------|--------|
+| `rules/<maand_job>/*.yaml` | Each job's `_prometheus/alerts/` (+ runbook URL injection) |
+| `rules/maand/certs.yaml` | Embedded cert alert rules when server config exists |
+| `consoles/runbooks/<job>/<slug>.html` | `_prometheus/runbooks/*.md` → HTML + index + CSS |
+| `consoles/dashboards/<job>/<path>` | `_prometheus/dashboards/**` copied as-is |
+| `prometheus.yml` (rendered) | Template with `{{ scrapeConfigs }}` / `{{ ruleFiles }}` |
+
+**`{{ scrapeConfigs }}`** reads scrape KV (`maand/prometheus/scrape*`), expands `maand:port/*` using **active** allocations, and **skips** jobs that would expand to zero targets (does not fail the whole render).
+
+After deploy **commits**, maand **best-effort** pushes cert expiry metrics via Prometheus remote write (see [certs.md](../certs.md#prometheus-metrics-optional)).
+
+Details: [prometheus.md](../../guides/prometheus.md).
 
 ---
 

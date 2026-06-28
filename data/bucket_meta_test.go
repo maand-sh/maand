@@ -80,7 +80,7 @@ func TestAccessibleKVNamespacesForJob(t *testing.T) {
 	namespaces, err := AccessibleKVNamespacesForJob(tx, "vault")
 	require.NoError(t, err)
 
-	assert.Contains(t, namespaces, "maand")
+	assert.Contains(t, namespaces, BucketKVNamespace)
 	assert.Contains(t, namespaces, "vars/bucket")
 	assert.Contains(t, namespaces, "maand/worker")
 	assert.Contains(t, namespaces, "maand/worker/10.0.0.1")
