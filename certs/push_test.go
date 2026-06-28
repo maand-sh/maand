@@ -37,7 +37,7 @@ func TestRemoteWriteMetrics(t *testing.T) {
 		CommonName: "api.internal",
 		NotAfter:   notAfter,
 		Status:     StatusOK,
-	}})
+	}}, "", "")
 	require.NoError(t, err)
 	require.Len(t, received.Timeseries, 3)
 
@@ -55,6 +55,25 @@ func TestRemoteWriteMetrics(t *testing.T) {
 	assert.Equal(t, float64(notAfter.Unix()), names[metricCertNotAfter])
 	assert.Equal(t, float64(0), names[metricCertExpiring])
 	assert.Equal(t, float64(0), names[metricCertExpired])
+}
+
+func TestRemoteWriteMetricsBasicAuth(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, pass, ok := r.BasicAuth()
+		require.True(t, ok)
+		assert.Equal(t, "promadmin", user)
+		assert.Equal(t, "s3cret", pass)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+
+	err := remoteWriteMetrics(srv.URL, []Metric{{
+		Scope:    "job",
+		Job:      "api",
+		Status:   StatusOK,
+		NotAfter: time.Now().Add(24 * time.Hour),
+	}}, "promadmin", "s3cret")
+	require.NoError(t, err)
 }
 
 func TestRemoteWriteMetricsRetries503(t *testing.T) {
@@ -87,7 +106,7 @@ func TestRemoteWriteMetricsRetries503(t *testing.T) {
 		CommonName: "api.internal",
 		NotAfter:   notAfter,
 		Status:     StatusOK,
-	}})
+	}}, "", "")
 	require.NoError(t, err)
 	assert.Equal(t, 3, attempts)
 }
@@ -114,7 +133,7 @@ func TestRemoteWriteMetricsDoesNotRetry400(t *testing.T) {
 		Job:      "api",
 		Status:   StatusOK,
 		NotAfter: time.Now().Add(24 * time.Hour),
-	}})
+	}}, "", "")
 	require.Error(t, err)
 	assert.Equal(t, 1, attempts)
 	var rw *remoteWriteError

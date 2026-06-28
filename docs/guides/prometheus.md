@@ -297,7 +297,7 @@ command:
   - '--web.enable-remote-write-receiver'
 ```
 
----
+When **`secrets/job/prometheus`** defines **`admin_username`** and **`admin_password`**, cert metric remote write uses HTTP Basic auth (same credentials as the Prometheus UI). If the web UI is protected, both secrets must be set or deploy logs a cert-metrics push error.
 
 ## Runbooks
 

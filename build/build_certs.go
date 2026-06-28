@@ -185,7 +185,7 @@ func buildJobCerts(tx *sql.Tx, jobName string, caChanged bool) error {
 	}
 
 	for namespace, certVariables := range certVariablesByNamespace {
-		if err := syncKeyValues(tx, namespace, certVariables); err != nil {
+		if err := syncCertKeyValues(namespace, certVariables); err != nil {
 			return err
 		}
 	}
@@ -235,7 +235,7 @@ func loadJobCertSpecs(tx *sql.Tx, jobName string) ([]jobCertSpec, error) {
 func purgeJobAllocationCertKV(tx *sql.Tx, jobName string, workerIPs []string) error {
 	for _, workerIP := range workerIPs {
 		namespace := fmt.Sprintf("maand/job/%s/worker/%s", jobName, workerIP)
-		if err := syncKeyValues(tx, namespace, map[string]string{}); err != nil {
+		if err := syncCertKeyValues(namespace, map[string]string{}); err != nil {
 			return err
 		}
 	}

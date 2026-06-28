@@ -41,6 +41,44 @@ func TestSyncAllocationKeyValuesPreservesCertKeys(t *testing.T) {
 	assert.NotContains(t, keys, "stale_meta")
 }
 
+func TestSyncCertKeyValuesPreservesAllocationMetadata(t *testing.T) {
+	t.Cleanup(kv.ResetStoreForTest)
+
+	db := openBuildAllocationsTestDB(t)
+	defer func() { _ = db.Close() }()
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+	require.NoError(t, tx.Commit())
+
+	namespace := "maand/job/zookeeper/worker/10.48.200.1"
+	store := kv.GetKVStore()
+	store.Put(namespace, "certs/quorum.crt", "CRT", 0)
+	store.Put(namespace, "certs/quorum.key", "KEY", 0)
+	store.Put(namespace, "zookeeper_allocation_index", "0", 0)
+	store.Put(namespace, "peer_workers", "10.48.200.2,10.48.200.3", 0)
+
+	idxBefore, err := store.Get(namespace, "zookeeper_allocation_index")
+	require.NoError(t, err)
+	peersBefore, err := store.Get(namespace, "peer_workers")
+	require.NoError(t, err)
+
+	require.NoError(t, syncCertKeyValues(namespace, map[string]string{
+		"certs/quorum.crt": "CRT",
+		"certs/quorum.key": "KEY",
+	}))
+
+	idxAfter, err := store.Get(namespace, "zookeeper_allocation_index")
+	require.NoError(t, err)
+	assert.Equal(t, idxBefore.Version, idxAfter.Version)
+	assert.Equal(t, "0", idxAfter.Value)
+
+	peersAfter, err := store.Get(namespace, "peer_workers")
+	require.NoError(t, err)
+	assert.Equal(t, peersBefore.Version, peersAfter.Version)
+	assert.Equal(t, "10.48.200.2,10.48.200.3", peersAfter.Value)
+}
+
 func TestBuildJobAllocationVariables(t *testing.T) {
 	t.Cleanup(kv.ResetStoreForTest)
 

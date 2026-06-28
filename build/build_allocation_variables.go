@@ -100,6 +100,23 @@ func purgeStaleJobAllocationVariables(tx *sql.Tx, jobName string) error {
 
 // syncAllocationKeyValues updates allocation metadata without removing cert keys.
 func syncAllocationKeyValues(namespace string, keyValues map[string]string) error {
+	return syncNamespaceKeyValues(namespace, keyValues, syncKeyPolicyAllocation)
+}
+
+// syncCertKeyValues updates cert PEMs without removing allocation metadata keys.
+func syncCertKeyValues(namespace string, keyValues map[string]string) error {
+	return syncNamespaceKeyValues(namespace, keyValues, syncKeyPolicyCert)
+}
+
+type syncKeyPolicy int
+
+const (
+	syncKeyPolicyFull syncKeyPolicy = iota
+	syncKeyPolicyAllocation
+	syncKeyPolicyCert
+)
+
+func syncNamespaceKeyValues(namespace string, keyValues map[string]string, policy syncKeyPolicy) error {
 	presentKeys := make([]string, 0, len(keyValues))
 	for key, value := range keyValues {
 		kv.GetKVStore().Put(namespace, key, value, 0)
@@ -113,11 +130,18 @@ func syncAllocationKeyValues(namespace string, keyValues map[string]string) erro
 
 	staleKeys := utils.Difference(existingKeys, presentKeys)
 	for _, key := range staleKeys {
-		if strings.HasPrefix(key, "certs/") {
-			continue
-		}
-		if key == "version" {
-			continue
+		switch policy {
+		case syncKeyPolicyAllocation:
+			if strings.HasPrefix(key, "certs/") {
+				continue
+			}
+			if key == "version" {
+				continue
+			}
+		case syncKeyPolicyCert:
+			if !strings.HasPrefix(key, "certs/") {
+				continue
+			}
 		}
 		if err := kv.GetKVStore().Delete(namespace, key); err != nil {
 			return err

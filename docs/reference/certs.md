@@ -193,6 +193,13 @@ Labels: `scope` (`ca` or `job`), `job`, `worker`, `cert`, `common_name`, `status
 
 **Remote write URL** — auto-discovered from the **prometheus** job in the workspace: first non-removed allocation IP and **`prometheus_port_http`** → `http://<worker>:<port>/api/v1/write`. No `maand.conf` setting; if there is no prometheus job with server config, push is skipped.
 
+**Authentication** — when **`secrets/job/prometheus`** contains **`admin_username`** and **`admin_password`** (same credentials used for the Prometheus web UI), maand sends HTTP Basic auth on remote write. If neither key exists, push is unauthenticated (legacy). If only one is set, push fails with a log message. Set secrets via **`pre_deploy`** / job commands or inspect with:
+
+```bash
+maand cat kv get secrets/job/prometheus admin_username --reveal
+maand cat kv get secrets/job/prometheus admin_password --reveal
+```
+
 Prometheus must run with **`--web.enable-remote-write-receiver`**. Deploy also writes embedded cert alert rules to **`rules/maand/certs.yaml`** on the prometheus worker. See [prometheus.md](../guides/prometheus.md#certificate-alerts).
 
 ---

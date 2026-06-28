@@ -19,6 +19,7 @@ import (
 
 	"maand/bucket"
 	"maand/data"
+	"maand/kv"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/golang/snappy"
@@ -28,6 +29,8 @@ import (
 const (
 	prometheusJobName      = "prometheus"
 	prometheusHTTPPortName = "prometheus_port_http"
+	prometheusAdminUserKey = "admin_username"
+	prometheusAdminPassKey = "admin_password"
 	metricCertNotAfter     = "maand_cert_not_after_seconds"
 	metricCertExpiring     = "maand_cert_expiring"
 	metricCertExpired      = "maand_cert_expired"
@@ -86,14 +89,60 @@ func pushMetrics(db *sql.DB) error {
 		return nil
 	}
 
-	return remoteWriteMetricsWithRetry(writeURL, metrics)
+	username, password, err := prometheusRemoteWriteAuth(db)
+	if err != nil {
+		return err
+	}
+
+	return remoteWriteMetricsWithRetry(writeURL, metrics, username, password)
 }
 
-func remoteWriteMetricsWithRetry(writeURL string, metrics []Metric) error {
+func prometheusRemoteWriteAuth(db *sql.DB) (username, password string, err error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return "", "", bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	store, err := kv.LoadFromTransaction(tx)
+	if err != nil {
+		return "", "", err
+	}
+
+	ns := kv.SecretJobNamespace(prometheusJobName)
+	username, err = store.GetSecret(ns, prometheusAdminUserKey)
+	if errors.Is(err, kv.ErrNotFound) {
+		username = ""
+	} else if err != nil {
+		return "", "", err
+	}
+
+	password, err = store.GetSecret(ns, prometheusAdminPassKey)
+	if errors.Is(err, kv.ErrNotFound) {
+		password = ""
+	} else if err != nil {
+		return "", "", err
+	}
+
+	if username == "" && password == "" {
+		return "", "", nil
+	}
+	if username == "" || password == "" {
+		return "", "", fmt.Errorf(
+			"cert metrics: prometheus remote write requires both %s and %s in %s",
+			prometheusAdminUserKey, prometheusAdminPassKey, ns,
+		)
+	}
+	return username, password, nil
+}
+
+func remoteWriteMetricsWithRetry(writeURL string, metrics []Metric, username, password string) error {
 	backoff := certMetricsRetryBackoff
 	var lastErr error
 	for attempt := 1; attempt <= certMetricsPushAttempts; attempt++ {
-		lastErr = remoteWriteMetrics(writeURL, metrics)
+		lastErr = remoteWriteMetrics(writeURL, metrics, username, password)
 		if lastErr == nil {
 			if attempt > 1 {
 				log.Printf("cert metrics: push succeeded on attempt %d/%d", attempt, certMetricsPushAttempts)
@@ -147,7 +196,7 @@ func discoverPrometheusRemoteWriteURL(tx *sql.Tx) (string, error) {
 	return fmt.Sprintf("http://%s:%d/api/v1/write", workers[0], port), nil
 }
 
-func remoteWriteMetrics(writeURL string, metrics []Metric) error {
+func remoteWriteMetrics(writeURL string, metrics []Metric, username, password string) error {
 	now := time.Now()
 	series := make([]prompb.TimeSeries, 0, len(metrics)*3)
 	for _, metric := range metrics {
@@ -185,6 +234,9 @@ func remoteWriteMetrics(writeURL string, metrics []Metric) error {
 	httpReq.Header.Set("Content-Type", "application/x-protobuf")
 	httpReq.Header.Set("Content-Encoding", "snappy")
 	httpReq.Header.Set("X-Prometheus-Remote-Write-Version", "0.1.0")
+	if username != "" {
+		httpReq.SetBasicAuth(username, password)
+	}
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
