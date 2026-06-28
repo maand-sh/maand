@@ -148,9 +148,9 @@ Build-time **`version`** rules and demand **`min_version`** / **`max_version`** 
 
 ---
 
-Use **`maand deploy --dry-run`** to see whether a real deploy would run, without contacting workers or committing hash updates:
+Use **`maand deploy --dry-run`** to see whether a real deploy would run, without rsync, lifecycle, or hash promotion:
 
-1. Stages job files under `tmp/workers/` (same as deploy).
+1. Stages job files under `tmp/workers/` (same as deploy), including **`pre_deploy`** hooks when registered (so plan hashes match real deploy staging). **`pre_deploy` may SSH to workers** when the hook runs job commands on allocations.
 2. Computes **MD5** of each active allocation’s staged tree and compares to **`previous_hash`** in the database (rolled back afterward).
 3. Prints per job whether deploy is required and per allocation the planned action: **start**, **restart**, **reload**, **sync**, or **skip**. When **`restart_globs`** forces a restart, the line includes **`matched=`** with the changed paths.
 

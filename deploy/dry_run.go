@@ -12,6 +12,7 @@ import (
 
 	"maand/bucket"
 	"maand/data"
+	"maand/jobcommand"
 	"maand/kv"
 )
 
@@ -51,8 +52,10 @@ type DryRunResult struct {
 }
 
 // DryRun stages job files locally, refreshes allocation content hashes in a rolled-back
-// transaction, and reports which jobs and allocations would be deployed. No workers are
-// contacted and no hash promotions are persisted.
+// transaction, and reports which jobs and allocations would be deployed. Jobs with
+// pre_deploy hooks run them before plan hashes are computed (same as deploy). pre_deploy
+// may SSH to workers when a hook runs job commands there; rsync, lifecycle, and hash
+// promotion are not performed.
 func DryRun(jobsFilter []string, opts Options) (DryRunResult, error) {
 	var result DryRunResult
 
@@ -83,6 +86,25 @@ func DryRun(jobsFilter []string, opts Options) (DryRunResult, error) {
 		return result, err
 	}
 
+	cancelRuntimeAPI := jobcommand.StartRuntimeAPI(tx)
+	defer cancelRuntimeAPI()
+
+	bucketID, err := data.GetBucketID(tx)
+	if err != nil {
+		return result, err
+	}
+	updateSeq, err := data.GetBucketUpdateSeq(tx)
+	if err != nil {
+		return result, err
+	}
+	rt, err := setupDeployRuntime(bucketID, bucket.NewRunContext("deploy", updateSeq))
+	if err != nil {
+		return result, err
+	}
+	defer func() {
+		_ = rt.Stop()
+	}()
+
 	workers, err := data.GetWorkers(tx, nil)
 	if err != nil {
 		return result, err
@@ -108,11 +130,11 @@ func DryRun(jobsFilter []string, opts Options) (DryRunResult, error) {
 		if err := prepareWorkersFiles(tx, workers); err != nil {
 			return result, err
 		}
-		if err := refreshPlanHashesForJobs(tx, jobs); err != nil {
-			return result, err
-		}
 
 		for _, job := range jobs {
+			if err := refreshPlanHashesForJobPlan(tx, rt, job); err != nil {
+				return result, err
+			}
 			plan, err := planJobRollout(tx, job, deploymentSeq, opts)
 			if err != nil {
 				return result, err

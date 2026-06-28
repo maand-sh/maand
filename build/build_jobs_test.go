@@ -546,6 +546,14 @@ memory = "192 mb"
 	var currentMemory string
 	require.NoError(t, db.QueryRow(`SELECT current_memory_mb FROM job WHERE name = 'api'`).Scan(&currentMemory))
 	assert.Equal(t, "192", currentMemory)
+
+	var memorySource string
+	require.NoError(t, db.QueryRow(`SELECT current_memory_source FROM job WHERE name = 'api'`).Scan(&memorySource))
+	assert.Equal(t, "bucket.jobs.conf", memorySource)
+
+	var cpuSource string
+	require.NoError(t, db.QueryRow(`SELECT current_cpu_source FROM job WHERE name = 'api'`).Scan(&cpuSource))
+	assert.Equal(t, "manifest", cpuSource)
 }
 
 func TestBuildJobsSyncsCertsFromManifest(t *testing.T) {

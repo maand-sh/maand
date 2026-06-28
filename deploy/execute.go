@@ -157,12 +157,13 @@ func Execute(jobsFilter []string, opts Options) error {
 			return err
 		}
 
-		if err := refreshPlanHashesForJobs(tx, jobs); err != nil {
-			return err
-		}
-
 		jobsToStage := make([]string, 0, len(jobs))
 		for _, job := range jobs {
+			if err := refreshPlanHashesForJobPlan(tx, rt, job); err != nil {
+				deployFailures = append(deployFailures, err)
+				continue
+			}
+
 			if !opts.Force {
 				needsRollout, err := JobNeedsRollout(tx, job)
 				if err != nil {
@@ -180,14 +181,6 @@ func Execute(jobsFilter []string, opts Options) error {
 				}
 			}
 
-			preErr := executePreJobCommandsForJob(tx, rt, job)
-			if persistErr := persistJobCommandKV(tx, job); persistErr != nil {
-				deployFailures = append(deployFailures, persistErr)
-			}
-			if preErr != nil {
-				deployFailures = append(deployFailures, preErr)
-				continue
-			}
 			jobsToStage = append(jobsToStage, job)
 		}
 

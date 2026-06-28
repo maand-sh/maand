@@ -62,6 +62,103 @@ func CheckSchemaVersion() error {
 			LatestSchemaVersion,
 		)
 	}
+	if err := checkRequiredSchemaColumns(db); err != nil {
+		return err
+	}
+	if err := checkRequiredCatalogViews(db); err != nil {
+		return err
+	}
+	return nil
+}
+
+var requiredSchemaColumns = map[string][]string{
+	"job": {
+		"deploy_parallel_count",
+		"health_check",
+		"restart_policy",
+		"restart_globs",
+		"current_memory_source",
+		"current_cpu_source",
+	},
+	"hash": {
+		"current_version",
+		"current_files",
+		"previous_files",
+	},
+	"allocations": {
+		"new_version",
+	},
+}
+
+var requiredCatalogViewColumns = map[string][]string{
+	"cat_allocations":   {"alloc_id", "worker_ip", "job", "disabled", "removed", "new_version"},
+	"cat_jobs":          {"job_id", "name", "version", "disabled", "deployment_seq", "selectors", "current_memory_mb", "current_memory_source", "current_cpu_mhz", "current_cpu_source"},
+	"cat_job_commands":  {"job", "command_name", "executed_on", "demand_job", "demand_command", "demand_config"},
+	"cat_kv":            {"namespace", "key", "value", "version", "ttl", "created_date", "deleted"},
+	"cat_workers":       {"worker_id", "worker_ip", "available_memory_mb", "available_cpu_mhz", "position", "labels"},
+	"cat_deployments":   {"alloc_id", "worker_ip", "job", "disabled", "removed", "current_hash", "previous_hash", "current_version", "new_version"},
+}
+
+func checkRequiredSchemaColumns(db *sql.DB) error {
+	for table, columns := range requiredSchemaColumns {
+		for _, column := range columns {
+			var columnCount int
+			err := db.QueryRow(
+				`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`,
+				table, column,
+			).Scan(&columnCount)
+			if err != nil {
+				return bucket.DatabaseError(err)
+			}
+			if columnCount == 0 {
+				return fmt.Errorf(
+					"%w: table %s is missing column %s; run maand init to upgrade",
+					bucket.ErrSchemaUpgradeRequired,
+					table,
+					column,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+func checkRequiredCatalogViews(db *sql.DB) error {
+	for view, columns := range requiredCatalogViewColumns {
+		var viewCount int
+		err := db.QueryRow(
+			`SELECT count(*) FROM sqlite_master WHERE type = 'view' AND name = ?`,
+			view,
+		).Scan(&viewCount)
+		if err != nil {
+			return bucket.DatabaseError(err)
+		}
+		if viewCount == 0 {
+			return fmt.Errorf(
+				"%w: catalog view %s is missing; run maand init to upgrade",
+				bucket.ErrSchemaUpgradeRequired,
+				view,
+			)
+		}
+		for _, column := range columns {
+			var columnCount int
+			err := db.QueryRow(
+				`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`,
+				view, column,
+			).Scan(&columnCount)
+			if err != nil {
+				return bucket.DatabaseError(err)
+			}
+			if columnCount == 0 {
+				return fmt.Errorf(
+					"%w: catalog view %s is missing column %s; run maand init to upgrade",
+					bucket.ErrSchemaUpgradeRequired,
+					view,
+					column,
+				)
+			}
+		}
+	}
 	return nil
 }
 
@@ -153,6 +250,12 @@ func migrateToV1(tx *sql.Tx) error {
 	if err := ensureTableColumn(tx, "hash", "previous_files", `ALTER TABLE hash ADD COLUMN previous_files TEXT`); err != nil {
 		return err
 	}
+	if err := ensureTableColumn(tx, "job", "current_memory_source", `ALTER TABLE job ADD COLUMN current_memory_source TEXT NOT NULL DEFAULT 'manifest'`); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "job", "current_cpu_source", `ALTER TABLE job ADD COLUMN current_cpu_source TEXT NOT NULL DEFAULT 'manifest'`); err != nil {
+		return err
+	}
 	if err := recreateCatalogViews(tx); err != nil {
 		return err
 	}
@@ -225,9 +328,11 @@ func baseTableDDL() []string {
 			min_memory_mb TEXT,
 			max_memory_mb TEXT,
 			current_memory_mb TEXT,
+			current_memory_source TEXT NOT NULL DEFAULT 'manifest',
 			min_cpu_mhz TEXT,
 			max_cpu_mhz TEXT,
 			current_cpu_mhz TEXT,
+			current_cpu_source TEXT NOT NULL DEFAULT 'manifest',
 			update_parallel_count INT,
 			deploy_parallel_count INT NOT NULL DEFAULT 0,
 			restart_policy TEXT NOT NULL DEFAULT 'always',
@@ -279,11 +384,13 @@ func recreateCatalogViews(tx *sql.Tx) error {
 		`DROP VIEW IF EXISTS cat_workers`,
 		`CREATE VIEW cat_allocations (alloc_id, worker_ip, job, disabled, removed, new_version) AS
 			SELECT alloc_id, worker_ip, job, disabled, removed, new_version FROM allocations ORDER BY job`,
-		`CREATE VIEW cat_jobs (job_id, name, version, disabled, deployment_seq, selectors) AS
+		`CREATE VIEW cat_jobs (job_id, name, version, disabled, deployment_seq, selectors, current_memory_mb, current_memory_source, current_cpu_mhz, current_cpu_source) AS
 			SELECT DISTINCT job_id, name, version,
 				(CASE WHEN (SELECT COUNT(1) FROM allocations wj WHERE j.name = wj.job AND wj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled,
 				ifnull((SELECT DISTINCT deployment_seq FROM allocations wj WHERE wj.job = j.name), 0) AS deployment_seq,
-				ifnull((SELECT GROUP_CONCAT(selector) FROM job_selectors jl WHERE jl.job_id = j.job_id), '') as selectors
+				ifnull((SELECT GROUP_CONCAT(selector) FROM job_selectors jl WHERE jl.job_id = j.job_id), '') as selectors,
+				j.current_memory_mb, j.current_memory_source,
+				j.current_cpu_mhz, j.current_cpu_source
 			FROM job j ORDER BY deployment_seq, name`,
 		`CREATE VIEW cat_job_commands (job, command_name, executed_on, demand_job, demand_command, demand_config) AS
 			SELECT job, name as command_name, executed_on, demand_job, demand_command, demand_config FROM job_commands ORDER BY job, name`,

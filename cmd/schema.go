@@ -22,6 +22,9 @@ func requireCurrentSchema(cmd *cobra.Command) error {
 		if errors.Is(err, bucket.ErrNotInitialized) {
 			return fmt.Errorf("%w: run maand init in the bucket directory", bucket.ErrNotInitialized)
 		}
+		if errors.Is(err, bucket.ErrSchemaUpgradeRequired) {
+			return fmt.Errorf("database schema upgrade required: run maand init in the bucket directory (%w)", err)
+		}
 		return err
 	}
 	return nil

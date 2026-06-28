@@ -7,6 +7,8 @@ package cat
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"maand/bucket"
 	"maand/data"
@@ -40,7 +42,7 @@ func Jobs() error {
 		return bucket.DatabaseError(err)
 	}
 
-	rows, err := tx.Query(`SELECT job_id, name, version, disabled, deployment_seq, selectors FROM cat_jobs`)
+	rows, err := tx.Query(`SELECT job_id, name, version, disabled, deployment_seq, selectors, current_memory_mb, current_memory_source, current_cpu_mhz, current_cpu_source FROM cat_jobs`)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
@@ -48,7 +50,7 @@ func Jobs() error {
 		_ = rows.Close()
 	}()
 
-	t := utils.GetTable(table.Row{"job", "version", "disabled", "deployment_seq", "selectors"})
+	t := utils.GetTable(table.Row{"job", "version", "disabled", "deployment_seq", "cpu", "memory", "selectors"})
 
 	for rows.Next() {
 		var jobID string
@@ -57,13 +59,30 @@ func Jobs() error {
 		var disabled int
 		var deploymentSeq int
 		var selectors string
+		var memoryMB string
+		var memorySource string
+		var cpuMHz string
+		var cpuSource string
 
-		err = rows.Scan(&jobID, &name, &version, &disabled, &deploymentSeq, &selectors)
+		err = rows.Scan(
+			&jobID, &name, &version, &disabled, &deploymentSeq, &selectors,
+			&memoryMB, &memorySource, &cpuMHz, &cpuSource,
+		)
 		if err != nil {
 			return bucket.DatabaseError(err)
 		}
 
-		t.AppendRows([]table.Row{{name, version, disabled, deploymentSeq, selectors}})
+		t.AppendRows([]table.Row{
+			{
+				name,
+				version,
+				disabled,
+				deploymentSeq,
+				formatJobCPU(cpuMHz, cpuSource),
+				formatJobMemory(memoryMB, memorySource),
+				selectors,
+			},
+		})
 	}
 	if err := data.RowsErr(rows); err != nil {
 		return err
@@ -76,4 +95,24 @@ func Jobs() error {
 	}
 
 	return nil
+}
+
+func formatJobResource(value, unit, source string) string {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		source = "manifest"
+	}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		value = "0"
+	}
+	return fmt.Sprintf("%s %s (%s)", value, unit, source)
+}
+
+func formatJobCPU(mhz, source string) string {
+	return formatJobResource(mhz, "mhz", source)
+}
+
+func formatJobMemory(mb, source string) string {
+	return formatJobResource(mb, "mb", source)
 }

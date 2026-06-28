@@ -20,6 +20,25 @@ func TestRefreshPlanHashesForJobs_noJobs(t *testing.T) {
 	require.NoError(t, tx.Rollback())
 }
 
+func TestRefreshPlanHashesForJobPlan_runsPreDeploy(t *testing.T) {
+	env := setupDeployTestEnv(t)
+	tx := env.begin(t)
+	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
+	_, err := tx.Exec(
+		`INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config)
+		 VALUES ('job-app', 'app', 'broken_pre', 'pre_deploy', '', '', '{}')`,
+	)
+	require.NoError(t, err)
+	require.NoError(t, kv.Initialize(tx))
+
+	err = refreshPlanHashesForJobPlan(tx, nil, "app")
+	require.Error(t, err)
+	var jobErr *JobError
+	require.ErrorAs(t, err, &jobErr)
+	require.Equal(t, "app", jobErr.Job)
+	require.NoError(t, tx.Rollback())
+}
+
 func TestRefreshPlanHashesForJobs_detectsContentChange(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)

@@ -31,7 +31,7 @@ help:
 	@echo "Variables: BINARY, CGO_ENABLED, UNIT_TIMEOUT, TESTS_TIMEOUT, INTEGRATION_TIMEOUT, GO_TEST_FLAGS"
 
 build:
-	go build -o $(BINARY) .
+	CGO_ENABLED=1 go build -o $(BINARY) .
 
 test: test-unit test-tests
 

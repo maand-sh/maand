@@ -9,7 +9,27 @@ import (
 	"os"
 
 	"maand/bucket"
+	"maand/data"
 )
+
+// refreshPlanHashesForJobPlan stages one job and updates plan hashes. When the job
+// registers pre_deploy hooks, they run first so rendered content matches real deploy
+// staging (deploy also runs pre_deploy before rsync/restart).
+func refreshPlanHashesForJobPlan(tx *sql.Tx, rt *bucket.Runtime, job string) error {
+	commands, err := data.GetJobCommands(tx, job, "pre_deploy")
+	if err != nil {
+		return &JobError{Job: job, Err: err}
+	}
+	if len(commands) > 0 {
+		if err := executePreJobCommandsForJob(tx, rt, job); err != nil {
+			return err
+		}
+		if err := persistJobCommandKV(tx, job); err != nil {
+			return err
+		}
+	}
+	return refreshPlanHashesForJobs(tx, []string{job})
+}
 
 // refreshPlanHashesForJobs stages jobs under tmp/workers/ and updates <job>_allocation
 // current_hash from the rendered tree. Run at deploy time (before JobNeedsRollout) so

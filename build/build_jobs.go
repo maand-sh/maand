@@ -130,6 +130,16 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			}
 		}
 
+		memorySource := "manifest"
+		if _, ok := jobConfig["memory"]; ok {
+			memorySource = bucketJobsConfigFile
+		}
+
+		cpuSource := "manifest"
+		if _, ok := jobConfig["cpu"]; ok {
+			cpuSource = bucketJobsConfigFile
+		}
+
 		if err := workspace.ValidateHealthCheck(jobName, manifest); err != nil {
 			return nil, err
 		}
@@ -161,17 +171,19 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			return nil, fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, jobName, err)
 		}
 		upsertJobQuery := `
-			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count, deploy_parallel_count, restart_policy, restart_globs, health_check)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, current_memory_source, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, current_cpu_source, update_parallel_count, deploy_parallel_count, restart_policy, restart_globs, health_check)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		_, err = tx.Exec(
 			upsertJobQuery, jobID, jobName, version,
 			fmt.Sprintf("%v", minMemoryMB),
 			fmt.Sprintf("%v", maxMemoryMB),
 			fmt.Sprintf("%v", requestedMemoryMB),
+			memorySource,
 			fmt.Sprintf("%v", minCPUMHZ),
 			fmt.Sprintf("%v", maxCPUMHZ),
 			fmt.Sprintf("%v", requestedCPUMHz),
+			cpuSource,
 			workspace.GetUpdateParallelCount(manifest),
 			workspace.GetDeployParallelCount(manifest),
 			restartPolicy,

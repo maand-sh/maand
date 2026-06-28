@@ -57,10 +57,24 @@ func TestMigrateSchemaUpgradesLegacyColumns(t *testing.T) {
 	assert.Equal(t, 1, columnExists(t, db, "job", "deploy_parallel_count"))
 	assert.Equal(t, 1, columnExists(t, db, "job", "restart_policy"))
 	assert.Equal(t, 1, columnExists(t, db, "job", "restart_globs"))
+	assert.Equal(t, 1, columnExists(t, db, "job", "current_memory_source"))
+	assert.Equal(t, 1, columnExists(t, db, "job", "current_cpu_source"))
 	assert.Equal(t, 1, columnExists(t, db, "hash", "current_files"))
 	assert.Equal(t, 1, columnExists(t, db, "hash", "previous_files"))
+	assert.Equal(t, 1, viewColumnExists(t, db, "cat_jobs", "current_memory_source"))
+	assert.Equal(t, 1, viewColumnExists(t, db, "cat_jobs", "current_cpu_source"))
 	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
 	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
+}
+
+func viewColumnExists(t *testing.T, db *sql.DB, view, column string) int {
+	t.Helper()
+	var count int
+	require.NoError(t, db.QueryRow(
+		`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`,
+		view, column,
+	).Scan(&count))
+	return count
 }
 
 func withTestBucket(t *testing.T) func() {
@@ -210,6 +224,56 @@ func TestCheckSchemaVersionCurrent(t *testing.T) {
 	require.NoError(t, db.Close())
 
 	require.NoError(t, CheckSchemaVersion())
+}
+
+func TestCheckSchemaVersionRequiresUpgradeForMissingColumn(t *testing.T) {
+	defer withTestBucket(t)()
+	require.NoError(t, os.MkdirAll(path.Join(bucket.Location, "data"), 0o755))
+
+	db, err := OpenDatabase(false)
+	require.NoError(t, err)
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, execStatements(tx, append(baseTableDDL(),
+		`CREATE TABLE IF NOT EXISTS schema_version (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			version INTEGER NOT NULL
+		)`,
+		`INSERT INTO schema_version (id, version) VALUES (1, 1)`,
+	)))
+	_, err = tx.Exec(`ALTER TABLE job DROP COLUMN restart_policy`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, db.Close())
+
+	err = CheckSchemaVersion()
+	require.ErrorIs(t, err, bucket.ErrSchemaUpgradeRequired)
+	assert.Contains(t, err.Error(), "restart_policy")
+	assert.Contains(t, err.Error(), "run maand init")
+}
+
+func TestCheckSchemaVersionRequiresUpgradeForStaleCatalogView(t *testing.T) {
+	defer withTestBucket(t)()
+	require.NoError(t, os.MkdirAll(path.Join(bucket.Location, "data"), 0o755))
+
+	db, err := OpenDatabase(false)
+	require.NoError(t, err)
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, MigrateSchema(tx))
+	_, err = tx.Exec(`DROP VIEW IF EXISTS cat_jobs`)
+	require.NoError(t, err)
+	_, err = tx.Exec(`CREATE VIEW cat_jobs (job_id, name, version, disabled, deployment_seq, selectors) AS
+		SELECT job_id, name, version, 0, 0, '' FROM job`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, db.Close())
+
+	err = CheckSchemaVersion()
+	require.ErrorIs(t, err, bucket.ErrSchemaUpgradeRequired)
+	assert.Contains(t, err.Error(), "cat_jobs")
+	assert.Contains(t, err.Error(), "current_memory_mb")
+	assert.Contains(t, err.Error(), "run maand init")
 }
 
 func TestCheckSchemaVersionTooNew(t *testing.T) {

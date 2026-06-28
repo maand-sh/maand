@@ -58,3 +58,33 @@ func TestRequireCurrentSchemaBlocksLegacyDatabase(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "run maand init")
 }
+
+func TestRequireCurrentSchemaStaleCatalogView(t *testing.T) {
+	root := t.TempDir()
+	orig := bucket.Location
+	bucket.Location = root
+	t.Cleanup(func() { bucket.Location = orig })
+
+	require.NoError(t, os.MkdirAll(path.Join(root, "data"), 0o755))
+	db, err := data.OpenDatabase(false)
+	require.NoError(t, err)
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	require.NoError(t, data.MigrateSchema(tx))
+	_, err = tx.Exec(`DROP VIEW IF EXISTS cat_jobs`)
+	require.NoError(t, err)
+	_, err = tx.Exec(`CREATE VIEW cat_jobs (job_id, name, version, disabled, deployment_seq, selectors) AS
+		SELECT job_id, name, version, 0, 0, '' FROM job`)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+	require.NoError(t, db.Close())
+
+	catCmd := &cobra.Command{Use: "cat"}
+	maandCmd.AddCommand(catCmd)
+	t.Cleanup(func() { maandCmd.RemoveCommand(catCmd) })
+
+	err = requireCurrentSchema(catCmd)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database schema upgrade required")
+	assert.Contains(t, err.Error(), "run maand init")
+}
