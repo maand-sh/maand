@@ -14,6 +14,7 @@ var (
 	SecretLocation    = path.Join(Location, "secrets")
 	TempLocation      = path.Join(Location, "tmp")
 	LogLocation       = path.Join(Location, "logs")
+	RunLogLocation    = path.Join(LogLocation, "runs")
 )
 
 func UpdatePath() {
@@ -21,6 +22,7 @@ func UpdatePath() {
 	SecretLocation = path.Join(Location, "secrets")
 	TempLocation = path.Join(Location, "tmp")
 	LogLocation = path.Join(Location, "logs")
+	RunLogLocation = path.Join(LogLocation, "runs")
 }
 
 func GetTempWorkerPath(workerIP string) string {

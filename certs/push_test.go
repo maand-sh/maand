@@ -56,3 +56,68 @@ func TestRemoteWriteMetrics(t *testing.T) {
 	assert.Equal(t, float64(0), names[metricCertExpiring])
 	assert.Equal(t, float64(0), names[metricCertExpired])
 }
+
+func TestRemoteWriteMetricsRetries503(t *testing.T) {
+	oldAttempts := certMetricsPushAttempts
+	oldBackoff := certMetricsRetryBackoff
+	certMetricsPushAttempts = 4
+	certMetricsRetryBackoff = 5 * time.Millisecond
+	t.Cleanup(func() {
+		certMetricsPushAttempts = oldAttempts
+		certMetricsRetryBackoff = oldBackoff
+	})
+
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts < 3 {
+			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(srv.Close)
+
+	notAfter := time.Date(2026, 12, 1, 0, 0, 0, 0, time.UTC)
+	err := remoteWriteMetricsWithRetry(srv.URL, []Metric{{
+		Scope:      "job",
+		Job:        "api",
+		WorkerIP:   "10.0.0.1",
+		CertName:   "tls",
+		CommonName: "api.internal",
+		NotAfter:   notAfter,
+		Status:     StatusOK,
+	}})
+	require.NoError(t, err)
+	assert.Equal(t, 3, attempts)
+}
+
+func TestRemoteWriteMetricsDoesNotRetry400(t *testing.T) {
+	oldAttempts := certMetricsPushAttempts
+	oldBackoff := certMetricsRetryBackoff
+	certMetricsPushAttempts = 5
+	certMetricsRetryBackoff = 5 * time.Millisecond
+	t.Cleanup(func() {
+		certMetricsPushAttempts = oldAttempts
+		certMetricsRetryBackoff = oldBackoff
+	})
+
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		http.Error(w, "bad request", http.StatusBadRequest)
+	}))
+	t.Cleanup(srv.Close)
+
+	err := remoteWriteMetricsWithRetry(srv.URL, []Metric{{
+		Scope:    "job",
+		Job:      "api",
+		Status:   StatusOK,
+		NotAfter: time.Now().Add(24 * time.Hour),
+	}})
+	require.Error(t, err)
+	assert.Equal(t, 1, attempts)
+	var rw *remoteWriteError
+	require.ErrorAs(t, err, &rw)
+	assert.Equal(t, http.StatusBadRequest, rw.statusCode)
+}

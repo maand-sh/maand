@@ -65,7 +65,7 @@ func TestAllocationVersionLifecycle(t *testing.T) {
 	assert.Equal(t, "0.0.0", versions.NewVersion)
 
 	require.NoError(t, SetAllocationNewVersion(tx, allocID, "2.0.0"))
-	require.NoError(t, UpdateAllocationPlan(tx, namespace, allocID, "hash-a"))
+	require.NoError(t, UpdateAllocationPlan(tx, namespace, allocID, "hash-a", FileManifest{}))
 	versions, err = GetAllocationVersions(tx, namespace, allocID)
 	require.NoError(t, err)
 	assert.Equal(t, "0.0.0", versions.CurrentVersion)
@@ -78,7 +78,7 @@ func TestAllocationVersionLifecycle(t *testing.T) {
 	assert.Equal(t, "2.0.0", versions.NewVersion)
 
 	require.NoError(t, SetAllocationNewVersion(tx, allocID, "2.1.0"))
-	require.NoError(t, UpdateAllocationPlan(tx, namespace, allocID, "hash-b"))
+	require.NoError(t, UpdateAllocationPlan(tx, namespace, allocID, "hash-b", FileManifest{}))
 	versions, err = GetAllocationVersions(tx, namespace, allocID)
 	require.NoError(t, err)
 	assert.Equal(t, "2.0.0", versions.CurrentVersion)

@@ -18,6 +18,7 @@ maand deploy [flags]
 | `--build` | `-b` | Run `maand build` before deploy. |
 | `--dry-run` | `-n` | Stage locally and compare allocation hashes; report whether deploy is required without changing workers or persisting hash updates. |
 | `--force` | | Redeploy jobs even when all allocations are already promoted (restart active allocations). |
+| `--sync-only` | | Rsync and promote without `start` / `restart` / `reload`. **Fails** when any allocation still needs **`start`** (new allocation). |
 
 Examples:
 
@@ -28,6 +29,8 @@ maand deploy --jobs api,worker
 maand deploy --dry-run
 maand deploy -b -n
 maand deploy --force --jobs vault
+maand deploy --sync-only --jobs prometheus
+maand deploy --dry-run --sync-only
 ```
 
 ---
@@ -59,7 +62,7 @@ For deployment_seq = 0 .. max:
     prepare job files + transpile .tpl + certs → tmp/workers/<ip>/jobs/<job>/
     rsync (filtered per job) to /opt/worker/<bucket_id>/
     update allocation content hashes (MD5 of staged tree)
-    deployJob (start/restart OR job_control + health_check + post_deploy)
+    deployJob (start/restart/reload OR job_control + health_check + post_deploy)
     KV checkpoint again
 Final rsync: per successfully deployed job only (filtered + jobs.json refresh)
 Commit transaction (even if some jobs failed — partial deploy)
@@ -110,15 +113,15 @@ Each active allocation tracks **running** vs **target** version alongside conten
 
 ```text
 First deploy:     current_version=0.0.0   new_version=2.0.0
-                  → make restart/start with CURRENT_VERSION=0.0.0 NEW_VERSION=2.0.0
+                  → make start with CURRENT_VERSION=0.0.0 NEW_VERSION=2.0.0
                   → promote → current_version=2.0.0
 
 Upgrade:          current_version=2.0.0   new_version=2.1.0
-                  → restart → promote → current_version=2.1.0
+                  → restart/reload (per restart_policy) → promote → current_version=2.1.0
 
-Same version, unchanged tree: hash unchanged and `current_version = new_version` → job skipped (no restart)
+Same version, unchanged tree: hash unchanged and `current_version = new_version` → job skipped (no lifecycle)
 
-Version-only bump: **`build`** updates `allocations.new_version`; **`deploy`** restarts when `hash.current_version != allocations.new_version` even if the content hash is unchanged
+Version-only bump: **`build`** updates `allocations.new_version`; **`deploy`** runs lifecycle when `hash.current_version != allocations.new_version` even if the content hash is unchanged (typically **`reload`** when policy is **`reload`**)
 ```
 
 During a **rolling deploy**, allocations on different workers can briefly differ (`current_version` updated per allocation as each wave promotes).
@@ -130,7 +133,7 @@ During a **rolling deploy**, allocations on different workers can briefly differ
 | Job-level KV (target) | `maand cat kv get maand/job/<job> version` |
 | Per-allocation KV | `maand/job/<job>/worker/<ip>/version` (target from build) |
 | Templates (`.tpl`) | `{{ .CurrentVersion }}`, `{{ .NewVersion }}` on allocation context |
-| Worker **`make`** env | `CURRENT_VERSION`, `NEW_VERSION` on `start` / `restart` |
+| Worker **`make`** env | `CURRENT_VERSION`, `NEW_VERSION` on `start` / `restart` / `reload` |
 | Job command scripts | Same env vars (plus `NEW_ALLOCATIONS` / `UPDATED_ALLOCATIONS` for `job_control`) |
 
 Example Makefile upgrade hook:
@@ -141,7 +144,7 @@ restart:
 	./bin/upgrade.sh
 ```
 
-Build-time **`version`** rules and demand **`min_version`** / **`max_version`** are separate — see [manifest.md](../deployment-sequence.md#version).
+Build-time **`version`** rules and demand **`min_version`** / **`max_version`** are separate — see [manifest.md](../manifest.md#version).
 
 ---
 
@@ -149,7 +152,7 @@ Use **`maand deploy --dry-run`** to see whether a real deploy would run, without
 
 1. Stages job files under `tmp/workers/` (same as deploy).
 2. Computes **MD5** of each active allocation’s staged tree and compares to **`previous_hash`** in the database (rolled back afterward).
-3. Prints per job whether deploy is required and per allocation whether it would **start**, **restart**, or **skip**.
+3. Prints per job whether deploy is required and per allocation the planned action: **start**, **restart**, **reload**, **sync**, or **skip**. When **`restart_globs`** forces a restart, the line includes **`matched=`** with the changed paths.
 
 ```bash
 maand deploy --dry-run
@@ -164,7 +167,8 @@ deploy dry-run: deployment required
 
 deployment sequence 0:
   job "api": deploy required
-    10.0.0.1  restart previous_hash=abc... current_hash=def...
+    10.0.0.1  reload  previous_hash=abc... current_hash=def...
+    10.0.0.2  restart previous_hash=abc... current_hash=def... matched=Makefile
 ```
 
 When everything is promoted:
@@ -186,7 +190,7 @@ For each job in the wave that needs rollout:
 2. **Stage** job files to `tmp/workers/<ip>/jobs/<job>/`
 3. **Rsync** that job to each worker allocation
 4. **Update allocation hashes** for that job
-5. **Start** new allocations (`previous_hash IS NULL`) or **restart** updated ones (`previous_hash != current_hash`) — immediately after copy
+5. **Start** new allocations (`previous_hash IS NULL`) or apply **`restart_policy`** on updated ones — immediately after copy
 6. **`post_deploy`**, then **promote** hashes for that job
 
 If the job has **no** `job_control` commands:
@@ -195,38 +199,144 @@ If the job has **no** `job_control` commands:
    `python3 /opt/worker/<bucket_id>/bin/runner.py <bucket_id> start --jobs <job>`  
    in batches of **`deploy_parallel_count`** (0 = all at once), ordered by **`deploy_order`**.  
    **`after_allocation_started`** hooks run after each batch. **One** health check runs after all start batches complete.
-2. **`handleUpdatedAllocations`**: Workers where hash changed →  
-   `runner.py ... restart --jobs <job>` in batches of **`update_parallel_count`**, ordered by **`deploy_order`**.  
-   **`after_allocation_started`** hooks run after each batch, then **health_check** (wait/retry) before the next batch.
+2. **`handleUpdatedAllocations`**: Workers where hash or version changed → lifecycle per **`restart_policy`** (see below) in batches of **`update_parallel_count`**, ordered by **`deploy_order`**.  
+   **`after_allocation_started`** hooks run after each batch, then **health_check** (wait/retry) before the next batch when a lifecycle target runs.
 3. **`post_deploy`**: Job commands with event `post_deploy`.
 4. **`promoteAllocationHash`**: Mark current tree and **`current_version`** as the new baseline.
 
 When allocations are **stopped** during reconcile (removed/disabled), **`after_allocation_stopped`** hooks run once per stopped allocation before the default Makefile stop.
 
-**Makefile** on the worker (under `jobs/<job>/`) receives **`CURRENT_VERSION`** and **`NEW_VERSION`** in the environment for **`start`** and **`restart`**. Use them for upgrade logic (see [Allocation version tracking](#allocation-version-tracking)):
+**Makefile** on the worker (under `jobs/<job>/`) receives **`CURRENT_VERSION`** and **`NEW_VERSION`** in the environment for **`start`**, **`restart`**, and **`reload`**. Use them for upgrade logic (see [Allocation version tracking](#allocation-version-tracking)):
 
 ```makefile
 start:
 stop:
 restart:
+reload:
 ```
 
 Data/logs/bin on workers are excluded from rsync (`--exclude=jobs/*/data`, etc.).
 
 ---
 
-## `job_control` deploy path
+## Applying changes on workers
 
-If the manifest registers any command with **`executed_on` including `job_control`**:
+Deploy always **rsyncs** staged files before it decides whether to touch running processes. That split matters: you can push config to disk while choosing how (or whether) the process reacts.
 
-- Default start/restart/stop is **not** used.
-- Each `job_control` command runs via **`jobcommand.JobCommand`** with extra env:
-  - `NEW_ALLOCATIONS=<comma-separated IPs>`
-  - `UPDATED_ALLOCATIONS=<comma-separated IPs>`
-  - `CURRENT_VERSION`, `NEW_VERSION` (per allocation)
-- Then **health_check** (with wait), **post_deploy**, **promote**.
+### What triggers rollout
 
-You implement rollout logic inside your scripts.
+| Situation | Typical action |
+|-----------|----------------|
+| First deploy on a worker (`previous_hash` empty) | **`make start`** |
+| Staged tree differs from last promote (`previous_hash ≠ current_hash`) | Lifecycle per **`restart_policy`** (below) |
+| Version target changed (`current_version ≠ new_version`, same tree) | Same lifecycle policy (usually **`reload`** when policy is `reload`) |
+| Already promoted on all active allocations | **Skip** — no rsync wave for that job |
+| **`--force`** | Rollout all active allocations even when hash and version match |
+
+**New allocations always start.** No policy or flag can replace `start` with rsync-only — use normal deploy for first boot, then tune policy for upgrades.
+
+### Default path: Makefile + `runner.py`
+
+When the job has no **`job_control`** commands, deploy calls **`runner.py`** on the worker, which runs **`make`** targets in the job directory:
+
+| Target | When |
+|--------|------|
+| **`start`** | New allocation |
+| **`restart`** | Full recreate / stop-start (policy **`always`**, or **`reload`** + **`restart_globs`** match) |
+| **`reload`** | Soft apply — config reload, HTTP `/-/reload`, `systemctl reload`, etc. |
+
+Each target receives **`CURRENT_VERSION`** and **`NEW_VERSION`** in the environment (see [Allocation version tracking](#allocation-version-tracking)).
+
+Rolling batches use **`deploy_parallel_count`** (starts) and **`update_parallel_count`** (restarts/reloads), ordered by **`deploy_order`**. Health checks run after start batches complete and after each update batch when a lifecycle target runs.
+
+### `restart_policy` (manifest)
+
+Set in **`manifest.json`**. Default **`always`**. Applies to **updated** allocations only.
+
+| Value | After rsync | Makefile |
+|-------|-------------|----------|
+| **`always`** | Recreate or full restart | `make restart` |
+| **`reload`** | Soft apply when possible | `make reload` (see **`restart_globs`**) |
+| **`never`** | Files only | — (rsync + promote) |
+
+Example — Prometheus picks up rule and config changes without restarting the process when only non-critical files change:
+
+```json
+{ "restart_policy": "reload" }
+```
+
+```makefile
+reload:
+	curl -sf -X POST http://127.0.0.1:$(PROM_PORT)/-/reload
+```
+
+Prometheus needs **`--web.enable-lifecycle`**. See [guides/prometheus.md](../../guides/prometheus.md).
+
+Stateful jobs (databases, queues) usually keep **`always`**. Stateless HTTP services and monitoring stacks often use **`reload`**.
+
+### `restart_globs` (manifest, with `reload` only)
+
+Optional list of **job-relative globs** (`*`, `?`, `**` — same rules as `.dashboardignore`). **`maand build`** rejects **`restart_globs`** unless **`restart_policy`** is **`reload`**.
+
+Maand stores a **per-file manifest** on each allocation (`hash.current_files` / `hash.previous_files`): path → content MD5 of the last staged and promoted trees. On upgrade it diffs those maps:
+
+- If **any changed path** matches a glob → **`make restart`**
+- Otherwise → **`make reload`**
+
+| Changed files | `restart_globs` | Result |
+|---------------|-----------------|--------|
+| `rules/alerts.yaml` | `["prometheus.yml", "Makefile"]` | reload |
+| `Makefile` | same | restart |
+| Version bump only (no file diff) | any | reload |
+| No promoted file manifest yet | any | reload (conservative default) |
+
+Example — reload for most edits, restart when compose or binaries change:
+
+```json
+{
+  "restart_policy": "reload",
+  "restart_globs": [
+    "docker-compose.yml",
+    "docker-compose.yml.tpl",
+    "Dockerfile",
+    "bin/**"
+  ]
+}
+```
+
+Dry-run shows which paths triggered restart:
+
+```text
+10.0.0.3  restart previous_hash=... current_hash=... matched=Makefile,bin/app
+10.0.0.4  reload  previous_hash=... current_hash=...
+```
+
+### `--sync-only` (CLI)
+
+One-deploy override: **rsync**, **`post_deploy`**, and **promote** without **`start`**, **`restart`**, or **`reload`**. Same effect as **`restart_policy: never`** for updated allocations, but chosen on the command line.
+
+| Case | Behavior |
+|------|----------|
+| Updated allocation | Rsync + promote; no lifecycle |
+| New allocation | **Error** — cannot bootstrap without **`start`** |
+| **`job_control`** job | Skips custom lifecycle; rsync + promote only |
+| **`--dry-run`** | Reports **`sync`**; errors if **`start`** would be required |
+
+Use when the process reads files directly, or when you will run **`maand job run <job> --target reload`** yourself afterward.
+
+```bash
+maand build
+maand deploy --dry-run --sync-only --jobs api
+maand deploy --sync-only --jobs api
+```
+
+**`--force --sync-only`** still skips lifecycle even when force would otherwise roll allocations.
+
+### `job_control` (custom lifecycle)
+
+If the manifest registers **`job_control`**, default **`start` / `restart` / `reload`** are **not** used. Your script receives **`NEW_ALLOCATIONS`**, **`UPDATED_ALLOCATIONS`**, **`CURRENT_VERSION`**, and **`NEW_VERSION`** — implement canary, blue/green, or sync logic there. See [job-command-api.md](../job-command-api.md).
+
+**`restart_policy`**, **`restart_globs`**, and **`--sync-only`** do not apply on this path (except **`--sync-only`** still skips the script and only rsyncs + promotes).
 
 ---
 
@@ -260,7 +370,7 @@ When the staged job ships **`prometheus.yml`** or **`prometheus.yml.tpl`**, maan
 | `rules/<maand_job>/*.yaml` | Each job's `_prometheus/alerts/` (+ runbook URL injection) |
 | `rules/maand/certs.yaml` | Embedded cert alert rules when server config exists |
 | `consoles/runbooks/<job>/<slug>.html` | `_prometheus/runbooks/*.md` → HTML + index + CSS |
-| `consoles/dashboards/<job>/<path>` | `_prometheus/dashboards/**` copied as-is |
+| `consoles/dashboards/<job>/<path>` | `_prometheus/dashboards/**` copied as-is (+ index, CSS) |
 | `prometheus.yml` (rendered) | Template with `{{ scrapeConfigs }}` / `{{ ruleFiles }}` |
 
 **`{{ scrapeConfigs }}`** reads scrape KV (`maand/prometheus/scrape*`), expands `maand:port/*` using **active** allocations, and **skips** jobs that would expand to zero targets (does not fail the whole render).
@@ -276,7 +386,7 @@ Details: [prometheus.md](../../guides/prometheus.md).
 | State | Behavior |
 |-------|----------|
 | **`removed=1`** (worker/job dropped at build) | If previously deployed: **stop**, then remove deployed job files on the worker (**`data/`** and **`logs/`** are left in place for redeploy). Local staging under `tmp/workers/<ip>/jobs/<job>/` is removed. Workers removed from **`workers.json`**: after all their removed allocations are processed, **`rm -rf /opt/worker/<bucket_id>/`**. Unreachable removed workers are assumed dead (logged, deploy continues). |
-| **`disabled=1`** | Excluded from start/restart/rsync targets; stop if was running; **keep** deployed job files, KV, and hash/version state. Content and version changes are still **staged, hashed, and promoted** on deploy (rollout shows `disabled` or `disabled_restart` in `maand cat deployments`). After re-enable (`maand build` clears `disabled.json`), deploy **starts** the allocation via `GetNewAllocations`. |
+| **`disabled=1`** | Excluded from start/restart/reload/rsync targets; stop if was running; **keep** deployed job files, KV, and hash/version state. Content and version changes are still **staged, hashed, and promoted** on deploy (rollout shows `disabled` or `disabled_restart` in `maand cat deployments`). After re-enable (`maand build` clears `disabled.json`), deploy **starts** the allocation via `GetNewAllocations`. |
 
 Redeploying the same job on the same worker reuses existing **`data/`** and **`logs/`** (rsync excludes those paths). **`deploy`** deletes the allocation **hash row** when reconciling **`removed=1`** allocations (even if the job is skipped from rollout), so a later redeploy treats it as a **new** rollout (`make start`) while worker **`data/`** and **`logs/`** remain. After **`build`** only, hashes still show the last promoted state until **`deploy`** runs.
 
@@ -359,9 +469,9 @@ Hash state lives in table **`hash`** with namespace `<job>_allocation` and key `
 - [templates.md](../templates.md) — `.tpl` rendering
 - [KV namespaces](../kv/namespaces.md) · [KV persistence](../kv/persistence.md)
 - [job-command.md](job-command.md) · [job-command-api.md](../job-command-api.md)
-- [disabled.md](../../guides/disable-and-drain.md) — disable/re-enable
+- [disable and drain](../../guides/disable-and-drain.md) — disable/re-enable
 - [rolling-deploy](../../guides/rolling-deploy.md) — `update_parallel_count`, version upgrades
-- [deploy-debugging.md](../../guides/debugging-deploy.md) — dry-run, `cat deployments`, failures
+- [debugging-deploy.md](../../guides/debugging-deploy.md) — dry-run, `cat deployments`, failures
 - [health-check.md](health-check.md) — standalone health checks
-- [job.md](job.md) — manual start/stop/restart
+- [job.md](job.md) — manual start/stop/restart/reload
 - [gc.md](gc.md) — purge removed allocations

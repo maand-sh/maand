@@ -103,7 +103,7 @@ func TestExecutePurgesRemovedAllocationEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 
 	worker.SetTestHooks(&worker.TestHooks{
-		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return nil
 		},
 	})
@@ -207,7 +207,7 @@ func TestExecutePurgesMultipleRemovedAllocations(t *testing.T) {
 	require.NoError(t, err)
 
 	worker.SetTestHooks(&worker.TestHooks{
-		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return nil
 		},
 	})
@@ -248,7 +248,7 @@ func TestExecuteFailsWhenLiveWorkerCleanupFails(t *testing.T) {
 	require.NoError(t, err)
 
 	worker.SetTestHooks(&worker.TestHooks{
-		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return assert.AnError
 		},
 	})

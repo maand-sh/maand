@@ -19,7 +19,7 @@ func TestDeployJob_startsNewAllocation(t *testing.T) {
 	require.NoError(t, kv.Initialize(tx))
 	require.NoError(t, prepareJobsFiles(tx, []string{"app"}))
 	require.NoError(t, updateAllocationHash(tx, []string{"app"}))
-	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", false))
+	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", Options{}))
 	assert.True(t, rec.HasAction("10.0.0.1", "start", "app"))
 	assert.True(t, env.allocationHashPromoted(t, tx, "app", "alloc-app-10.0.0.1"))
 	require.NoError(t, tx.Rollback())
@@ -33,7 +33,7 @@ func TestDeployJob_skipsWhenAlreadyPromoted(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "same", "same")
 	require.NoError(t, kv.Initialize(tx))
-	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", false))
+	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", Options{}))
 	assert.Empty(t, rec.Commands)
 	require.NoError(t, tx.Rollback())
 }
@@ -54,7 +54,7 @@ func TestDeployJobWithCommands_skipsWhenAlreadyPromoted(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	tx = env.begin(t)
-	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", false))
+	require.NoError(t, deployJob(tx, nil, env.bucketID, "app", Options{}))
 	assert.Empty(t, rec.Commands)
 	require.NoError(t, tx.Rollback())
 }
@@ -110,7 +110,7 @@ func TestDeployJobWithCommands_forceRollout(t *testing.T) {
 	commands, err := data.GetJobCommands(tx, "app", "job_control")
 	require.NoError(t, err)
 
-	err = deployJobWithCommands(tx, nil, "app", commands, true)
+	err = deployJobWithCommands(tx, nil, "app", commands, Options{Force: true})
 	require.Error(t, err)
 	assert.Empty(t, rec.Commands)
 	require.NoError(t, tx.Rollback())

@@ -146,4 +146,4 @@ password = {{ getSecret "db_password" }}
 | Template panic: key not found | Use **`getOptional`** when upstream job KV may be empty; otherwise run hook that writes KV before deploy, or add **`vars.toml`** |
 | Stale value after hook | Ensure hook runs in **`pre_deploy`** (before stage) or value is in build-time KV |
 
-Debugging: [deploy-debugging.md](../guides/debugging-deploy.md#template--kv-errors-during-stage).
+Debugging: [debugging-deploy.md](../guides/debugging-deploy.md#template--kv-errors-during-stage).

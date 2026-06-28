@@ -33,6 +33,10 @@ func TestNotFoundErrorMessage(t *testing.T) {
 	assert.Contains(t, err.Error(), "app")
 	assert.Contains(t, err.Error(), "missing")
 	assert.Contains(t, err.Error(), "pre_deploy")
+
+	global := &jobcommand.NotFoundError{Command: "command_cluster_status", Event: "cli"}
+	assert.Contains(t, global.Error(), `command "command_cluster_status"`)
+	assert.Contains(t, global.Error(), `event "cli"`)
 }
 
 func TestJobCommandRejectsUnregisteredCommand(t *testing.T) {

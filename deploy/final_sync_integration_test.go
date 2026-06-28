@@ -16,7 +16,7 @@ func TestFinalSyncDeployedJobs_writesFilteredRules(t *testing.T) {
 	var captured string
 	SetTestHooks(&TestHooks{
 		WorkerCommand: (&CommandRecorder{BucketID: env.bucketID}).Record,
-		Rsync: func(_ *bucket.Runtime, _, workerIP string) error {
+		Rsync: func(_ *bucket.Runtime, _, workerIP string, _ []string) error {
 			filterPath := path.Join(bucket.TempLocation, "workers", workerIP+".rsync")
 			data, err := os.ReadFile(filterPath)
 			if err != nil {
@@ -25,7 +25,7 @@ func TestFinalSyncDeployedJobs_writesFilteredRules(t *testing.T) {
 			captured = string(data)
 			return nil
 		},
-		SetupRuntime: func(string) (*bucket.Runtime, error) { return nil, nil },
+		SetupRuntime: func(string, bucket.RunContext) (*bucket.Runtime, error) { return nil, nil },
 	})
 	t.Cleanup(ClearTestHooks)
 

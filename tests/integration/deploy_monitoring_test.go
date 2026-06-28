@@ -32,7 +32,7 @@ func TestIntegrationDeployPrometheusNodeExporterConnected(t *testing.T) {
 		jobAssignedPort(t, monitoringJobNodeExporter, "node_exporter_metrics_port"),
 	)
 
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 	assert.True(t, jobAllocationHashesPromoted(t, monitoringJobNodeExporter))
 	assert.True(t, jobAllocationHashesPromoted(t, monitoringJobPrometheus))
 

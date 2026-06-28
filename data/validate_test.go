@@ -51,7 +51,7 @@ func TestValidateBucketUpdateSeq(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	worker.SetTestHooks(&worker.TestHooks{
-		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return nil
 		},
 	})
@@ -78,7 +78,7 @@ func TestValidateBucketUpdateSeqWorkerFailure(t *testing.T) {
 	require.Error(t, runErr)
 
 	worker.SetTestHooks(&worker.TestHooks{
-		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return runErr
 		},
 	})

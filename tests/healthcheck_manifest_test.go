@@ -52,7 +52,7 @@ func openHealthCheckSession(t *testing.T) (*sql.Tx, *bucket.Runtime, func()) {
 
 	bucketID, err := data.GetBucketID(tx)
 	require.NoError(t, err)
-	rt, err := bucket.SetupRuntime(bucketID)
+	rt, err := bucket.SetupRuntime(bucketID, bucket.NewRunContext("test", 0))
 	require.NoError(t, err)
 
 	cleanup := func() {

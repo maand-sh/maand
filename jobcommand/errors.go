@@ -20,6 +20,9 @@ type NotFoundError struct {
 }
 
 func (e *NotFoundError) Error() string {
+	if e.Job == "" {
+		return fmt.Sprintf("command %q is not registered for event %q", e.Command, e.Event)
+	}
 	return fmt.Sprintf("job %q command %q is not registered for event %q", e.Job, e.Command, e.Event)
 }
 

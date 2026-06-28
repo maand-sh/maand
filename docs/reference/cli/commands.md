@@ -10,7 +10,7 @@ Configuration files: [configuration.md](../configuration.md) · KV: [KV persiste
 |---------|---------|---------|
 | `maand init` | Create or upgrade bucket (DB, workspace layout, CA, secrets) | — |
 | `maand build` | Read workspace → update `maand.db`, KV, certs; run `post_build` hooks | [build.md](build.md) |
-| `maand deploy` | Push jobs to workers, roll out, run deploy hooks | [deploy.md](deploy.md) · [rolling-deploy](../../guides/rolling-deploy.md) · [deploy-debugging.md](../../guides/debugging-deploy.md) |
+| `maand deploy` | Push jobs to workers, roll out, run deploy hooks | [deploy.md](deploy.md) · [rolling-deploy](../../guides/rolling-deploy.md) · [debugging-deploy.md](../../guides/debugging-deploy.md) |
 | `maand health_check` | Worker SSH gate + per-job health (manifest probes or commands) | [health-check.md](health-check.md) |
 | `maand gc` | Purge removed allocations, worker data, old KV history | [gc.md](gc.md) |
 
@@ -28,6 +28,7 @@ Configuration files: [configuration.md](../configuration.md) · KV: [KV persiste
 | `maand cat certs` | TLS CA and leaf certs with expiry (`--jobs`, `--workers`) — [certs.md](../certs.md#inspecting-certificates-maand-cat-certs) |
 | `maand cat prometheus` | `_prometheus/` participation (scrape, alerts, runbooks, dashboards); `get`, `scrape` subcommands |
 | `maand cat kv` | List KV keys (`--jobs`, `--active`, `--deleted`; or `maand cat kv get <ns> <key> [--reveal]`) |
+| `maand logs show` | Filter structured bucket logs (`--worker`, `--run`, `--job`, `--phase`, `--event`, `--tail`) | [logging.md](../observability/logging.md) |
 
 ## Job control
 
@@ -35,9 +36,10 @@ Manual lifecycle on workers (requires prior deploy; validates `worker.json` / `u
 
 | Command | Summary | Details |
 |---------|---------|---------|
-| `maand job start <job>` | `make start` (or `job_control` command) | [job.md](job.md) |
+| `maand job start <job>` | `make start` via `runner.py` | [job.md](job.md) |
 | `maand job stop <job>` | `make stop` | [job.md](job.md) |
 | `maand job restart <job>` | `make restart` | [job.md](job.md) |
+| `maand job run <job> --target reload` | `make reload` (manual; deploy uses `restart_policy`) | [job.md](job.md) |
 | `maand job run <job> --target <name>` | Arbitrary Makefile target | [job.md](job.md) |
 | `maand job status <job>` | `make status` | [job.md](job.md) |
 | `maand job create <job>` | Scaffold `workspace/jobs/<job>/` | [job.md](job.md) |
@@ -48,7 +50,7 @@ Common flags: `--allocations ip,...`, `--health_check` (start/stop/restart/run).
 
 | Command | Summary | Details |
 |---------|---------|---------|
-| `maand job_command <job> <command>` | Run one manifest command with event **`cli`** | [job-command.md](job-command.md) |
+| `maand jobcommand <command> [job]` | Run one manifest command with event **`cli`** (`job_command` alias) | [job-command.md](job-command.md) |
 
 Flags: `--concurrency N`, `--verbose`.
 
@@ -104,15 +106,18 @@ Reconciles the entire workspace. No filters. Validates job **demands** and **ver
 ## `maand deploy`
 
 ```bash
-maand deploy [--build] [--jobs j1,j2] [--dry-run] [--force]
+maand deploy [--build] [--jobs j1,j2] [--dry-run] [--force] [--sync-only]
 ```
 
 | Flag | Description |
 |------|-------------|
 | `-b`, `--build` | Run `maand build` first |
 | `--jobs` | Limit to named jobs (still respects deployment sequence) |
-| `-n`, `--dry-run` | Compare allocation hashes; no worker changes |
+| `-n`, `--dry-run` | Stage locally and compare hashes; prints per-allocation actions (**start**, **restart**, **reload**, **sync**, **skip**) without worker changes |
 | `--force` | Redeploy even when all allocations are already promoted |
+| `--sync-only` | Rsync and promote without lifecycle targets; fails when any allocation still needs **start** |
+
+After rsync, deploy applies **`restart_policy`** (**`always`** → **`make restart`**, **`reload`** → **`make reload`**, **`never`** → files only). See [deploy.md](deploy.md#applying-changes-on-workers).
 
 **Host prerequisites:** `bash`, `ssh`, `rsync`, `python3`, optional `bun`.  
 **Worker prerequisites:** `python3`, `make`, `rsync`, `bash`, `timeout`, optional `sudo`.
@@ -125,7 +130,7 @@ See [deploy.md](deploy.md).
 
 ```bash
 maand job start|stop|restart|status <job> [--allocations ip,...] [--health_check]
-maand job run <job> --target <make-target> [--allocations ip,...] [--health_check]
+maand job run <job> --target start|stop|restart|reload|<make-target> [--allocations ip,...] [--health_check]
 maand job create <job> [--selectors s1,s2]
 ```
 
@@ -136,8 +141,10 @@ See [job.md](job.md).
 ## `maand job_command`
 
 ```bash
-maand job_command <job> <command_name> [--concurrency N] [--verbose]
+maand jobcommand <command_name> [job] [--concurrency N] [--verbose]
 ```
+
+Omit **job** to run on every catalog job that defines the command for **`cli`**.
 
 Command must include **`cli`** in manifest `executed_on`. Script: `workspace/jobs/<job>/_modules/command_<name>.py` (or `.ts`/`.js`).
 
@@ -223,7 +230,7 @@ maand cat deployments [--jobs j1,j2] [--workers ip,...] [--active]
 | `--workers` | Comma-separated worker IPs |
 | `--active` | Only active allocations (`removed=0`, `disabled=0`) |
 
-Shows `current_hash`, `previous_hash`, versions, and rollout state per allocation. **Rollout** is `removed`, `disabled`, or `disabled_restart` when the allocation flag applies; otherwise hash/version state (`new`, `restart`, `promoted`, `health_failed`). **`deploy`** clears hash rows for removed allocations. See [deploy.md](deploy.md#inspect-state) and [deploy-debugging.md](../../guides/debugging-deploy.md).
+Shows `current_hash`, `previous_hash`, versions, and rollout state per allocation. **Rollout** is `removed`, `disabled`, or `disabled_restart` when the allocation flag applies; otherwise hash/version state (`new`, `restart`, `promoted`, `health_failed`). **`deploy`** clears hash rows for removed allocations. See [deploy.md](deploy.md#inspect-state) and [debugging-deploy.md](../../guides/debugging-deploy.md).
 
 ### `maand cat certs`
 
@@ -260,6 +267,6 @@ maand health_check        # optional
 # day-2: maand job *, maand job_command, maand run_command, maand gc
 ```
 
-Operations: [disabled.md](../../guides/disable-and-drain.md), [rolling-deploy](../../guides/rolling-deploy.md), [deploy-debugging.md](../../guides/debugging-deploy.md).
+Operations: [disable and drain](../../guides/disable-and-drain.md), [rolling-deploy](../../guides/rolling-deploy.md), [debugging-deploy.md](../../guides/debugging-deploy.md).
 
-Tutorials: [getting-started.md](../../start/quickstart.md), [day-2-operations.md](../../guides/day-2-ops.md).
+Tutorials: [quickstart.md](../../start/quickstart.md), [day-2-ops.md](../../guides/day-2-ops.md).

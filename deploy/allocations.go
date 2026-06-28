@@ -30,7 +30,7 @@ func handleNewAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string) 
 		if err != nil {
 			return err
 		}
-		return runWorkerCommand(rt, workerIP, []string{startCmd}, env)
+		return runWorkerCommand(rt, workerIP, runnerCmdCtx(job, "rollout", "start", bucketID), []string{startCmd}, env)
 	}
 
 	if err := rolloutStartBatches(tx, rt, bucketID, job, newAllocations, startFn); err != nil {
@@ -39,8 +39,8 @@ func handleNewAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string) 
 	return nil
 }
 
-func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string, force bool) error {
-	updatedAllocations, err := allocationsNeedingRestart(tx, job, force)
+func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string, opts Options) error {
+	updatedAllocations, err := allocationsNeedingRestart(tx, job, opts.Force)
 	if err != nil {
 		return err
 	}
@@ -48,16 +48,87 @@ func handleUpdatedAllocations(tx *sql.Tx, rt *bucket.Runtime, bucketID, job stri
 		return nil
 	}
 
-	restartCmd := runnerCommand(bucketID, "restart", job)
-	restartFn := func(workerIP string) error {
-		env, err := allocationVersionEnv(tx, job, workerIP)
+	policy, err := data.GetRestartPolicy(tx, job)
+	if err != nil {
+		return err
+	}
+	globs, err := data.GetRestartGlobs(tx, job)
+	if err != nil {
+		return err
+	}
+
+	restartWorkers := make([]string, 0)
+	reloadWorkers := make([]string, 0)
+	namespace := fmt.Sprintf("%s_allocation", job)
+
+	for _, workerIP := range updatedAllocations {
+		allocID, err := data.GetAllocationID(tx, workerIP, job)
 		if err != nil {
 			return err
 		}
-		return runWorkerCommand(rt, workerIP, []string{restartCmd}, env)
+
+		current, previous, ok, err := data.GetAllocationHash(tx, namespace, allocID)
+		if err != nil {
+			return err
+		}
+		hashChanged := ok && previous != "" && previous != current
+
+		needsVersion, err := data.AllocationNeedsVersionRollout(tx, job, workerIP)
+		if err != nil {
+			return err
+		}
+		versionOnly := needsVersion && !hashChanged
+
+		manifests, err := data.GetAllocationFileManifests(tx, namespace, allocID)
+		if err != nil {
+			return err
+		}
+		legacyNoManifest := !manifests.HasPreviousFiles
+
+		action, _ := resolveUpdateAction(
+			opts.SyncOnly, policy, globs,
+			manifests.Previous, manifests.Current,
+			hashChanged, versionOnly, legacyNoManifest,
+		)
+		if action == rolloutActionSync {
+			continue
+		}
+		if action == rolloutActionRestart {
+			restartWorkers = append(restartWorkers, workerIP)
+		} else {
+			reloadWorkers = append(reloadWorkers, workerIP)
+		}
 	}
 
-	return rolloutRestartBatches(tx, rt, bucketID, job, updatedAllocations, restartFn)
+	if len(reloadWorkers) > 0 {
+		reloadCmd := runnerCommand(bucketID, rolloutActionReload, job)
+		reloadFn := func(workerIP string) error {
+			env, err := allocationVersionEnv(tx, job, workerIP)
+			if err != nil {
+				return err
+			}
+			return runWorkerCommand(rt, workerIP, runnerCmdCtx(job, "rollout", rolloutActionReload, bucketID), []string{reloadCmd}, env)
+		}
+		if err := rolloutRestartBatches(tx, rt, bucketID, job, reloadWorkers, reloadFn); err != nil {
+			return err
+		}
+	}
+
+	if len(restartWorkers) > 0 {
+		restartCmd := runnerCommand(bucketID, rolloutActionRestart, job)
+		restartFn := func(workerIP string) error {
+			env, err := allocationVersionEnv(tx, job, workerIP)
+			if err != nil {
+				return err
+			}
+			return runWorkerCommand(rt, workerIP, runnerCmdCtx(job, "rollout", rolloutActionRestart, bucketID), []string{restartCmd}, env)
+		}
+		if err := rolloutRestartBatches(tx, rt, bucketID, job, restartWorkers, restartFn); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func activeWorkers(workers []string, tx *sql.Tx, job string) ([]string, error) {
@@ -144,9 +215,10 @@ func reconcileStoppedAllocation(
 			log.Printf("deploy: stop disabled allocation %s on %s", alloc.Job, alloc.WorkerIP)
 		}
 		stopCmd := runnerCommand(bucketID, "stop", alloc.Job)
+		stopCtx := runnerCmdCtx(alloc.Job, "reconcile", "stop", bucketID)
 		if assumeDead {
-			runWorkerCommandOrAssumeDead(rt, alloc.WorkerIP, []string{stopCmd}, nil)
-		} else if err := runWorkerCommand(rt, alloc.WorkerIP, []string{stopCmd}, nil); err != nil {
+			runWorkerCommandOrAssumeDead(rt, alloc.WorkerIP, stopCtx, []string{stopCmd}, nil)
+		} else if err := runWorkerCommand(rt, alloc.WorkerIP, stopCtx, []string{stopCmd}, nil); err != nil {
 			return fmt.Errorf("worker %s job %s: %w", alloc.WorkerIP, alloc.Job, err)
 		}
 		if err := executeAfterAllocationStopped(tx, rt, alloc.Job, alloc.WorkerIP); err != nil {
@@ -156,6 +228,15 @@ func reconcileStoppedAllocation(
 			if err := removeJobDeployArtifactsFromWorker(rt, bucketID, alloc.WorkerIP, alloc.Job, assumeDead); err != nil {
 				return err
 			}
+		}
+	} else if alloc.Removed || alloc.Disabled {
+		if rt != nil {
+			_ = rt.LogEvent(alloc.WorkerIP, "reconcile_skip_stop", map[string]string{
+				"job":      alloc.Job,
+				"reason":   "not_deployed",
+				"removed":  fmt.Sprintf("%t", alloc.Removed),
+				"disabled": fmt.Sprintf("%t", alloc.Disabled),
+			})
 		}
 	}
 

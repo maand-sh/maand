@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -32,6 +33,25 @@ const (
 	metricCertExpired      = "maand_cert_expired"
 	certMetricsPushTimeout = 15 * time.Second
 )
+
+var (
+	certMetricsPushAttempts      = 5
+	certMetricsRetryBackoff      = 2 * time.Second
+	certMetricsRetryMaxBackoff   = 15 * time.Second
+)
+
+type remoteWriteError struct {
+	statusCode int
+	body       string
+}
+
+func (e *remoteWriteError) Error() string {
+	status := fmt.Sprintf("%d %s", e.statusCode, http.StatusText(e.statusCode))
+	if e.body != "" {
+		return fmt.Sprintf("remote write status %s: %s", status, e.body)
+	}
+	return fmt.Sprintf("remote write status %s", status)
+}
 
 // PushMetrics sends current certificate expiry gauges to Prometheus remote write.
 // Called after deploy; failures are logged and do not fail deploy.
@@ -66,7 +86,40 @@ func pushMetrics(db *sql.DB) error {
 		return nil
 	}
 
-	return remoteWriteMetrics(writeURL, metrics)
+	return remoteWriteMetricsWithRetry(writeURL, metrics)
+}
+
+func remoteWriteMetricsWithRetry(writeURL string, metrics []Metric) error {
+	backoff := certMetricsRetryBackoff
+	var lastErr error
+	for attempt := 1; attempt <= certMetricsPushAttempts; attempt++ {
+		lastErr = remoteWriteMetrics(writeURL, metrics)
+		if lastErr == nil {
+			if attempt > 1 {
+				log.Printf("cert metrics: push succeeded on attempt %d/%d", attempt, certMetricsPushAttempts)
+			}
+			return nil
+		}
+		if attempt == certMetricsPushAttempts || !isRetryableRemoteWriteError(lastErr) {
+			return lastErr
+		}
+		log.Printf("cert metrics: attempt %d/%d failed: %v; retrying in %s", attempt, certMetricsPushAttempts, lastErr, backoff)
+		time.Sleep(backoff)
+		if next := backoff * 2; next > certMetricsRetryMaxBackoff {
+			backoff = certMetricsRetryMaxBackoff
+		} else {
+			backoff = next
+		}
+	}
+	return lastErr
+}
+
+func isRetryableRemoteWriteError(err error) bool {
+	var rw *remoteWriteError
+	if errors.As(err, &rw) {
+		return rw.statusCode == http.StatusTooManyRequests || rw.statusCode >= http.StatusInternalServerError
+	}
+	return true
 }
 
 func discoverPrometheusRemoteWriteURL(tx *sql.Tx) (string, error) {
@@ -142,7 +195,10 @@ func remoteWriteMetrics(writeURL string, metrics []Metric) error {
 	}()
 	if resp.StatusCode/100 != 2 {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("remote write status %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return &remoteWriteError{
+			statusCode: resp.StatusCode,
+			body:       strings.TrimSpace(string(body)),
+		}
 	}
 	return nil
 }

@@ -25,9 +25,9 @@ func TestDryRun_forceRequiresDeploymentAfterPromote(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil, false))
+	require.NoError(t, Execute(nil, Options{}))
 
-	result, err := DryRun(nil, true)
+	result, err := DryRun(nil, Options{Force: true})
 	require.NoError(t, err)
 	require.True(t, result.Required)
 	require.Len(t, result.Jobs, 1)
@@ -43,9 +43,9 @@ func TestDryRun_noDeploymentAfterPromote(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil, false))
+	require.NoError(t, Execute(nil, Options{}))
 
-	result, err := DryRun(nil, false)
+	result, err := DryRun(nil, Options{})
 	require.NoError(t, err)
 	require.False(t, result.Required)
 	require.Len(t, result.Jobs, 1)
@@ -61,13 +61,13 @@ func TestDryRun_detectsContentChange(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	require.NoError(t, Execute(nil, false))
+	require.NoError(t, Execute(nil, Options{}))
 
 	tx = env.begin(t)
 	env.insertJobFile(t, tx, "job-app", path.Join("app", "marker.txt"), "v2", false)
 	require.NoError(t, tx.Commit())
 
-	result, err := DryRun(nil, false)
+	result, err := DryRun(nil, Options{})
 	require.NoError(t, err)
 	require.True(t, result.Required)
 	require.Len(t, result.Jobs, 1)
@@ -90,7 +90,7 @@ func TestDryRun_firstDeploy(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	result, err := DryRun(nil, false)
+	result, err := DryRun(nil, Options{})
 	require.NoError(t, err)
 	require.True(t, result.Required)
 	require.Equal(t, rolloutActionStart, result.Jobs[0].Allocations[0].Action)
@@ -103,7 +103,7 @@ func TestDryRun_doesNotPersistHashes(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	result, err := DryRun(nil, false)
+	result, err := DryRun(nil, Options{})
 	require.NoError(t, err)
 	require.True(t, result.Required)
 
@@ -122,7 +122,7 @@ func TestPlanJobRollout_startNewAllocation(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	tx = env.begin(t)
-	plan, err := planJobRollout(tx, "app", 0, false)
+	plan, err := planJobRollout(tx, "app", 0, Options{})
 	require.NoError(t, err)
 	require.True(t, plan.NeedsRollout)
 	require.Len(t, plan.Allocations, 1)
@@ -137,7 +137,7 @@ func TestPlanJobRollout_noAllocations(t *testing.T) {
 	require.NoError(t, tx.Rollback())
 
 	tx = env.begin(t)
-	plan, err := planJobRollout(tx, "orphan", 0, false)
+	plan, err := planJobRollout(tx, "orphan", 0, Options{})
 	require.NoError(t, err)
 	assert.Equal(t, "no allocations", plan.SkipReason)
 	assert.False(t, plan.NeedsRollout)
@@ -154,7 +154,7 @@ func TestPlanJobRollout_disabledPromotedRequiresStop(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	tx = env.begin(t)
-	plan, err := planJobRollout(tx, "app", 0, false)
+	plan, err := planJobRollout(tx, "app", 0, Options{})
 	require.NoError(t, err)
 	require.True(t, plan.NeedsRollout)
 	require.Len(t, plan.Allocations, 1)
@@ -169,14 +169,14 @@ func TestDryRun_disabledPromotedRequiresDeploy(t *testing.T) {
 	tx := env.begin(t)
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
-	require.NoError(t, Execute(nil, false))
+	require.NoError(t, Execute(nil, Options{}))
 
 	tx = env.begin(t)
 	_, err := tx.Exec(`UPDATE allocations SET disabled = 1 WHERE job = 'app'`)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
-	result, err := DryRun(nil, false)
+	result, err := DryRun(nil, Options{})
 	require.NoError(t, err)
 	require.True(t, result.Required)
 	require.Len(t, result.Jobs, 1)
@@ -195,7 +195,7 @@ func TestDryRun_disabledVersionPendingRequiresPromote(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 
-	result, err := DryRun(nil, false)
+	result, err := DryRun(nil, Options{})
 	require.NoError(t, err)
 	require.True(t, result.Required)
 	require.Equal(t, rolloutActionStopPromote, result.Jobs[0].Allocations[0].Action)
@@ -209,7 +209,7 @@ func TestPlanJobRollout_forceRestart(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	tx = env.begin(t)
-	plan, err := planJobRollout(tx, "app", 0, true)
+	plan, err := planJobRollout(tx, "app", 0, Options{Force: true})
 	require.NoError(t, err)
 	require.True(t, plan.NeedsRollout)
 	require.Len(t, plan.Allocations, 1)
@@ -225,7 +225,7 @@ func TestPlanJobRollout_alreadyPromoted(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	tx = env.begin(t)
-	plan, err := planJobRollout(tx, "app", 0, false)
+	plan, err := planJobRollout(tx, "app", 0, Options{})
 	require.NoError(t, err)
 	assert.False(t, plan.NeedsRollout)
 	assert.Equal(t, "already promoted on all allocations", plan.SkipReason)

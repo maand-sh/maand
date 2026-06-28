@@ -79,7 +79,12 @@ func runControl(tx *sql.Tx, req Request) error {
 		return err
 	}
 
-	rt, err := bucket.SetupRuntime(bucketID)
+	updateSeq, err := data.GetBucketUpdateSeq(tx)
+	if err != nil {
+		return err
+	}
+
+	rt, err := bucket.SetupRuntime(bucketID, bucket.NewRunContext("job", updateSeq))
 	if err != nil {
 		return err
 	}

@@ -62,9 +62,10 @@ func UpdateSeq(db *sql.DB) error {
 }
 
 // Execute deploys jobs to all workers, optionally filtered by job name.
-// When force is true, jobs already promoted on all allocations are staged and
-// restarted anyway.
-func Execute(jobsFilter []string, force bool) error {
+// When opts.Force is true, jobs already promoted on all allocations are staged and
+// restarted anyway. When opts.SyncOnly is true, files are rsynced and hashes promoted
+// without lifecycle actions; new allocations are rejected.
+func Execute(jobsFilter []string, opts Options) error {
 	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return err
@@ -111,7 +112,12 @@ func Execute(jobsFilter []string, force bool) error {
 		return err
 	}
 
-	rt, err := setupDeployRuntime(bucketID)
+	updateSeq, err := data.GetBucketUpdateSeq(tx)
+	if err != nil {
+		return err
+	}
+
+	rt, err := setupDeployRuntime(bucketID, bucket.NewRunContext("deploy", updateSeq))
 	if err != nil {
 		return err
 	}
@@ -157,13 +163,19 @@ func Execute(jobsFilter []string, force bool) error {
 
 		jobsToStage := make([]string, 0, len(jobs))
 		for _, job := range jobs {
-			if !force {
+			if !opts.Force {
 				needsRollout, err := JobNeedsRollout(tx, job)
 				if err != nil {
 					return err
 				}
 				if !needsRollout {
 					log.Printf("deploy: skip job %q (already promoted on all allocations)", job)
+					if rt != nil {
+						_ = rt.LogEvent("", "deploy_skip", map[string]string{
+							"job":    job,
+							"reason": "already_promoted",
+						})
+					}
 					continue
 				}
 			}
@@ -194,7 +206,7 @@ func Execute(jobsFilter []string, force bool) error {
 				return err
 			}
 
-			deployErr := deployJob(tx, rt, bucketID, job, force)
+			deployErr := deployJob(tx, rt, bucketID, job, opts)
 			if persistErr := persistJobCommandKV(tx, job); persistErr != nil {
 				deployFailures = append(deployFailures, persistErr)
 			}

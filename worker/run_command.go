@@ -12,18 +12,24 @@ import (
 )
 
 // ExecuteCommand runs commands on a worker over SSH.
-func ExecuteCommand(rt *bucket.Runtime, workerIP string, commands []string, env []string) error {
+func ExecuteCommand(rt *bucket.Runtime, workerIP string, cmdCtx bucket.CommandContext, commands []string, env []string) error {
 	workerIP = strings.TrimSpace(workerIP)
 	if workerIP == "" {
 		return remoteError("", fmt.Errorf("worker IP is required"))
 	}
 
 	if testHooks != nil && testHooks.ExecuteCommand != nil {
-		return testHooks.ExecuteCommand(rt, workerIP, commands, env)
+		return testHooks.ExecuteCommand(rt, workerIP, cmdCtx, commands, env)
 	}
 
 	script := bucket.BuildCommandScript(commands, env)
-	if err := RunRemoteScript(rt, workerIP, strings.NewReader(script), false); err != nil {
+	if cmdCtx.Cmd == "" {
+		cmdCtx.Cmd = bucket.SummarizeCommands(commands)
+	}
+	if cmdCtx.Action == "" {
+		cmdCtx.Action = "ssh"
+	}
+	if err := RunRemoteScript(rt, workerIP, cmdCtx, strings.NewReader(script), false); err != nil {
 		return remoteError(workerIP, err)
 	}
 	return nil
@@ -31,13 +37,19 @@ func ExecuteCommand(rt *bucket.Runtime, workerIP string, commands []string, env 
 
 // ExecuteFileCommand runs an existing bash script (host path under the bucket) on a worker.
 // Environment variables must be embedded in the script file.
-func ExecuteFileCommand(rt *bucket.Runtime, workerIP string, hostScriptPath string, _ []string) error {
+func ExecuteFileCommand(rt *bucket.Runtime, workerIP string, cmdCtx bucket.CommandContext, hostScriptPath string, _ []string) error {
 	workerIP = strings.TrimSpace(workerIP)
 	if workerIP == "" {
 		return remoteError("", fmt.Errorf("worker IP is required"))
 	}
 
-	if err := RunRemoteScriptFile(rt, workerIP, hostScriptPath, false); err != nil {
+	if cmdCtx.Cmd == "" {
+		cmdCtx.Cmd = hostScriptPath
+	}
+	if cmdCtx.Action == "" {
+		cmdCtx.Action = "ssh"
+	}
+	if err := RunRemoteScriptFile(rt, workerIP, cmdCtx, hostScriptPath, false); err != nil {
 		return remoteError(workerIP, err)
 	}
 	return nil

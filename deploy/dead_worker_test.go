@@ -31,10 +31,10 @@ func TestRunWorkerCommandOrAssumeDead_swallowsError(t *testing.T) {
 	t.Cleanup(ClearTestHooks)
 
 	SetTestHooks(&TestHooks{
-		WorkerCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		WorkerCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return assert.AnError
 		},
 	})
 
-	runWorkerCommandOrAssumeDead(nil, "10.0.0.99", []string{"echo test"}, nil)
+	runWorkerCommandOrAssumeDead(nil, "10.0.0.99", bucket.CommandContext{Phase: "test", Action: "ssh"}, []string{"echo test"}, nil)
 }

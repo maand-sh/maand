@@ -12,7 +12,11 @@ import (
 )
 
 // LatestSchemaVersion is the target schema version applied by MigrateSchema.
-const LatestSchemaVersion = 4
+const LatestSchemaVersion = 1
+
+// legacySchemaVersionMax is the highest obsolete multi-step schema number (v2–v4).
+// Databases at those versions are renumbered to LatestSchemaVersion on init.
+const legacySchemaVersionMax = 4
 
 // CheckSchemaVersion verifies maand.db exists and its schema version matches this binary.
 // Run maand init to create or upgrade the database.
@@ -42,18 +46,18 @@ func CheckSchemaVersion() error {
 		return err
 	}
 
-	if currentVersion < LatestSchemaVersion {
+	if currentVersion != LatestSchemaVersion {
+		if currentVersion > legacySchemaVersionMax {
+			return fmt.Errorf(
+				"%w: database schema version %d is newer than this binary supports (%d); upgrade the maand binary",
+				bucket.ErrSchemaTooNew,
+				currentVersion,
+				LatestSchemaVersion,
+			)
+		}
 		return fmt.Errorf(
 			"%w: database schema version %d, binary expects %d; run maand init to upgrade",
 			bucket.ErrSchemaUpgradeRequired,
-			currentVersion,
-			LatestSchemaVersion,
-		)
-	}
-	if currentVersion > LatestSchemaVersion {
-		return fmt.Errorf(
-			"%w: database schema version %d is newer than this binary supports (%d); upgrade the maand binary",
-			bucket.ErrSchemaTooNew,
 			currentVersion,
 			LatestSchemaVersion,
 		)
@@ -67,21 +71,18 @@ func MigrateSchema(tx *sql.Tx) error {
 	if err := execStatements(tx, baseTableDDL()); err != nil {
 		return err
 	}
+	if err := migrateToV1(tx); err != nil {
+		return err
+	}
 
 	currentVersion, err := readSchemaVersion(tx)
 	if err != nil {
 		return err
 	}
-
-	for version := currentVersion + 1; version <= LatestSchemaVersion; version++ {
-		if err := applySchemaMigration(tx, version); err != nil {
-			return fmt.Errorf("schema migration %d: %w", version, err)
-		}
-		if err := writeSchemaVersion(tx, version); err != nil {
-			return err
-		}
+	if currentVersion == LatestSchemaVersion {
+		return nil
 	}
-	return nil
+	return writeSchemaVersion(tx, LatestSchemaVersion)
 }
 
 func readSchemaVersion(tx *sql.Tx) (int, error) {
@@ -119,21 +120,6 @@ func writeSchemaVersion(tx *sql.Tx, version int) error {
 	return nil
 }
 
-func applySchemaMigration(tx *sql.Tx, version int) error {
-	switch version {
-	case 1:
-		return migrateToV1(tx)
-	case 2:
-		return migrateToV2(tx)
-	case 3:
-		return migrateToV3(tx)
-	case 4:
-		return migrateToV4(tx)
-	default:
-		return fmt.Errorf("unsupported schema version %d", version)
-	}
-}
-
 func migrateToV1(tx *sql.Tx) error {
 	if err := execStatements(tx, []string{
 		`CREATE TABLE IF NOT EXISTS schema_version (
@@ -152,36 +138,25 @@ func migrateToV1(tx *sql.Tx) error {
 	if err := ensureTableColumn(tx, "job", "health_check", `ALTER TABLE job ADD COLUMN health_check TEXT`); err != nil {
 		return err
 	}
-	return recreateCatalogViews(tx)
-}
-
-func migrateToV2(tx *sql.Tx) error {
-	return ensureCatHashesView(tx)
-}
-
-// migrateToV3 renames the cat_hashes view to cat_deployments (backs `maand cat deployments`).
-func migrateToV3(tx *sql.Tx) error {
+	if err := ensureTableColumn(tx, "job", "deploy_parallel_count", `ALTER TABLE job ADD COLUMN deploy_parallel_count INT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "job", "restart_policy", `ALTER TABLE job ADD COLUMN restart_policy TEXT NOT NULL DEFAULT 'always'`); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "job", "restart_globs", `ALTER TABLE job ADD COLUMN restart_globs TEXT NOT NULL DEFAULT '[]'`); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "hash", "current_files", `ALTER TABLE hash ADD COLUMN current_files TEXT`); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "hash", "previous_files", `ALTER TABLE hash ADD COLUMN previous_files TEXT`); err != nil {
+		return err
+	}
+	if err := recreateCatalogViews(tx); err != nil {
+		return err
+	}
 	return ensureCatDeploymentsView(tx)
-}
-
-func migrateToV4(tx *sql.Tx) error {
-	return ensureTableColumn(tx, "job", "deploy_parallel_count", `ALTER TABLE job ADD COLUMN deploy_parallel_count INT NOT NULL DEFAULT 0`)
-}
-
-func ensureCatHashesView(tx *sql.Tx) error {
-	return execStatements(tx, []string{
-		`DROP VIEW IF EXISTS cat_hashes`,
-		`CREATE VIEW cat_hashes (
-			alloc_id, worker_ip, job, disabled, removed,
-			current_hash, previous_hash, current_version, new_version
-		) AS
-			SELECT a.alloc_id, a.worker_ip, a.job, a.disabled, a.removed,
-			       ifnull(h.current_hash, ''), ifnull(h.previous_hash, ''),
-			       ifnull(h.current_version, ''), ifnull(a.new_version, '')
-			FROM allocations a
-			LEFT JOIN hash h ON h.namespace = (a.job || '_allocation') AND h.key = a.alloc_id
-			ORDER BY a.job, a.worker_ip`,
-	})
 }
 
 func ensureCatDeploymentsView(tx *sql.Tx) error {
@@ -255,6 +230,8 @@ func baseTableDDL() []string {
 			current_cpu_mhz TEXT,
 			update_parallel_count INT,
 			deploy_parallel_count INT NOT NULL DEFAULT 0,
+			restart_policy TEXT NOT NULL DEFAULT 'always',
+			restart_globs TEXT NOT NULL DEFAULT '[]',
 			health_check TEXT,
 			PRIMARY KEY(name)
 		)`,
@@ -285,6 +262,8 @@ func baseTableDDL() []string {
 			key TEXT,
 			current_hash TEXT,
 			previous_hash TEXT,
+			current_files TEXT,
+			previous_files TEXT,
 			current_version TEXT,
 			PRIMARY KEY(namespace, key)
 		)`,

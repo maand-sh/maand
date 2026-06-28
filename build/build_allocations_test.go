@@ -301,7 +301,9 @@ func TestMarkReenabledAllocations(t *testing.T) {
 		);
 		CREATE TABLE hash (
 			namespace TEXT, key TEXT,
-			current_hash TEXT, previous_hash TEXT, current_version TEXT,
+			current_hash TEXT, previous_hash TEXT,
+			current_files TEXT, previous_files TEXT,
+			current_version TEXT,
 			PRIMARY KEY(namespace, key)
 		);
 	`)

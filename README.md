@@ -15,6 +15,7 @@ It is designed to handle a wide variety of workloads within a cluster, automatin
 
 ### Guides
 
+- [Guides index](docs/guides/README.md)
 - [Rolling deploy](docs/guides/rolling-deploy.md)
 - [Debugging deploy](docs/guides/debugging-deploy.md)
 - [Disable and drain](docs/guides/disable-and-drain.md)
@@ -23,7 +24,11 @@ It is designed to handle a wide variety of workloads within a cluster, automatin
 
 ### Reference
 
+- [Reference index](docs/reference/README.md)
+- [Configuration](docs/reference/configuration.md)
 - [Manifest](docs/reference/manifest.md) · [Deployment sequence](docs/reference/deployment-sequence.md)
+- [Resources and placement](docs/reference/resources-and-placement.md)
+- [Logging](docs/reference/observability/logging.md)
 - [KV namespaces](docs/reference/kv/namespaces.md)
 - [CLI commands](docs/reference/cli/commands.md)
 - [Build](docs/reference/cli/build.md) · [Deploy](docs/reference/cli/deploy.md)

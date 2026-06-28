@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"maand/bucket"
 	"maand/kv"
 	"maand/promconfig"
 
@@ -210,8 +211,16 @@ func TestAssemblePrometheusDashboards(t *testing.T) {
 	require.NoError(t, kv.Initialize(tx))
 	env.seedMakefileJob(t, tx, "prometheus", "10.0.0.1", 0)
 	apiJobID := env.insertJob(t, tx, "api", 0, 1)
-	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "dashboards", "overview.html"), "<html>overview</html>", false)
-	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "dashboards", "slo", "latency.html"), "<html>latency</html>", false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "dashboards", ".dashboardignore"), "_partial.html\n", false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "dashboards", "overview.html"), "<html><head><title>API overview</title></head>overview</html>", false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "dashboards", "_partial.html"), "<html>partial</html>", false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "dashboards", "worker_detail.html"), "<html><title>Worker detail</title></html>", false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "dashboards", "workers.html"), "<html><title>Workers</title></html>", false)
+	env.insertJobFile(t, tx, apiJobID, path.Join("api", "_prometheus", "dashboards", "slo", "latency.html"), "<html><title>SLO latency</title>latency</html>", false)
+
+	ignorePath := path.Join(bucket.WorkspaceLocation, "jobs", "api", "_prometheus", "dashboards", ".dashboardignore")
+	require.NoError(t, os.MkdirAll(path.Dir(ignorePath), 0o755))
+	require.NoError(t, os.WriteFile(ignorePath, []byte("_partial.html\nworker_detail.html\n"), 0o644))
 	require.NoError(t, prepareJobsFiles(tx, []string{"prometheus"}))
 	dest := path.Join(env.root, "tmp", "workers", "10.0.0.1", "jobs", "prometheus")
 	require.NoError(t, assemblePrometheusDashboards(tx, dest))
@@ -221,9 +230,31 @@ func TestAssemblePrometheusDashboards(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(overview), "overview")
 
+	partial, err := os.ReadFile(path.Join(dest, "consoles", "dashboards", "api", "_partial.html"))
+	require.NoError(t, err)
+	assert.Contains(t, string(partial), "partial")
+
 	nested, err := os.ReadFile(path.Join(dest, "consoles", "dashboards", "api", "slo", "latency.html"))
 	require.NoError(t, err)
 	assert.Contains(t, string(nested), "latency")
+
+	_, err = os.Stat(path.Join(dest, "consoles", "dashboards", "api", ".dashboardignore"))
+	assert.True(t, os.IsNotExist(err), ".dashboardignore is not deployed to consoles")
+
+	indexHTML, err := os.ReadFile(path.Join(dest, "consoles", "dashboards", "index.html"))
+	require.NoError(t, err)
+	assert.Contains(t, string(indexHTML), `href="api/overview.html"`)
+	assert.Contains(t, string(indexHTML), ">API overview</a>")
+	assert.Contains(t, string(indexHTML), `href="api/slo/latency.html"`)
+	assert.Contains(t, string(indexHTML), ">SLO latency</a>")
+	assert.NotContains(t, string(indexHTML), "_partial.html")
+	assert.NotContains(t, string(indexHTML), "worker_detail.html")
+	assert.NotContains(t, string(indexHTML), "Worker detail")
+	assert.NotContains(t, string(indexHTML), ".dashboardignore")
+	assert.Contains(t, string(indexHTML), ">Workers</a>")
+
+	_, err = os.Stat(path.Join(dest, "consoles", "dashboards", "style.css"))
+	require.NoError(t, err)
 
 	_, err = os.Stat(path.Join(dest, "maand", "dashboards"))
 	assert.True(t, os.IsNotExist(err), "dashboards must not be written under maand/")

@@ -21,23 +21,23 @@ import (
 func TestIntegrationBuildAndDeploy(t *testing.T) {
 	setupIntegrationBucket(t)
 
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 }
 
 func TestIntegrationDeployDryRunAfterPromote(t *testing.T) {
 	setupIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
-	result, err := deploy.DryRun(nil, false)
+	result, err := deploy.DryRun(nil, deploy.Options{})
 	require.NoError(t, err)
 	assert.False(t, result.Required, "dry-run after successful deploy should not require rollout")
 }
 
 func TestIntegrationDeployRolloutAfterFileChange(t *testing.T) {
 	setupIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
-	result, err := deploy.DryRun(nil, false)
+	result, err := deploy.DryRun(nil, deploy.Options{})
 	require.NoError(t, err)
 	assert.False(t, result.Required)
 
@@ -45,18 +45,18 @@ func TestIntegrationDeployRolloutAfterFileChange(t *testing.T) {
 	require.NoError(t, os.WriteFile(marker, []byte("changed"), 0o644))
 	executeBuild(t)
 
-	result, err = deploy.DryRun(nil, false)
+	result, err = deploy.DryRun(nil, deploy.Options{})
 	require.NoError(t, err)
 	assert.True(t, result.Required, "dry-run should detect content change after rebuild")
 
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
-	result, err = deploy.DryRun(nil, false)
+	result, err = deploy.DryRun(nil, deploy.Options{})
 	require.NoError(t, err)
 	assert.False(t, result.Required, "dry-run after rollout should show bucket in sync")
 }
 
 func TestIntegrationDeployJobFilter(t *testing.T) {
 	setupIntegrationBucket(t)
-	require.NoError(t, deploy.Execute([]string{integrationJobName}, false))
+	require.NoError(t, deploy.Execute([]string{integrationJobName}, deploy.Options{}))
 }

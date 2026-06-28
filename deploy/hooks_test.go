@@ -17,7 +17,7 @@ import (
 func TestRunWorkerCommandUsesHooks(t *testing.T) {
 	called := false
 	SetTestHooks(&TestHooks{
-		WorkerCommand: func(_ *bucket.Runtime, workerIP string, commands []string, _ []string) error {
+		WorkerCommand: func(_ *bucket.Runtime, workerIP string, _ bucket.CommandContext, commands []string, _ []string) error {
 			called = true
 			assert.Equal(t, "10.0.0.1", workerIP)
 			assert.Len(t, commands, 1)
@@ -26,14 +26,14 @@ func TestRunWorkerCommandUsesHooks(t *testing.T) {
 	})
 	t.Cleanup(ClearTestHooks)
 
-	require.NoError(t, runWorkerCommand(nil, "10.0.0.1", []string{"echo ok"}, nil))
+	require.NoError(t, runWorkerCommand(nil, "10.0.0.1", bucket.CommandContext{Phase: "test", Action: "ssh"}, []string{"echo ok"}, nil))
 	assert.True(t, called)
 }
 
 func TestRunRsyncUsesHooks(t *testing.T) {
 	called := false
 	SetTestHooks(&TestHooks{
-		Rsync: func(_ *bucket.Runtime, bucketID, workerIP string) error {
+		Rsync: func(_ *bucket.Runtime, bucketID, workerIP string, _ []string) error {
 			called = true
 			assert.Equal(t, "bucket-1", bucketID)
 			assert.Equal(t, "10.0.0.1", workerIP)
@@ -42,20 +42,20 @@ func TestRunRsyncUsesHooks(t *testing.T) {
 	})
 	t.Cleanup(ClearTestHooks)
 
-	require.NoError(t, runRsync(nil, "bucket-1", "10.0.0.1"))
+	require.NoError(t, runRsync(nil, "bucket-1", "10.0.0.1", []string{"app"}))
 	assert.True(t, called)
 }
 
 func TestSetupDeployRuntimeUsesHooks(t *testing.T) {
 	SetTestHooks(&TestHooks{
-		SetupRuntime: func(bucketID string) (*bucket.Runtime, error) {
+		SetupRuntime: func(bucketID string, _ bucket.RunContext) (*bucket.Runtime, error) {
 			assert.Equal(t, "bucket-1", bucketID)
 			return &bucket.Runtime{}, nil
 		},
 	})
 	t.Cleanup(ClearTestHooks)
 
-	rt, err := setupDeployRuntime("bucket-1")
+	rt, err := setupDeployRuntime("bucket-1", bucket.NewRunContext("test", 0))
 	require.NoError(t, err)
 	require.NotNil(t, rt)
 }
@@ -63,7 +63,7 @@ func TestSetupDeployRuntimeUsesHooks(t *testing.T) {
 func TestRunWorkerCommandWithoutDeployHooks(t *testing.T) {
 	ClearTestHooks()
 	worker.SetTestHooks(&worker.TestHooks{
-		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		ExecuteCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return nil
 		},
 	})
@@ -72,5 +72,5 @@ func TestRunWorkerCommandWithoutDeployHooks(t *testing.T) {
 		ClearTestHooks()
 	})
 
-	require.NoError(t, runWorkerCommand(nil, "10.0.0.1", []string{"echo ok"}, nil))
+	require.NoError(t, runWorkerCommand(nil, "10.0.0.1", bucket.CommandContext{Phase: "test", Action: "ssh"}, []string{"echo ok"}, nil))
 }

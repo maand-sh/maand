@@ -18,9 +18,9 @@ import (
 func TestPurgeJobCommandKVForInactiveJobs(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	SetTestHooks(&TestHooks{
-		WorkerCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error { return nil },
-		Rsync:         func(*bucket.Runtime, string, string) error { return nil },
-		SetupRuntime:  func(string) (*bucket.Runtime, error) { return nil, nil },
+		WorkerCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error { return nil },
+		Rsync:         func(*bucket.Runtime, string, string, []string) error { return nil },
+		SetupRuntime:  func(string, bucket.RunContext) (*bucket.Runtime, error) { return nil, nil },
 	})
 	t.Cleanup(ClearTestHooks)
 

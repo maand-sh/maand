@@ -40,9 +40,11 @@ maand cat job_commands
 | `selectors` | Worker **labels** required for placement (all must match). When omitted, the **job name** is used — see [Placement selectors](#placement-selectors). |
 | `update_parallel_count` | Rolling **restart** batch size during deploy (default **1**) |
 | `deploy_parallel_count` | Rolling **start** batch size on first deploy (**0** = all at once) |
+| `restart_policy` | How deploy applies **updated** allocations after rsync: `always`, `reload`, or `never` (default `always`) |
+| `restart_globs` | With `reload` only — globs; matching changed paths trigger `restart` instead of `reload` |
 | `resources` | Memory, CPU, ports — [resources-and-placement.md](resources-and-placement.md) |
 | `commands` | Named hooks (`command_*`) — [cli/job-command.md](./cli/job-command.md) |
-| `health_check` | Built-in probes (tcp/http/ssh); mutually exclusive with `health_check` command event |
+| `health_check` | Built-in probes (tcp/http/ssh) and/or a `health_check` command (probes run first) |
 | `certs` | TLS definitions → KV per allocation — [certs.md](certs.md) |
 
 Example:
@@ -68,6 +70,55 @@ Example:
 ```
 
 Port `{}` assigns from the `bucket.conf` pool; an integer fixes the port in the manifest.
+
+---
+
+## Memory and CPU (`resources`)
+
+Use **`resources.memory`** and **`resources.cpu`** in the manifest to declare **min** and **max** bounds for the job. These limits travel with the job in git and define what reservations are allowed on any bucket.
+
+```json
+"resources": {
+  "memory": { "min": "256 mb", "max": "2 gb" },
+  "cpu": { "min": "500 mhz", "max": "2000 mhz" }
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `min` | Lower bound for reservations (omit or `0` = no lower bound) |
+| `max` | Upper bound for reservations (if `min` is set and `max` omitted, `max` defaults to `min`) |
+
+Build fails when **`min` > `max`**.
+
+### Actual reservation (not in the manifest)
+
+The manifest does **not** set how much memory or CPU the job uses **today**. That comes from **`workspace/bucket.jobs.conf`** (or an environment-specific file — see below). Each job section sets the **current** reservation:
+
+```toml
+# workspace/bucket.jobs.prod.conf
+[api]
+memory = "1 gb"
+cpu = "1500 mhz"
+```
+
+The value must satisfy **`manifest min ≤ reservation ≤ manifest max`**. Build stores it as **`current_memory_mb`** / **`current_cpu_mhz`** and sums it per worker for capacity checks against **`workers.json`**.
+
+### Choosing an environment
+
+Set **`job_config_selector`** in **`maand.conf`** to pick which override file build reads:
+
+| `job_config_selector` | File |
+|-----------------------|------|
+| `""` | `workspace/bucket.jobs.conf` |
+| `"prod"` | `workspace/bucket.jobs.prod.conf` |
+| `"staging"` | `workspace/bucket.jobs.staging.conf` |
+
+Use the same manifest bounds in every environment; tune **`memory`** / **`cpu`** per file without changing `manifest.json`.
+
+KV keys **`maand/job/<job>`** expose `min_memory_mb`, `max_memory_mb`, `memory`, `min_cpu_mhz`, `max_cpu_mhz`, and `cpu` for templates and commands.
+
+Details: [resources-and-placement.md](resources-and-placement.md) · [configuration.md](configuration.md#job-memory-and-cpu-manifest-bounds-vs-bucket-overrides).
 
 ---
 
@@ -170,12 +221,47 @@ Empty dependency (default):
 
 ---
 
+## Deploy rollout
+
+These fields control **how** deploy applies an upgrade after files are rsynced. They do not affect **build** or placement. Full behavior: [cli/deploy.md](./cli/deploy.md#applying-changes-on-workers).
+
+### `restart_policy`
+
+| Value | Meaning |
+|-------|---------|
+| **`always`** (default) | Run **`make restart`** on every content or version upgrade |
+| **`reload`** | Run **`make reload`** when possible; pair with **`restart_globs`** for paths that need a full restart |
+| **`never`** | Rsync and promote only; no Makefile lifecycle on upgrade |
+
+New allocations always run **`make start`**, regardless of policy.
+
+### `restart_globs`
+
+Optional string array. Valid **only** when **`restart_policy`** is **`reload`**. Each entry is a glob relative to the job directory (`Makefile`, `bin/**`, `docker-compose.yml`, etc.).
+
+Maand diffs per-file content hashes between the staged tree and the last promoted tree. If any **changed** path matches a glob, deploy runs **`restart`** instead of **`reload`** on that allocation.
+
+Example:
+
+```json
+{
+  "restart_policy": "reload",
+  "restart_globs": ["docker-compose.yml", "Dockerfile", "bin/**"]
+}
+```
+
+Requires a **`reload:`** target in the Makefile (and **`restart:`** for glob-triggered full restarts).
+
+---
+
 ## Rollout fields (summary)
 
 | Field / KV | Purpose | Guide |
 |------------|---------|-------|
 | `deploy_parallel_count` | Batch size for **first deploy** starts | [guides/rolling-deploy](../guides/rolling-deploy.md) |
-| `update_parallel_count` | Batch size for **restart** upgrades | [guides/rolling-deploy](../guides/rolling-deploy.md) |
+| `update_parallel_count` | Batch size for **restart** / **reload** upgrades | [guides/rolling-deploy](../guides/rolling-deploy.md) |
+| `restart_policy` | `always` / `reload` / `never` on updated allocations | [cli/deploy.md](./cli/deploy.md#applying-changes-on-workers) |
+| `restart_globs` | Critical paths when policy is `reload` | [cli/deploy.md](./cli/deploy.md#applying-changes-on-workers) |
 | `deploy_order` KV | Worker order within batches (build-synced; override via **`put_deploy_order`** in `pre_deploy` or `cli`) | [kv/namespaces.md](./kv/namespaces.md) |
 
 ---

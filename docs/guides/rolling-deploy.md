@@ -6,18 +6,31 @@ Maand rolls out **job** changes through **`maand deploy`** (content hash and/or 
 
 ## Rolling job upgrade (deploy)
 
-### When deploy restarts allocations
+Deploy is the primary way to roll out workspace changes. Maand compares **content hashes** and **version targets** per allocation, rsyncs when needed, then runs **`start`**, **`restart`**, **`reload`**, or nothing — according to manifest policy and optional CLI flags.
 
-Deploy restarts (or starts) an allocation when:
+### When an allocation is touched
 
-| Trigger | Detection |
-|---------|-----------|
-| First deploy on worker | `previous_hash IS NULL` → **start** |
-| Workspace content changed | `previous_hash != current_hash` → **restart** |
-| Version-only bump | `hash.current_version != allocations.new_version` → **restart** |
-| **`--force`** | **restart** all active allocations (except new → still **start**) |
+| Situation | What deploy does |
+|-----------|------------------|
+| First deploy on worker | **`make start`** |
+| Content changed since last promote | Rsync, then lifecycle per **`restart_policy`** |
+| Version bumped, files unchanged | Same lifecycle (often **`reload`** when policy is `reload`) |
+| Already promoted | **Skip** that job |
+| **`--force`** | Roll all active allocations (policy still applies to *how*) |
+| **`--sync-only`** | Rsync + promote only; **errors** if **`start`** is required |
 
-Skipped when hashes and versions are already promoted on all **active** allocations.
+See [deploy.md](../reference/cli/deploy.md#applying-changes-on-workers) for **`restart_policy`**, **`restart_globs`**, and **`--sync-only`**.
+
+### Choosing a lifecycle strategy
+
+| Job type | Typical manifest | Makefile |
+|----------|------------------|----------|
+| Stateful (Postgres, Kafka) | `"restart_policy": "always"` | `restart` recreates or restarts service |
+| Monitoring (Prometheus) | `"restart_policy": "reload"` | `reload` calls `/-/reload` |
+| App with compose + static config | `"restart_policy": "reload"` + **`restart_globs`** for compose/Dockerfile | `reload` for config; `restart` when globs match |
+| Files consumed without process hook | `"restart_policy": "never"` or **`--sync-only`** | Process watches disk or you run `maand job run … --target reload` |
+
+Add a **`reload:`** target whenever policy is **`reload`**. Without it, deploy still invokes `make reload` and the target must exist.
 
 ### Configure batch size
 
@@ -26,7 +39,7 @@ Two manifest fields control rollout batching:
 | Field | Phase | Default | Behavior |
 |-------|-------|---------|----------|
 | **`deploy_parallel_count`** | First deploy (**start** new allocations) | `0` (= all at once) | Start new allocations in batches of N; **one health check** after all batches |
-| **`update_parallel_count`** | Upgrades (**restart** changed allocations) | `1` | Restart in batches of N; **health check after each batch** |
+| **`update_parallel_count`** | Upgrades (**restart** / **reload** changed allocations) | `1` | Lifecycle in batches of N; **health check after each batch** when a target runs |
 
 In **`workspace/jobs/<job>/manifest.json`**:
 
@@ -41,7 +54,7 @@ In **`workspace/jobs/<job>/manifest.json`**:
 
 Both fields use **`deploy_order`** (KV key `maand/job/<job>/deploy_order`, synced from catalog on build) to pick worker order within each batch. Override in **`pre_deploy`** with **`put_deploy_order()`** — see [job-command-api.md](../reference/job-command-api.md). Deploy validates softly and falls back to catalog order if the list is stale.
 
-Example: job **`api`** on workers `10.0.0.1` … `10.0.0.4` with **`update_parallel_count: 2`**:
+Example: job **`api`** on workers `10.0.0.1` … `10.0.0.4` with **`update_parallel_count: 2`** and **`restart_policy: always`**:
 
 ```text
 Batch 1: restart 10.0.0.1 and 10.0.0.2 (parallel)
@@ -50,13 +63,15 @@ Batch 2: restart 10.0.0.3 and 10.0.0.4 (parallel)
          → health_check again
 ```
 
+With **`restart_policy: reload`**, the same batches call **`make reload`** instead (or **`restart`** on workers where **`restart_globs`** matched).
+
 Set **`update_parallel_count`** to the largest restart burst you can tolerate while keeping the service healthy (often 1 for stateful jobs, higher for stateless). Use **`deploy_parallel_count`** the same way for **first deploy** when bringing up a multi-node cluster (Vault, Cassandra, Postgres primaries/replicas).
 
-After each batch start/restart, maand runs **`after_allocation_started`** hooks (if registered), then the health gate for that phase.
+After each batch start, restart, or reload, maand runs **`after_allocation_started`** hooks (if registered), then the health gate for that phase.
 
 ### Version and Makefile env
 
-On **start** and **restart**, the worker Makefile receives:
+On **start**, **restart**, and **reload**, the worker Makefile receives:
 
 ```text
 CURRENT_VERSION=<running, pre-promote>
@@ -86,7 +101,7 @@ See [deployment-sequence.md](../reference/deployment-sequence.md).
 
 ### `job_control` custom rollout
 
-If any manifest command uses **`executed_on: ["job_control"]`**, default start/restart is **not** used. Your script receives:
+If any manifest command uses **`executed_on: ["job_control"]`**, default Makefile lifecycle (start/restart/reload) is **not** used. Your script receives:
 
 ```text
 NEW_ALLOCATIONS=10.0.0.1,10.0.0.2
@@ -198,8 +213,8 @@ During deploy, different workers may briefly show different **`current_version`*
 ## Related
 
 - [deploy.md](../reference/cli/deploy.md) — full deploy pipeline and version tracking
-- [disabled.md](disable-and-drain.md) — drain workers or jobs
-- [job.md](../reference/cli/job.md) — manual start/stop/restart
+- [disable and drain](disable-and-drain.md) — drain workers or jobs
+- [job.md](../reference/cli/job.md) — manual start/stop/restart/reload
 - [run-command.md](../reference/cli/run-command.md) — SSH batches and **`--concurrency`**
 - [health-check.md](../reference/cli/health-check.md) — probes and wait/retry
-- [deploy-debugging.md](debugging-deploy.md) — when rolling upgrade stalls or fails
+- [debugging-deploy.md](debugging-deploy.md) — when rolling upgrade stalls or fails

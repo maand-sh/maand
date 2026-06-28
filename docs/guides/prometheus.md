@@ -189,7 +189,7 @@ When staging the prometheus job (see [deploy.md](../reference/cli/deploy.md#prom
 
 1. **Alert rules** — copy each `_prometheus/alerts/*.yaml` from `job_files` to `rules/<maand_job>/`; inject **`runbook_url`** from **`runbook`** annotation; add **`rules/maand/certs.yaml`** when server config exists
 2. **Runbooks** — render markdown to `consoles/runbooks/<job>/<slug>.html` (+ index, CSS)
-3. **Dashboards** — copy `consoles/dashboards/<job>/<path>` preserving subdirectories
+3. **Dashboards** — copy `consoles/dashboards/<job>/<path>` preserving subdirectories (+ index, CSS)
 4. **Config** — render `prometheus.yml.tpl` with **`{{ scrapeConfigs }}`** and **`{{ ruleFiles }}`**
 5. **Cert metrics** — after deploy commit, best-effort remote write of cert expiry gauges (not at build)
 
@@ -345,10 +345,18 @@ Override **`runbook_url`** in the alert YAML when you need a different base URL.
 
 During **`maand deploy`**, when staging the **prometheus** job, maand copies every file under **`_prometheus/dashboards/`** to **`consoles/dashboards/<job>/<path>`**, preserving subdirectories. Source files stay in **`job_files`** from build; they are not rsynced from workspace.
 
-Use Prometheus [console templates](https://prometheus.io/docs/visualization/consoles/) (HTML plus optional JS/CSS in the same tree). Dashboards are **not** written under workspace **`maand/`** — that folder remains for optional custom pages you check in.
+Optional **`_prometheus/dashboards/.dashboardignore`** (gitignore-style, one pattern per line) omits matching files from **`dashboards/index.html`** only. Ignored files are still copied to the worker and reachable by direct URL. Deploy reads the latest **`.dashboardignore` from workspace** (run **`maand build`** if you rely on catalog-only workflows elsewhere).
+
+```gitignore
+# partials and fragments — not listed on index
+_partial.html
+partials/**
+**/worker_detail.html
+```
 
 | URL (Prometheus UI) | File on worker |
 |---------------------|----------------|
+| `/consoles/dashboards/` | `consoles/dashboards/index.html` |
 | `/consoles/dashboards/<job>/overview.html` | `consoles/dashboards/<job>/overview.html` |
 | `/consoles/dashboards/<job>/slo/latency.html` | `consoles/dashboards/<job>/slo/latency.html` |
 

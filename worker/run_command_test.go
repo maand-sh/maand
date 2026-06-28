@@ -34,7 +34,7 @@ func TestRemoteCommandErrorIsRunCommand(t *testing.T) {
 }
 
 func TestExecuteFileCommandRejectsEmptyWorker(t *testing.T) {
-	err := ExecuteFileCommand(nil, "  ", t.TempDir()+"/x.sh", nil)
+	err := ExecuteFileCommand(nil, "  ", bucket.CommandContext{}, t.TempDir()+"/x.sh", nil)
 	if err == nil {
 		t.Fatal("expected error")
 	}

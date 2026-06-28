@@ -15,7 +15,7 @@ import (
 	"maand/worker"
 )
 
-func rsync(rt *bucket.Runtime, bucketID, workerIP string) error {
+func rsync(rt *bucket.Runtime, bucketID, workerIP string, jobs []string) error {
 	conf, err := bucket.GetMaandConf()
 	if err != nil {
 		return err
@@ -79,7 +79,13 @@ func rsync(rt *bucket.Runtime, bucketID, workerIP string) error {
 	}
 
 	cmd := exec.Command("rsync", args...)
-	if err := rt.RunCommand(workerIP, cmd); err != nil {
+	cmdCtx := bucket.CommandContext{
+		Job:    strings.Join(jobs, ","),
+		Phase:  "rsync",
+		Action: "rsync",
+		Cmd:    bucket.SummarizeExecCmd(cmd),
+	}
+	if err := rt.RunCommand(workerIP, cmdCtx, cmd); err != nil {
 		return fmt.Errorf("rsync failed: worker %s: %w", workerIP, err)
 	}
 	return nil

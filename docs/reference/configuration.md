@@ -13,7 +13,7 @@ Related: [build.md](cli/build.md) · [concepts.md](../start/concepts.md#bucket) 
 | **CLI host** | `maand` (built with `CGO_ENABLED=1`), `bash`, `ssh`, `rsync`, `python3`; `bun` when any job command uses `.ts`/`.js` |
 | **Workers** | `python3`, `make`, `rsync`, `bash`, `timeout`; `sudo` when `use_sudo = true` |
 
-SSH: private key in **`secrets/<ssh_key>`** authorized for **`ssh_user`** on every worker. See [tutorials/getting-started.md](../start/quickstart.md).
+SSH: private key in **`secrets/<ssh_key>`** authorized for **`ssh_user`** on every worker. See [quickstart](../start/quickstart.md).
 
 ---
 
@@ -29,6 +29,7 @@ use_sudo = true
 certs_ttl = 60
 certs_renewal_buffer = 10
 job_config_selector = ""
+log_format = "kv"
 ```
 
 | Field | Default | Purpose |
@@ -40,6 +41,7 @@ job_config_selector = ""
 | `certs_ttl` | `60` | Days until generated job certs expire |
 | `certs_renewal_buffer` | `0` if omitted | Regenerate leaf certs when within this many days of expiry (`0` = only after `NotAfter`) |
 | `job_config_selector` | `""` | Suffix for **`bucket.jobs.<selector>.conf`** (see below) |
+| `log_format` | `kv` | Bucket log encoding: **`kv`**, **`json`**, or **`jsonl`** (JSON lines) |
 
 Full TLS guide: [certs.md](certs.md).
 
@@ -66,23 +68,80 @@ Job manifests declare ports as **`{}`** (assign from pool) or a **fixed integer*
 
 ---
 
-## `workspace/bucket.jobs.conf` (optional)
+## Job memory and CPU: manifest bounds vs bucket overrides
 
-Per-job overrides (memory, etc.):
+Memory and CPU are configured in **two places**; **`maand.conf`** picks which override file applies to the current environment.
+
+| Layer | File | Role |
+|-------|------|------|
+| **Bounds** | `workspace/jobs/<job>/manifest.json` → `resources.memory` / `resources.cpu` | **Min** and **max** the job is allowed to use (checked into git with the job) |
+| **Reservation** | `workspace/bucket.jobs.conf` or `workspace/bucket.jobs.<selector>.conf` | **Actual** memory/CPU for this bucket/environment — must be **within** manifest min/max |
+| **Environment pick** | `maand.conf` → `job_config_selector` | Chooses which `bucket.jobs*.conf` file build reads |
+
+Example manifest bounds:
+
+```json
+"resources": {
+  "memory": { "min": "256 mb", "max": "2 gb" },
+  "cpu": { "min": "500 mhz", "max": "2000 mhz" }
+}
+```
+
+Example reservation for job `api` in the current environment:
 
 ```toml
 [api]
 memory = "512 mb"
+cpu = "1500 mhz"
 ```
 
-| Selector in `maand.conf` | File used |
-|--------------------------|-----------|
-| `job_config_selector = ""` | `workspace/bucket.jobs.conf` |
-| `job_config_selector = "prod"` | `workspace/bucket.jobs.prod.conf` |
+Build stores the reservation as **`current_memory_mb`** / **`current_cpu_mhz`** and validates:
 
-Overrides are written to **`vars/bucket/job/<job>`** at build. Only **`memory`** and **`cpu`** keys affect reservations and worker validation; other keys are stored in KV only.
+```text
+manifest min ≤ bucket.jobs value ≤ manifest max
+```
 
-Full guide (manifest bounds, validation, selectors): [resources-and-placement.md](resources-and-placement.md).
+Worker capacity in **`workers.json`** must cover the sum of reservations on each host.
+
+---
+
+## `workspace/bucket.jobs.conf` (optional)
+
+Per-job TOML sections. **`memory`** and **`cpu`** set the reservation for that job; other keys are copied to KV only.
+
+```toml
+[api]
+memory = "512 mb"
+cpu = "1500 mhz"
+my_setting = "staging-only"
+```
+
+### Environment selector (`job_config_selector`)
+
+Set **`job_config_selector`** in **`maand.conf`** to switch environments without editing job manifests. Build loads **one** override file:
+
+| `job_config_selector` in `maand.conf` | Override file read |
+|---------------------------------------|--------------------|
+| `""` (default) | `workspace/bucket.jobs.conf` |
+| `"prod"` | `workspace/bucket.jobs.prod.conf` |
+| `"staging"` | `workspace/bucket.jobs.staging.conf` |
+
+Pattern: **`bucket.jobs.<selector>.conf`** where `<selector>` matches `job_config_selector`.
+
+Example layout:
+
+```text
+workspace/
+├── bucket.jobs.conf           # default / dev reservations
+├── bucket.jobs.staging.conf   # used when job_config_selector = "staging"
+└── bucket.jobs.prod.conf      # used when job_config_selector = "prod"
+```
+
+Change **`job_config_selector`**, then **`maand build`**. Manifest min/max stay the same; only the active reservation file changes.
+
+Overrides are written to **`vars/bucket/job/<job>`** at build. Only **`memory`** and **`cpu`** affect reservations and worker validation.
+
+Full guide (validation, placement labels, examples): [resources-and-placement.md](resources-and-placement.md).
 
 ---
 
@@ -96,7 +155,7 @@ Stable job-scoped variables merged into **`vars/job/<job>`** at build (put-only;
 
 Drain or pause workloads without removing workspace files. Always follow edits with **`maand build`**.
 
-Full guide: [disabled.md](../guides/disable-and-drain.md).
+Full guide: [disable and drain](../guides/disable-and-drain.md).
 
 ---
 
@@ -124,4 +183,4 @@ maand deploy
 
 If you skip **`init`**, commands such as **`build`** or **`deploy`** print an error like `database schema upgrade required … run maand init to upgrade`.
 
-See [tutorials/day-2-operations.md](../guides/day-2-ops.md#upgrade-maand-schema).
+See [day-2 operations](../guides/day-2-ops.md#upgrade-maand-schema).

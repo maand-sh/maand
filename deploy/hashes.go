@@ -40,11 +40,11 @@ func updateJobAllocationHashes(tx *sql.Tx, job string) error {
 			return err
 		}
 
-		md5, err := utils.HashDirectory(jobDir)
+		tree, err := utils.HashDirectoryTree(jobDir)
 		if err != nil {
 			return err
 		}
-		if err := data.UpdateAllocationPlan(tx, namespace, allocID, md5); err != nil {
+		if err := data.UpdateAllocationPlan(tx, namespace, allocID, tree.Aggregate, data.FileManifest(tree.Files)); err != nil {
 			return err
 		}
 

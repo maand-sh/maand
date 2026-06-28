@@ -29,7 +29,13 @@ func runCommandOnWorker(
 	}
 
 	env := buildCommandEnv(allocationID, jobName, workerIP, allocationIndex, disabled, commandName, event, extraEnv)
-	return rt.Exec(workerIP, CommandExecLines(moduleDir, scriptPath, runtime, jobName), env, verbose)
+	cmdCtx := bucket.CommandContext{
+		Job:    jobName,
+		Phase:  "job_command",
+		Action: commandName,
+		Cmd:    path.Join(moduleDir, scriptPath),
+	}
+	return rt.Exec(workerIP, cmdCtx, CommandExecLines(moduleDir, scriptPath, runtime, jobName), env)
 }
 
 func buildCommandEnv(

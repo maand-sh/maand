@@ -8,7 +8,7 @@ import "maand/bucket"
 
 // TestHooks overrides worker side effects during tests. Clear with ClearTestHooks when done.
 type TestHooks struct {
-	ExecuteCommand func(rt *bucket.Runtime, workerIP string, commands []string, env []string) error
+	ExecuteCommand func(rt *bucket.Runtime, workerIP string, cmdCtx bucket.CommandContext, commands []string, env []string) error
 }
 
 var testHooks *TestHooks

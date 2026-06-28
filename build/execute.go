@@ -41,7 +41,7 @@ func runPostBuildHooks(tx *sql.Tx) error {
 		return fmt.Errorf("post_build: get bucket id: %w", err)
 	}
 
-	rt, err := bucket.SetupRuntime(bucketID)
+	rt, err := bucket.SetupRuntime(bucketID, bucket.NewRunContext("build", 0))
 	if err != nil {
 		return fmt.Errorf("post_build: setup runtime: %w", err)
 	}

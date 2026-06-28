@@ -29,7 +29,7 @@ func TestSkipSchemaCheck(t *testing.T) {
 	maandCmd.RemoveCommand(buildCmd)
 }
 
-func TestRequireCurrentSchemaBlocksV1Database(t *testing.T) {
+func TestRequireCurrentSchemaBlocksLegacyDatabase(t *testing.T) {
 	root := t.TempDir()
 	orig := bucket.Location
 	bucket.Location = root
@@ -46,9 +46,7 @@ func TestRequireCurrentSchemaBlocksV1Database(t *testing.T) {
 
 	db, err = data.OpenDatabase(true)
 	require.NoError(t, err)
-	_, err = db.Exec(`UPDATE schema_version SET version = 1`)
-	require.NoError(t, err)
-	_, err = db.Exec(`DROP VIEW IF EXISTS cat_deployments`)
+	_, err = db.Exec(`UPDATE schema_version SET version = 4`)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 

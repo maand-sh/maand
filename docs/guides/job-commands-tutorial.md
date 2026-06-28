@@ -69,8 +69,8 @@ For Bun, use **`command_foo.ts`** and ensure **`bun`** is on the CLI host.
 
 ```bash
 maand build
-maand job_command api command_migrate --verbose
-maand job_command api command_migrate --concurrency 2
+maand jobcommand command_migrate api --verbose
+maand jobcommand command_migrate api --concurrency 2
 ```
 
 Before running, maand checks:
@@ -97,7 +97,7 @@ Other useful events:
 | `post_deploy` | After successful rollout |
 | `job_control` | Instead of default `make start/stop/restart` |
 | `health_check` | `maand health_check` and after deploy restart |
-| `cli` | `maand job_command` only |
+| `cli` | `maand jobcommand` only |
 
 ---
 
@@ -159,7 +159,7 @@ Template files (`.tpl`) rendered at deploy use the same data. See [job-command-a
 
 ```bash
 maand build                                    # validates commands + scripts
-maand job_command <job> <command> [--verbose]  # event: cli
+maand jobcommand <command> [job] [--verbose]  # event: cli; omit job to run on all matching jobs
 maand deploy                                   # pre/post_deploy, job_control
 maand health_check --jobs <job>
 maand cat job_commands                         # list registered commands

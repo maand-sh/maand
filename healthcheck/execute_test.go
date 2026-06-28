@@ -39,7 +39,7 @@ func TestHealthCheckSkipsJobWithoutConfig(t *testing.T) {
 		) VALUES ('id1', 'plain', '1', '0', '0', '0', '0', '0', '0', 1)`)
 	require.NoError(t, err)
 
-	rt, err := bucket.SetupRuntime("test")
+	rt, err := bucket.SetupRuntime("test", bucket.NewRunContext("test", 0))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rt.Stop() })
 

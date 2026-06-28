@@ -94,7 +94,12 @@ func Execute(workerCSV, labelCSV string, batchSize int, shellCommand string, run
 		return bucket.UnexpectedError(err)
 	}
 
-	rt, err := bucket.SetupRuntime(bucketID)
+	updateSeq, err := data.GetBucketUpdateSeq(tx)
+	if err != nil {
+		return err
+	}
+
+	rt, err := bucket.SetupRuntime(bucketID, bucket.NewRunContext("run_command", updateSeq))
 	if err != nil {
 		return err
 	}
@@ -245,7 +250,11 @@ func runScriptOnWorkerBatch(rt *bucket.Runtime, bucketID string, scriptContent [
 				fmt.Sprintf("WORKER_IP=%s", targetWorkerIP),
 			}
 
-			if err := worker.ExecuteFileCommand(rt, targetWorkerIP, commandFilePath, execEnv); err != nil {
+			if err := worker.ExecuteFileCommand(rt, targetWorkerIP, bucket.CommandContext{
+				Phase:  "run_command",
+				Action: "ssh",
+				Cmd:    commandFilePath,
+			}, commandFilePath, execEnv); err != nil {
 				failureMu.Lock()
 				failures[targetWorkerIP] = err
 				failureMu.Unlock()

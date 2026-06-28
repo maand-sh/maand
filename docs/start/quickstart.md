@@ -87,7 +87,7 @@ Scaffold a job:
 maand job create hello --selectors worker
 ```
 
-This creates `workspace/jobs/hello/` with `manifest.json` and a minimal **Makefile**. Replace the Makefile with something that tracks lifecycle (deploy calls `make start` / `make restart`):
+This creates `workspace/jobs/hello/` with `manifest.json` and a minimal **Makefile**. Replace the Makefile with something that tracks lifecycle (deploy calls `make start` on first deploy and `make restart` on upgrades by default; add a **`reload`** target if you set **`restart_policy: reload`** — see [deploy.md](../reference/cli/deploy.md#applying-changes-on-workers)):
 
 ```bash
 cat > workspace/jobs/hello/Makefile <<'EOF'
@@ -167,7 +167,7 @@ Deploy will:
 1. Check host tools (`ssh`, `rsync`, `python3`, …) and worker prerequisites
 2. Stage job files under `tmp/workers/<ip>/`
 3. Rsync to `/opt/worker/<bucket_id>/` on each worker
-4. Run `make start` (first deploy) or `make restart` (content changed)
+4. Run lifecycle targets: **`make start`** (first deploy) or, on upgrades, **`make restart`** by default (**`restart_policy: always`**). With **`restart_policy: reload`**, deploy calls **`make reload`** instead (or **`make restart`** when changed files match **`restart_globs`**).
 
 Optional: combine build + deploy:
 
@@ -175,11 +175,13 @@ Optional: combine build + deploy:
 maand deploy --build
 ```
 
-Dry-run before a production push:
+Dry-run before a production push — stages locally and prints per-allocation actions (**start**, **restart**, **reload**, **sync**, **skip**); **`matched=`** paths appear when **`restart_globs`** forces a restart:
 
 ```bash
 maand deploy --dry-run
 ```
+
+See [Applying changes on workers](../reference/cli/deploy.md#applying-changes-on-workers) for **`restart_policy`**, **`--sync-only`**, and glob behavior.
 
 Deploy only one job:
 
@@ -222,9 +224,11 @@ maand build
 maand deploy
 ```
 
-Deploy compares **content hashes** per allocation and restarts only jobs that changed. With `update_parallel_count: 2`, restarts happen in rolling batches of two workers.
+Deploy compares **content hashes** per allocation and rolls out only jobs that changed. With `update_parallel_count: 2`, lifecycle actions (**restart** or **reload**, per **`restart_policy`**) happen in rolling batches of two workers.
 
-Each **`make restart`** receives **`CURRENT_VERSION`** (what was last promoted on that worker) and **`NEW_VERSION`** (the target from your manifest after build). Use them in the Makefile for migrations or upgrade scripts — see [deploy.md](../reference/cli/deploy.md#allocation-version-tracking).
+Each **`make start`**, **`make restart`**, or **`make reload`** receives **`CURRENT_VERSION`** (what was last promoted on that worker) and **`NEW_VERSION`** (the target from your manifest after build). Use them in the Makefile for migrations or upgrade scripts — see [deploy.md](../reference/cli/deploy.md#allocation-version-tracking).
+
+For config-only pushes without touching the process, set **`restart_policy: reload`** (and optional **`restart_globs`**) in **`manifest.json`**, or use **`maand deploy --sync-only`** to rsync and promote with no lifecycle — then run **`maand job run hello --target reload`** if needed. A **version-only** bump still triggers rollout when **`current_version ≠ new_version`**, even if the content hash is unchanged (typically **`reload`** when policy is **`reload`**).
 
 Bump **`version`** in `manifest.json` when you want templates, KV, and deploy to reflect a new release. Bumping version alone still triggers rollout when `manifest.json` is part of the synced tree (content hash changes). If this job depends on others (or is depended on), use semver strings and optional **`min_version`** / **`max_version`** in **`demands.config`** — see [manifest.md](../reference/manifest.md#version).
 

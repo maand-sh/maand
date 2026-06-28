@@ -133,6 +133,12 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 		if err := workspace.ValidateHealthCheck(jobName, manifest); err != nil {
 			return nil, err
 		}
+		if err := workspace.ValidateRestartPolicy(jobName, manifest); err != nil {
+			return nil, err
+		}
+		if err := workspace.ValidateRestartGlobs(jobName, manifest); err != nil {
+			return nil, err
+		}
 		if err := workspace.ValidatePrometheusServerFiles(jobName); err != nil {
 			return nil, err
 		}
@@ -146,9 +152,17 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 		}
 
 		version := workspace.GetVersion(manifest)
+		restartPolicy, err := workspace.NormalizeRestartPolicy(manifest.RestartPolicy)
+		if err != nil {
+			return nil, fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, jobName, err)
+		}
+		restartGlobsJSON, err := workspace.EncodeRestartGlobs(manifest.RestartGlobs)
+		if err != nil {
+			return nil, fmt.Errorf("%w: job %s %w", bucket.ErrInvalidManifest, jobName, err)
+		}
 		upsertJobQuery := `
-			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count, deploy_parallel_count, health_check)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			INSERT OR REPLACE INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb, min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count, deploy_parallel_count, restart_policy, restart_globs, health_check)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		_, err = tx.Exec(
 			upsertJobQuery, jobID, jobName, version,
@@ -160,6 +174,8 @@ func BuildJobs(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) ([]string, 
 			fmt.Sprintf("%v", requestedCPUMHz),
 			workspace.GetUpdateParallelCount(manifest),
 			workspace.GetDeployParallelCount(manifest),
+			restartPolicy,
+			restartGlobsJSON,
 			healthCheckJSON,
 		)
 		if err != nil {

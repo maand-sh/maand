@@ -55,4 +55,6 @@ type Manifest struct {
 	HealthCheck         *ManifestHealthCheck `json:"health_check,omitempty"`
 	UpdateParallelCount int                  `json:"update_parallel_count"`
 	DeployParallelCount int                  `json:"deploy_parallel_count"`
+	RestartPolicy       string               `json:"restart_policy,omitempty"`
+	RestartGlobs        []string             `json:"restart_globs,omitempty"`
 }

@@ -17,14 +17,14 @@ Related: [concepts.md](concepts.md) · [commands.md](../reference/cli/commands.m
 | **Catalog & placement** | Declare workers (`workers.json`) with labels, tags, CPU/memory; declare jobs with **selectors** (label matching); auto-create **allocations** (job × worker). Three-layer **resource model**: manifest min/max, `bucket.jobs*.conf` reservations, worker capacity validation — see [resources-and-placement.md](../reference/resources-and-placement.md) |
 | **Environment overrides** | `job_config_selector` in `maand.conf` picks `bucket.jobs.<env>.conf` for per-environment memory/CPU without changing manifests — see [configuration.md](../reference/configuration.md) |
 | **Build** | Reconcile workspace → `maand.db` + KV; validate resources, ports, job dependencies; generate and **auto-rotate TLS** certs; sync `disabled.json`; run **`post_build`** hooks in `deployment_seq` order — see [build.md](../reference/cli/build.md), [certs.md](../reference/certs.md) |
-| **Deploy** | Rsync to `/opt/worker/<bucket_id>/`; Makefile start/stop/restart (or custom **`job_control`**); **hash-based skip** for unchanged jobs; **partial deploy resume**; **`--dry-run`**, **`--force`**, **`--jobs`** filters; ordered **waves** via `deployment_seq` — see [deploy.md](../reference/cli/deploy.md), [deploy-debugging.md](../guides/debugging-deploy.md) |
+| **Deploy** | Rsync to workers; Makefile **`start` / `restart` / `reload`** (or **`job_control`**); **`restart_policy`**, **`restart_globs`**, **`--sync-only`**; hash skip and partial resume; **`--dry-run`**, **`--force`**, **`--jobs`**; waves via **`deployment_seq`** — [deploy.md](../reference/cli/deploy.md) |
 | **Rolling upgrades** | `deploy_parallel_count` / `update_parallel_count`, health gates, `deploy_order`; semver version tracking — [guides/rolling-deploy.md](../guides/rolling-deploy.md) |
 | **Dependencies** | Cross-job **command demands** with version constraints; build computes **`deployment_seq`** and detects circular demands — see [deployment-sequence.md](../reference/deployment-sequence.md) |
 | **Job commands & runtime API** | Python/Bun hooks on the CLI host: `post_build`, `pre_deploy`, `post_deploy`, `job_control`, `health_check`, `after_allocation_started`, `after_allocation_stopped`, **`cli`** — [reference/cli/job-command.md](../reference/cli/job-command.md) |
 | **Health** | Built-in TCP/HTTP/SSH manifest probes and/or custom **`health_check`** commands (probes first); **`--wait`**, **`--update-hash`** to trigger redeploy — see [health-check.md](../reference/cli/health-check.md) |
 | **Prometheus** | Per-job optional **`_prometheus/`** (scrape, alerts, runbooks, dashboards); build validates and stores in `job_files`; scrape configs go to KV — see [prometheus.md](../guides/prometheus.md) |
-| **Maintenance (disable)** | **`disabled.json`** drains workers, jobs, or single allocations **without** removing workspace or catalog rows. Disabled allocations still get build/KV/certs and deploy staging; maand **never starts** them — see [disabled.md](../guides/disable-and-drain.md) |
-| **Day-2 ops** | `maand job start\|stop\|restart\|run\|status`; `maand run_command` for ad-hoc SSH; soft-remove via workspace edits + **GC** for purged rows and disk — see [job.md](../reference/cli/job.md), [gc.md](../reference/cli/gc.md), [tutorials/day-2-operations.md](../guides/day-2-ops.md) |
+| **Maintenance (disable)** | **`disabled.json`** drains workers, jobs, or single allocations **without** removing workspace or catalog rows. Disabled allocations still get build/KV/certs and deploy staging; maand **never starts** them — see [disable and drain](../guides/disable-and-drain.md) |
+| **Day-2 ops** | `maand job start\|stop\|restart\|run\|status`; `maand run_command` for ad-hoc SSH; soft-remove via workspace edits + **GC** for purged rows and disk — see [job.md](../reference/cli/job.md), [gc.md](../reference/cli/gc.md), [day-2-ops.md](../guides/day-2-ops.md) |
 | **State & secrets** | Layered KV: global (`vars/bucket`), worker, job (`vars.toml` + hooks), allocation (certs, peers, version). Encrypted **`secrets/job/*`**. Inspect with **`maand cat`** — see [KV persistence](../reference/kv/persistence.md), [KV namespaces](../reference/kv/namespaces.md) |
 | **TLS** | Bucket CA at init; per-job certs declared in manifest; build-time renewal via `certs_ttl` / `certs_renewal_buffer`; staged to workers on deploy — see [certs.md](../reference/certs.md) |
 | **Templates** | Go templates (`.tpl`) rendered at deploy with KV context (`get`, `getSecret`) — see [templates.md](../reference/templates.md) |
@@ -47,14 +47,15 @@ See [README.md](../README.md#typical-workflow) for the command sequence.
 | Different CPU/memory per env | `bucket.jobs.prod.conf` + `job_config_selector` | [configuration.md](../reference/configuration.md) |
 | Ordered multi-job deploy | Command **demands** → `deployment_seq` waves | [deployment-sequence.md](../reference/deployment-sequence.md) |
 | Rolling restart without downtime | `update_parallel_count` + health between batches | [rolling-deploy](../guides/rolling-deploy.md) |
+| Push config without restarting the process | `restart_policy: reload` (+ optional `restart_globs`) | [deploy.md](../reference/cli/deploy.md#applying-changes-on-workers) |
 | Skip redeploy when nothing changed | Content hashes + version promotion per allocation | [deploy.md](../reference/cli/deploy.md), `maand cat deployments` |
 | Bootstrap secrets before templates | `pre_deploy` + `put_job_secret` / runtime API | [job-command-api.md](../reference/job-command-api.md), [KV namespaces](../reference/kv/namespaces.md) |
 | Custom canary or blue/green | `job_control` command + env `NEW_ALLOCATIONS` | [job-command-api.md](../reference/job-command-api.md), [rolling-deploy](../guides/rolling-deploy.md) |
 | Single-writer migration across nodes | Runtime **semaphore** (`capacity=1`) | [job-command-api.md](../reference/job-command-api.md#semaphores) |
-| Drain one node for maintenance | `disabled.json` → build → deploy (stops, no restart) | [disabled.md](../guides/disable-and-drain.md) |
+| Drain one node for maintenance | `disabled.json` → build → deploy (stops, no restart) | [disable and drain](../guides/disable-and-drain.md) |
 | mTLS or app TLS on workers | Manifest `certs` + auto-rotation on build | [certs.md](../reference/certs.md) |
 | Inspect TLS expiry | `maand cat certs` | [certs.md](../reference/certs.md#inspecting-certificates-maand-cat-certs) |
-| Debug “why didn’t deploy run?” | `--dry-run`, `maand cat deployments`, [deploy-debugging.md](../guides/debugging-deploy.md) | [deploy-debugging.md](../guides/debugging-deploy.md) |
+| Debug “why didn’t deploy run?” | `--dry-run`, `maand cat deployments`, [debugging-deploy.md](../guides/debugging-deploy.md) | [debugging-deploy.md](../guides/debugging-deploy.md) |
 | One-off operator script | `maand job_command` (event **`cli`**) | [job-command-api.md](../reference/job-command-api.md) |
 
 ---
@@ -62,7 +63,7 @@ See [README.md](../README.md#typical-workflow) for the command sequence.
 ## Where maand is strong
 
 1. **No agents** — workers only need SSH, `make`, `python3`, `rsync`, `bash`. Good fit when you do not want Nomad/K8s overhead.
-2. **Declarative + incremental deploy** — content hashes and version tracking mean redeploys skip promoted allocations and resume after partial failure. Dry-run and `maand cat deployments` make rollout state visible. See [deploy.md](../reference/cli/deploy.md) and [deploy-debugging.md](../guides/debugging-deploy.md).
+2. **Declarative + incremental deploy** — content hashes and version tracking mean redeploys skip promoted allocations and resume after partial failure. Dry-run and `maand cat deployments` make rollout state visible. See [deploy.md](../reference/cli/deploy.md) and [debugging-deploy.md](../guides/debugging-deploy.md).
 3. **Multi-job orchestration** — dependency graph, ordered deploy waves, rolling restarts with health gates between batches. See [deployment-sequence.md](../reference/deployment-sequence.md) and [rolling-deploy](../guides/rolling-deploy.md).
 4. **Extensibility without a custom agent** — job commands, runtime HTTP API (KV, demands, semaphores), and layered configuration support migrations, secret bootstrap, custom lifecycle, and CLI-triggered ops on the orchestrator host. See [job-command-api.md](../reference/job-command-api.md) and [KV namespaces](../reference/kv/namespaces.md).
 5. **Operational tooling built in** — maintenance disable (not delete), GC, dry-run, hash inspection, cert renewal on build, resource validation, and structured [deploy debugging](../guides/debugging-deploy.md).
@@ -79,7 +80,7 @@ Maand is a **focused orchestrator**, not a general container or platform schedul
 | **Single control point** | One bucket directory on one CLI host is the source of truth (not HA etcd/consul). |
 | **SSH-centric** | All worker interaction is SSH/rsync; no native service mesh, CNI, or container runtime. |
 | **Label-based placement** | Selectors + resource validation — not bin-packing, affinity rules, or dynamic scheduling beyond labels. |
-| **Makefile lifecycle** | Default deploy uses `start`/`stop`/`restart` targets; you bring process supervision (systemd, containers, etc.) via Makefile or **`job_control`** commands. |
+| **Makefile lifecycle** | Default deploy uses `start`/`stop`/`restart`/`reload` targets; you bring process supervision (systemd, containers, etc.) via Makefile or **`job_control`** commands. |
 | **Hook runtimes** | Python3 and Bun on the **CLI host**; scripts reach workers via SSH helpers (Python) or your own wiring. Workers run what you deploy. |
 | **In-process coordination** | Runtime API and semaphores exist only for the current maand CLI session — not a distributed lock service. |
 | **Linux workers** | Docs assume Linux hosts with standard Unix tooling. |

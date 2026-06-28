@@ -15,9 +15,9 @@ func TestCheckWorkerPrerequisitesFailsBeforeDeploy(t *testing.T) {
 		CheckWorkerPrerequisites: func(*bucket.Runtime, []string) error {
 			return errors.New("worker 10.0.0.2 missing prerequisites: make")
 		},
-		WorkerCommand: func(*bucket.Runtime, string, []string, []string) error { return nil },
-		Rsync:         func(*bucket.Runtime, string, string) error { return nil },
-		SetupRuntime:  func(string) (*bucket.Runtime, error) { return nil, nil },
+		WorkerCommand: func(*bucket.Runtime, string, bucket.CommandContext, []string, []string) error { return nil },
+		Rsync:         func(*bucket.Runtime, string, string, []string) error { return nil },
+		SetupRuntime:  func(string, bucket.RunContext) (*bucket.Runtime, error) { return nil, nil },
 	})
 	t.Cleanup(ClearTestHooks)
 
@@ -25,7 +25,7 @@ func TestCheckWorkerPrerequisitesFailsBeforeDeploy(t *testing.T) {
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
 	require.NoError(t, tx.Commit())
 
-	err := Execute(nil, false)
+	err := Execute(nil, Options{})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "missing prerequisites: make")
 }

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strings"
 
 	"maand/bucket"
 	"maand/data"
@@ -17,6 +18,8 @@ import (
 const (
 	rolloutActionStart   = "start"
 	rolloutActionRestart = "restart"
+	rolloutActionReload  = "reload"
+	rolloutActionSync    = "sync"
 	rolloutActionSkip    = "skip"
 	rolloutActionStop    = "stop"
 	rolloutActionPromote = "promote"
@@ -29,6 +32,7 @@ type AllocationPlan struct {
 	Action       string
 	PreviousHash string
 	CurrentHash  string
+	MatchedPaths []string
 }
 
 // JobPlan summarizes whether a job would be deployed in the current wave.
@@ -49,7 +53,7 @@ type DryRunResult struct {
 // DryRun stages job files locally, refreshes allocation content hashes in a rolled-back
 // transaction, and reports which jobs and allocations would be deployed. No workers are
 // contacted and no hash promotions are persisted.
-func DryRun(jobsFilter []string, force bool) (DryRunResult, error) {
+func DryRun(jobsFilter []string, opts Options) (DryRunResult, error) {
 	var result DryRunResult
 
 	db, err := data.OpenDatabase(true)
@@ -109,13 +113,18 @@ func DryRun(jobsFilter []string, force bool) (DryRunResult, error) {
 		}
 
 		for _, job := range jobs {
-			plan, err := planJobRollout(tx, job, deploymentSeq, force)
+			plan, err := planJobRollout(tx, job, deploymentSeq, opts)
 			if err != nil {
 				return result, err
 			}
 			result.Jobs = append(result.Jobs, plan)
 			if plan.NeedsRollout {
 				result.Required = true
+				if opts.SyncOnly {
+					if err := validateSyncOnlyRollout(tx, job); err != nil {
+						return result, err
+					}
+				}
 			}
 		}
 	}
@@ -123,7 +132,7 @@ func DryRun(jobsFilter []string, force bool) (DryRunResult, error) {
 	return result, nil
 }
 
-func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, force bool) (JobPlan, error) {
+func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, opts Options) (JobPlan, error) {
 	plan := JobPlan{
 		Job:           job,
 		DeploymentSeq: deploymentSeq,
@@ -138,6 +147,15 @@ func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, force bool) (JobP
 		return plan, nil
 	}
 
+	policy, err := data.GetRestartPolicy(tx, job)
+	if err != nil {
+		return plan, err
+	}
+	globs, err := data.GetRestartGlobs(tx, job)
+	if err != nil {
+		return plan, err
+	}
+
 	namespace := fmt.Sprintf("%s_allocation", job)
 	for _, workerIP := range workers {
 		disabled, err := data.IsAllocationDisabled(tx, workerIP, job)
@@ -145,7 +163,7 @@ func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, force bool) (JobP
 			return plan, err
 		}
 		if disabled == 1 {
-			ap, needs, err := planDisabledAllocation(tx, job, workerIP, namespace, force)
+			ap, needs, err := planDisabledAllocation(tx, job, workerIP, namespace, opts)
 			if err != nil {
 				return plan, err
 			}
@@ -156,7 +174,7 @@ func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, force bool) (JobP
 			continue
 		}
 
-		ap, needs, err := planActiveAllocation(tx, job, workerIP, namespace, force)
+		ap, needs, err := planActiveAllocation(tx, job, workerIP, namespace, opts, policy, globs)
 		if err != nil {
 			return plan, err
 		}
@@ -175,7 +193,9 @@ func planJobRollout(tx *sql.Tx, job string, deploymentSeq int, force bool) (JobP
 func planActiveAllocation(
 	tx *sql.Tx,
 	job, workerIP, namespace string,
-	force bool,
+	opts Options,
+	policy string,
+	globs []string,
 ) (AllocationPlan, bool, error) {
 	allocID, err := data.GetAllocationID(tx, workerIP, job)
 	if err != nil {
@@ -197,12 +217,22 @@ func planActiveAllocation(
 		ap.CurrentHash = current
 		return ap, true, nil
 	case previous != current:
-		ap.Action = rolloutActionRestart
+		action, matched, err := resolveAllocationLifecycle(tx, job, workerIP, opts, policy, globs, true, false)
+		if err != nil {
+			return AllocationPlan{}, false, err
+		}
+		ap.Action = action
+		ap.MatchedPaths = matched
 		ap.PreviousHash = previous
 		ap.CurrentHash = current
 		return ap, true, nil
-	case force:
-		ap.Action = rolloutActionRestart
+	case opts.Force:
+		action, matched, err := resolveAllocationLifecycle(tx, job, workerIP, opts, policy, globs, false, false)
+		if err != nil {
+			return AllocationPlan{}, false, err
+		}
+		ap.Action = action
+		ap.MatchedPaths = matched
 		ap.PreviousHash = previous
 		ap.CurrentHash = current
 		return ap, true, nil
@@ -212,7 +242,12 @@ func planActiveAllocation(
 			return AllocationPlan{}, false, err
 		}
 		if needsVersion {
-			ap.Action = rolloutActionRestart
+			action, matched, err := resolveAllocationLifecycle(tx, job, workerIP, opts, policy, globs, false, true)
+			if err != nil {
+				return AllocationPlan{}, false, err
+			}
+			ap.Action = action
+			ap.MatchedPaths = matched
 			ap.PreviousHash = previous
 			ap.CurrentHash = current
 			return ap, true, nil
@@ -227,7 +262,7 @@ func planActiveAllocation(
 func planDisabledAllocation(
 	tx *sql.Tx,
 	job, workerIP, namespace string,
-	force bool,
+	opts Options,
 ) (AllocationPlan, bool, error) {
 	allocID, err := data.GetAllocationID(tx, workerIP, job)
 	if err != nil {
@@ -251,7 +286,7 @@ func planDisabledAllocation(
 		return AllocationPlan{}, false, err
 	}
 	hashMismatch := wasDeployed && previous != current
-	needsPromote := hashMismatch || needsVersion || (force && wasDeployed)
+	needsPromote := hashMismatch || needsVersion || (opts.Force && wasDeployed)
 
 	needs := false
 	if wasDeployed {
@@ -318,8 +353,25 @@ func printAllocationPlan(alloc AllocationPlan) {
 			fmt.Printf("    %s  start   (no hash row yet)\n", alloc.WorkerIP)
 		}
 	case rolloutActionRestart:
+		if len(alloc.MatchedPaths) > 0 {
+			fmt.Printf(
+				"    %s  restart previous_hash=%s current_hash=%s matched=%s\n",
+				alloc.WorkerIP, alloc.PreviousHash, alloc.CurrentHash, strings.Join(alloc.MatchedPaths, ","),
+			)
+			break
+		}
 		fmt.Printf(
 			"    %s  restart previous_hash=%s current_hash=%s\n",
+			alloc.WorkerIP, alloc.PreviousHash, alloc.CurrentHash,
+		)
+	case rolloutActionReload:
+		fmt.Printf(
+			"    %s  reload  previous_hash=%s current_hash=%s\n",
+			alloc.WorkerIP, alloc.PreviousHash, alloc.CurrentHash,
+		)
+	case rolloutActionSync:
+		fmt.Printf(
+			"    %s  sync    previous_hash=%s current_hash=%s\n",
 			alloc.WorkerIP, alloc.PreviousHash, alloc.CurrentHash,
 		)
 	case rolloutActionSkip:

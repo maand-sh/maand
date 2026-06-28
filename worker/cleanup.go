@@ -21,12 +21,21 @@ func JobDeployArtifactsCleanupCommand(bucketID, job string) string {
 	)
 }
 
+func cleanupCmdCtx(job, action string, cmd string) bucket.CommandContext {
+	return bucket.CommandContext{
+		Job:    job,
+		Phase:  "gc",
+		Action: action,
+		Cmd:    cmd,
+	}
+}
+
 // RemoveJobDeployArtifacts deletes deployed job files on a worker but leaves
 // data/ and logs/ in place so the same allocation can reuse them on redeploy.
 // Permanent deletion of data/, logs/, and bin/ is handled by maand gc.
 func RemoveJobDeployArtifacts(rt *bucket.Runtime, bucketID, workerIP, job string) error {
 	cmd := JobDeployArtifactsCleanupCommand(bucketID, job)
-	if err := ExecuteCommand(rt, workerIP, []string{cmd}, nil); err != nil {
+	if err := ExecuteCommand(rt, workerIP, cleanupCmdCtx(job, "cleanup_deploy", cmd), []string{cmd}, nil); err != nil {
 		return remoteError(workerIP, err)
 	}
 	return nil
@@ -36,7 +45,7 @@ func RemoveJobDeployArtifacts(rt *bucket.Runtime, bucketID, workerIP, job string
 func RemoveJobRuntimeDirs(rt *bucket.Runtime, bucketID, workerIP, job string) error {
 	base := fmt.Sprintf("/opt/worker/%s/jobs/%s", bucketID, job)
 	cmd := fmt.Sprintf("rm -rf %s/data %s/logs %s/bin", base, base, base)
-	if err := ExecuteCommand(rt, workerIP, []string{cmd}, nil); err != nil {
+	if err := ExecuteCommand(rt, workerIP, cleanupCmdCtx(job, "cleanup_runtime", cmd), []string{cmd}, nil); err != nil {
 		return remoteError(workerIP, err)
 	}
 	return nil
@@ -46,7 +55,7 @@ func RemoveJobRuntimeDirs(rt *bucket.Runtime, bucketID, workerIP, job string) er
 func RemoveJobTree(rt *bucket.Runtime, bucketID, workerIP, job string) error {
 	base := fmt.Sprintf("/opt/worker/%s/jobs/%s", bucketID, job)
 	cmd := fmt.Sprintf("rm -rf %q", base)
-	if err := ExecuteCommand(rt, workerIP, []string{cmd}, nil); err != nil {
+	if err := ExecuteCommand(rt, workerIP, cleanupCmdCtx(job, "cleanup_job_tree", cmd), []string{cmd}, nil); err != nil {
 		return remoteError(workerIP, err)
 	}
 	return nil

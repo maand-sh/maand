@@ -131,7 +131,7 @@ deploy_parallel_count: 1  (or any N)
 
 ### maand
 - **CLI-first**: `maand cat` for inspection (jobs, workers, allocations, KV, deployments, certs, health).
-- **Real-time logs**: `maand logs`, `maand run_command` for SSH batch execution.
+- **Structured logs**: `maand logs show`, `maand run_command` for SSH batch execution.
 - **Single source of truth**: SQLite catalog (workers, jobs, allocations, versions, KV).
 - **Rollout transparency**: `maand deploy --dry-run` shows exactly what will change.
 - **Operations model**: explicit, imperative. Deploy is a CLI invocation; auditable and scriptable.

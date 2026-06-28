@@ -1,6 +1,8 @@
 # `maand job`
 
-Manual **job control** on workers: start, stop, restart, custom Makefile targets (for example `migrate`), or show status. Validates that each worker’s `worker.json` matches maand.db before running.
+Manual **job control** on workers: start, stop, restart, reload, custom Makefile targets (for example `migrate`), or show status. Validates that each worker’s `worker.json` matches maand.db before running.
+
+**`reload`** is a first-class Makefile target — use **`maand job run <job> --target reload`** for a manual soft apply. During **`maand deploy`**, lifecycle is driven by manifest **`restart_policy`** (**`always`** → restart, **`reload`** → reload, **`never`** → none); deploy does not call **`maand job`**.
 
 Requires a prior **`maand deploy`** so workers are in sync (`update_seq` check).
 
@@ -20,7 +22,7 @@ maand job create <job> [--selectors s1,s2]
 | Flag | Commands | Description |
 |------|----------|-------------|
 | `--allocations` | control | Comma-separated worker IPs (default: all workers for the job). |
-| `--target` | `run` | Makefile target (required): built-in `start`, `stop`, `restart`, `status`, or any safe custom name such as `migrate`. |
+| `--target` | `run` | Makefile target (required): built-in `start`, `stop`, `restart`, `reload`, `status`, or any safe custom name such as `migrate`. |
 | `--health_check` | start/stop/restart/run | Run health_check commands after the action. |
 | `--selectors` | `create` | Selectors written into a new `manifest.json`. |
 
@@ -36,12 +38,13 @@ Before control commands run, maand verifies each worker’s `/opt/worker/<bucket
 | Sync check | No | Yes (`worker.json` / `update_seq`) |
 | Hash / skip logic | Yes | No |
 
-Jobs with **`job_control`** commands in the manifest use those instead of the default Makefile runner when present.
+**`maand job`** always runs **`runner.py`** → Makefile targets on workers. The **`job_control`** command event replaces Makefile lifecycle during **`maand deploy`** only — not during manual `maand job` commands.
 
 ## Examples
 
 ```bash
 maand job restart api
+maand job run api --target reload
 maand job stop api --allocations 10.0.0.2
 maand job run api --target migrate
 maand job create myservice --selectors worker

@@ -34,13 +34,13 @@ func TestSyncWorkers_usesHooks(t *testing.T) {
 		mu     sync.Mutex
 	)
 	SetTestHooks(&TestHooks{
-		Rsync: func(_ *bucket.Runtime, _, workerIP string) error {
+		Rsync: func(_ *bucket.Runtime, _, workerIP string, _ []string) error {
 			mu.Lock()
 			synced = append(synced, workerIP)
 			mu.Unlock()
 			return nil
 		},
-		WorkerCommand: func(*bucket.Runtime, string, []string, []string) error { return nil },
+		WorkerCommand: func(*bucket.Runtime, string, bucket.CommandContext, []string, []string) error { return nil },
 	})
 	t.Cleanup(ClearTestHooks)
 

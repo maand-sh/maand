@@ -98,11 +98,11 @@ Multiple demands → **max depth** across chains. Cycles fail build.
 for seq in 0..max:
   jobs ← all jobs with deployment_seq = seq (respect --jobs filter)
   for each job needing rollout:
-    pre_deploy → stage → rsync → start/restart batches → post_deploy → promote
+    pre_deploy → stage → rsync → lifecycle batches (start/restart/reload) → post_deploy → promote
   commit partial progress; continue even if one job failed
 ```
 
-Within one sequence value, jobs roll out **independently**. Each job applies its own **`deploy_parallel_count`** (starts) and **`update_parallel_count`** (restarts). Worker order within batches uses KV **`deploy_order`**.
+Within one sequence value, jobs roll out **independently**. Each job applies its own **`deploy_parallel_count`** (starts) and **`update_parallel_count`** (upgrades: restart or reload). Worker order within batches uses KV **`deploy_order`**.
 
 Deploy **never** runs a higher sequence before a lower one finishes its wave.
 
@@ -116,7 +116,7 @@ After the main transaction commits, **`post_build`** hooks run in **sequence ord
 
 | Command | Ordering |
 |---------|----------|
-| `maand job start/stop/restart` | Manual |
+| `maand job start/stop/restart/reload` | Manual |
 | `maand job_command` (cli) | Selected job only |
 | `maand health_check` | Per `--jobs` flag |
 | `maand run_command` | Unrelated |
@@ -185,7 +185,7 @@ maand deploy --dry-run
 | `deployment_seq` | `allocations.deployment_seq` | `BuildDeploymentSequence` |
 | Deploy wave order | — | `maand deploy` (0 → max) |
 | `post_build` order | — | `maand build` (0 → max) |
-| Rolling restarts | `update_parallel_count` | Per job, per wave |
+| Rolling upgrades | `update_parallel_count` | Per job, per wave (restart or reload) |
 | Rolling first deploy | `deploy_parallel_count` | Per job, per wave |
 | Rollout worker order | `deploy_order` KV | Build sync; optional `pre_deploy` override |
 

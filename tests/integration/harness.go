@@ -421,7 +421,7 @@ func jobUpdateParallelCount(t *testing.T, job string) int {
 
 func dryRunPlanForJob(t *testing.T, job string) deploy.JobPlan {
 	t.Helper()
-	result, err := deploy.DryRun([]string{job}, false)
+	result, err := deploy.DryRun([]string{job}, deploy.Options{})
 	require.NoError(t, err)
 	for _, plan := range result.Jobs {
 		if plan.Job == job {

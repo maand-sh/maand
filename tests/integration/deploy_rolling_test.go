@@ -29,7 +29,7 @@ func TestIntegrationDeployRollingUpgradeOnContentChange(t *testing.T) {
 	setupRollingIntegrationBucket(t, parallel)
 	assert.Equal(t, parallel, jobUpdateParallelCount(t, integrationJobName))
 
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 	assert.True(t, jobAllocationHashesPromoted(t, integrationJobName))
 
 	for _, ip := range ips {
@@ -48,10 +48,10 @@ func TestIntegrationDeployRollingUpgradeOnContentChange(t *testing.T) {
 		assert.Equal(t, "restart", alloc.Action, "worker %s", alloc.WorkerIP)
 	}
 
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 	assert.True(t, jobAllocationHashesPromoted(t, integrationJobName))
 
-	result, err := deploy.DryRun(nil, false)
+	result, err := deploy.DryRun(nil, deploy.Options{})
 	require.NoError(t, err)
 	assert.False(t, result.Required)
 
@@ -71,7 +71,7 @@ func TestIntegrationDeployRollingUpgradeParallelism(t *testing.T) {
 	setupRollingIntegrationBucket(t, parallel)
 	assert.Equal(t, parallel, jobUpdateParallelCount(t, integrationJobName))
 
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
 	marker := filepath.Join(bucket.WorkspaceLocation, "jobs", integrationJobName, "upgrade-marker.txt")
 	require.NoError(t, os.WriteFile(marker, []byte("v3"), 0o644))
@@ -87,7 +87,7 @@ func TestIntegrationDeployRollingUpgradeParallelism(t *testing.T) {
 	}
 	assert.Len(t, restartWorkers, len(ips))
 
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
 	for _, ip := range ips {
 		assert.Equal(t, 1, workerJobCounter(t, ip, "restart"), "batched upgrade should restart once on %s", ip)

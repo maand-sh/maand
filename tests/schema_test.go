@@ -52,16 +52,14 @@ func TestMigrateSchemaIdempotentInTransaction(t *testing.T) {
 	assert.Equal(t, versionBefore, mustGetSchemaVersion(t))
 }
 
-func TestUpgradeBucketFromV1ToLatest(t *testing.T) {
+func TestUpgradeBucketFromLegacySchemaVersion(t *testing.T) {
 	initFreshBucket(t)
 	requireLatestSchema(t)
 	require.True(t, mustViewExists(t, "cat_deployments"))
 
 	db, err := data.OpenDatabase(true)
 	require.NoError(t, err)
-	_, err = db.Exec(`UPDATE schema_version SET version = 1`)
-	require.NoError(t, err)
-	_, err = db.Exec(`DROP VIEW IF EXISTS cat_deployments`)
+	_, err = db.Exec(`UPDATE schema_version SET version = 4`)
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 

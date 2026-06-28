@@ -57,7 +57,11 @@ func ValidateBucketUpdateSeq(tx *sql.Tx, rt *bucket.Runtime, workers []string) e
 				"python3 /opt/worker/%s/bin/worker.py %s %s %d",
 				bucketID, bucketID, tWorkerID, updateSeq,
 			)
-			err := worker.ExecuteCommand(rt, tWorkerIP, []string{cmd}, nil)
+			err := worker.ExecuteCommand(rt, tWorkerIP, bucket.CommandContext{
+				Phase:  "validate",
+				Action: "worker_sync",
+				Cmd:    cmd,
+			}, []string{cmd}, nil)
 			if err != nil {
 				mu.Lock()
 				errs[tWorkerIP] = err

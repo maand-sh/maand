@@ -90,8 +90,10 @@ Workers removed from `workers.json` are marked **`removed`** on allocations (not
 | `version` | Job version string — see [Job version](#job-version) below |
 | `selectors` | Worker **labels** for placement. When omitted, the **job name** is used (all selectors must match worker labels). |
 | `update_parallel_count` | Rolling restart batch size during **deploy** upgrades (minimum 1; default 1). |
+| `restart_policy` | Default **`always`**. **`reload`** runs `make reload` on upgrades; **`never`** rsyncs without lifecycle. |
+| `restart_globs` | Only with **`reload`**. Changed paths matching a glob run **`restart`** instead of **`reload`**. |
 | `deploy_parallel_count` | Rolling **start** batch size on first deploy (0 = all new allocations at once). |
-| `resources.memory` / `cpu` | Limits; optional override via `bucket.jobs.conf`. |
+| `resources.memory` / `cpu` | **Min/max bounds** in manifest; **actual** reservation from `bucket.jobs.conf` or `bucket.jobs.<env>.conf` (`job_config_selector` in `maand.conf`) — [resources-and-placement.md](../resources-and-placement.md). |
 | `resources.ports` | Named ports: `{}` (maand assigns from pool) or integer (fixed; any port number) |
 | `commands` | Named commands (must be prefixed `command_`). |
 | `certs` | Per-job cert definitions → generated into KV per worker. |
@@ -139,7 +141,7 @@ Full rules: [manifest.md](../manifest.md#version) · [deployment-sequence.md](..
 
 ### Job directory rules
 
-- **`Makefile`** is **required** (used by default deploy via `runner.py`: `make start|stop|restart`).
+- **`Makefile`** or **`Makefile.tpl`** is **required** (default deploy uses `runner.py` → `make start|stop|restart|reload` per **`restart_policy`**; `.tpl` is rendered at deploy).
 - Reserved directories on disk: **`data/`**, **`logs/`**, **`bin/`** must **not** exist under the job folder (they are created on workers at runtime).
 - Job files are copied into table **`job_files`** (content stored in DB).
 
@@ -175,14 +177,20 @@ Disabled allocations are not **active** for deploy/job commands but rows remain 
 
 ### `workspace/bucket.jobs.conf` (optional)
 
-TOML map of job name → settings (e.g. memory override):
+Per-job **reservations** for memory and CPU in the current environment. Values must fall within manifest **min/max** (`resources.memory` / `resources.cpu`).
 
 ```toml
 [myjob]
 memory = "256 mb"
+cpu = "500 mhz"
 ```
 
-If `maand.conf` sets `job_config_selector = "prod"`, the file used is **`bucket.jobs.prod.conf`**.
+| `job_config_selector` in `maand.conf` | File used |
+|---------------------------------------|-----------|
+| `""` | `bucket.jobs.conf` |
+| `"prod"` | `bucket.jobs.prod.conf` |
+
+See [configuration.md](../configuration.md#job-memory-and-cpu-manifest-bounds-vs-bucket-overrides) and [resources-and-placement.md](../resources-and-placement.md).
 
 ### `workspace/bucket.conf`
 

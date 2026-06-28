@@ -13,10 +13,11 @@ import (
 func runWorkerCommandOrAssumeDead(
 	rt *bucket.Runtime,
 	workerIP string,
+	cmdCtx bucket.CommandContext,
 	commands []string,
 	env []string,
 ) {
-	if err := runWorkerCommand(rt, workerIP, commands, env); err != nil {
+	if err := runWorkerCommand(rt, workerIP, cmdCtx, commands, env); err != nil {
 		log.Printf("deploy: removed worker %s unreachable, assuming dead: %v", workerIP, err)
 	}
 }

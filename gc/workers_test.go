@@ -30,7 +30,7 @@ func TestPurgeRemovedAllocationWorkerData_liveWorker(t *testing.T) {
 
 	var commands []string
 	worker.SetTestHooks(&worker.TestHooks{
-		ExecuteCommand: func(_ *bucket.Runtime, workerIP string, cmds []string, _ []string) error {
+		ExecuteCommand: func(_ *bucket.Runtime, workerIP string, _ bucket.CommandContext, cmds []string, _ []string) error {
 			assert.Equal(t, "10.0.0.1", workerIP)
 			commands = append(commands, cmds...)
 			return nil
@@ -61,7 +61,7 @@ func TestPurgeRemovedAllocationWorkerData_deadWorker(t *testing.T) {
 
 	called := false
 	worker.SetTestHooks(&worker.TestHooks{
-		ExecuteCommand: func(_ *bucket.Runtime, workerIP string, _ []string, _ []string) error {
+		ExecuteCommand: func(_ *bucket.Runtime, workerIP string, _ bucket.CommandContext, _ []string, _ []string) error {
 			called = true
 			assert.Equal(t, "10.0.0.99", workerIP)
 			return assert.AnError

@@ -46,7 +46,7 @@ func Execute(retainDays int) error {
 		return err
 	}
 
-	rt, err := bucket.SetupRuntime(bucketID)
+	rt, err := bucket.SetupRuntime(bucketID, bucket.NewRunContext("gc", 0))
 	if err != nil {
 		return err
 	}

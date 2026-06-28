@@ -181,7 +181,7 @@ Restart or reload the job if it caches TLS material (e.g. **`make restart`** on 
 
 ### Prometheus metrics (optional)
 
-When a **prometheus** job ships `prometheus.yml` or `prometheus.yml.tpl`, **`maand deploy`** (after commit) pushes certificate expiry gauges to Prometheus remote write (`/api/v1/write`). Push runs **only at deploy**, not at **`maand build`**. Failures are **best-effort** — logged, deploy still succeeds.
+When a **prometheus** job ships `prometheus.yml` or `prometheus.yml.tpl`, **`maand deploy`** (after commit) pushes certificate expiry gauges to Prometheus remote write (`/api/v1/write`). Push runs **only at deploy**, not at **`maand build`**. Failures are **best-effort** — logged, deploy still succeeds. Transient failures (503, other 5xx, network errors) are retried up to 5 times with backoff (2s–15s) because Prometheus may not accept remote write immediately after rollout.
 
 | Metric | Meaning |
 |--------|---------|
@@ -351,4 +351,4 @@ maand cat certs --workers 10.0.0.1
 - [configuration.md](configuration.md) — `maand.conf` fields
 - [build.md](cli/build.md) — build pipeline step `BuildCerts`
 - [KV persistence](kv/persistence.md) — persistence and namespaces
-- [disabled.md](../guides/disable-and-drain.md) — disabled allocations still receive build certs
+- [disable and drain](../guides/disable-and-drain.md) — disabled allocations still receive build certs

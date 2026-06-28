@@ -8,6 +8,9 @@ package jobcommand
 import (
 	"database/sql"
 	_ "embed"
+	"errors"
+	"fmt"
+	"log"
 	"os"
 	"sync"
 
@@ -165,7 +168,8 @@ func runCommandOnWorkers(
 }
 
 // Execute is the CLI entry point: open DB, start the job-command HTTP server, and run the command.
-func Execute(jobName, commandName, event string, concurrency int, verbose bool, extraEnv []string) error {
+// When jobName is empty, commandName runs on every job that registers it for event.
+func Execute(commandName, jobName, event string, concurrency int, verbose bool, extraEnv []string) error {
 	db, err := data.OpenDatabase(true)
 	if err != nil {
 		return err
@@ -194,7 +198,7 @@ func Execute(jobName, commandName, event string, concurrency int, verbose bool, 
 		return err
 	}
 
-	rt, err := bucket.SetupRuntime(bucketID)
+	rt, err := bucket.SetupRuntime(bucketID, bucket.NewRunContext("jobcommand", 0))
 	if err != nil {
 		return err
 	}
@@ -206,13 +210,50 @@ func Execute(jobName, commandName, event string, concurrency int, verbose bool, 
 		return err
 	}
 
-	if err := JobCommand(tx, rt, jobName, commandName, event, concurrency, verbose, extraEnv); err != nil {
+	jobs, err := resolveJobsForCommand(tx, jobName, commandName, event)
+	if err != nil {
 		return err
+	}
+
+	var runErrors []error
+	for _, job := range jobs {
+		if len(jobs) > 1 {
+			log.Printf("jobcommand: %s", job)
+		}
+		if err := JobCommand(tx, rt, job, commandName, event, concurrency, verbose, extraEnv); err != nil {
+			runErrors = append(runErrors, fmt.Errorf("job %s: %w", job, err))
+		}
 	}
 
 	if err := kv.PersistToSessionTransaction(tx); err != nil {
 		return err
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return bucket.DatabaseError(err)
+	}
+
+	return errors.Join(runErrors...)
+}
+
+func resolveJobsForCommand(tx *sql.Tx, jobName, commandName, event string) ([]string, error) {
+	if jobName != "" {
+		allowed, err := data.GetJobCommands(tx, jobName, event)
+		if err != nil {
+			return nil, err
+		}
+		if !commandAllowed(allowed, commandName) {
+			return nil, &NotFoundError{Job: jobName, Command: commandName, Event: event}
+		}
+		return []string{jobName}, nil
+	}
+
+	jobs, err := data.GetJobsWithCommand(tx, commandName, event)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobs) == 0 {
+		return nil, &NotFoundError{Command: commandName, Event: event}
+	}
+	return jobs, nil
 }

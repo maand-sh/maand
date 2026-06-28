@@ -17,23 +17,33 @@
 | Static config in git | `vars.toml`, `bucket.jobs*.conf` |
 | Process lifecycle on workers | Makefile + `runner.py` (default deploy) |
 | Custom full rollout | **`job_control`** command |
-| Batched start/restart + per-batch hooks | **`after_allocation_started`** + parallel counts — [guides/rolling-deploy.md](../../guides/rolling-deploy.md) |
+| Batched start/restart/reload + per-batch hooks | **`after_allocation_started`** + parallel counts — [guides/rolling-deploy.md](../../guides/rolling-deploy.md) |
 | Drain on stop | **`after_allocation_stopped`** |
 | Secrets before `.tpl` render | **`pre_deploy`** + `put_job_secret` |
 | Post-rollout smoke test | **`post_deploy`** |
 | Probes | manifest `health_check` and/or **`health_check`** command — [health-check.md](health-check.md) |
-| Operator one-off | **`cli`** + `maand job_command` |
+| Operator one-off | **`cli`** + `maand jobcommand` |
 
 Scripts run on the **CLI host**, not on workers by default. Use Python **`run_ssh`** / **`run_runner_target`** to reach workers.
 
-**Disabled allocations** still receive invocations (`DISABLED=1`). See [guides/disable-and-drain.md](../../guides/disable-and-drain.md).
+**Disabled allocations** are skipped for most events (`post_build`, `pre_deploy`, `cli`, etc.) — only **active** allocations (`disabled=0`) run. Hooks during deploy reconcile may still target a disabled allocation being stopped (`DISABLED=1` in env). See [disable and drain](../../guides/disable-and-drain.md).
 
 ---
 
 ## CLI (ad-hoc)
 
 ```bash
-maand job_command <job> <command_name> [--concurrency N] [--verbose]
+maand jobcommand <command_name> [job] [--concurrency N] [--verbose]
+```
+
+When **job** is omitted, the command runs on **every job** in the catalog that registers it for the **`cli`** event.
+
+Examples:
+
+```bash
+maand jobcommand command_cluster_status
+maand jobcommand command_migrate api --verbose
+maand job_command command_migrate api   # alias
 ```
 
 Requires **`cli`** in manifest **`executed_on`**. KV commits on success.
@@ -47,10 +57,10 @@ Requires **`cli`** in manifest **`executed_on`**. KV commits on success.
 | **`post_build`** | **`maand build`** | After catalog commit; **build fails** on error; runs in `deployment_seq` order |
 | **`pre_deploy`** | **`maand deploy`** | Before rsync; secrets/vars for templates; failure skips job for this deploy |
 | **`post_deploy`** | **`maand deploy`** | After successful rollout; failure fails that job |
-| **`job_control`** | **`maand deploy`** | Replaces Makefile start/restart/stop entirely |
-| **`health_check`** | **`maand health_check`**, deploy | KV read-only; mutually exclusive with manifest probes |
+| **`job_control`** | **`maand deploy`** | Replaces Makefile lifecycle (start/restart/reload/stop) entirely |
+| **`health_check`** | **`maand health_check`**, deploy | KV read-only; manifest probes run first when both probes and command exist — [health-check.md](health-check.md) |
 | **`cli`** | **`maand job_command`** | Operator-triggered only |
-| **`after_allocation_started`** | **`maand deploy`** | After each batch start/restart, before health gate |
+| **`after_allocation_started`** | **`maand deploy`** | After each batch start/restart/reload, before health gate |
 | **`after_allocation_stopped`** | **`maand deploy`** | After each allocation stop during reconcile |
 
 ### Batch env (allocation hooks)
@@ -150,7 +160,7 @@ db_password = "{{ getSecret "secrets/job/api" "db_password" }}"
 1. Add `command_<name>.py` (or `.ts`) under `_modules/`.
 2. Register in **`manifest.json`** with **`executed_on`** and optional **`demands`**.
 3. **`maand build`**
-4. Test: **`maand job_command <job> command_<name> --verbose`** (if `cli` listed)
+4. Test: **`maand jobcommand command_<name> [job] --verbose`** (if `cli` listed)
 5. Wire deploy events as needed.
 
 ---
@@ -177,7 +187,7 @@ maand deploy             —            ✓            ✓*           ✓       
 maand health_check       —            —            —            —              ✓         —
 maand job_command        —            —            —            —              —         ✓
 
-* deploy: health_check after restart/job_control; roll = job_control OR Makefile path
+* deploy: health_check after lifecycle (restart/reload/start)/job_control; roll = job_control OR Makefile path
                          (+ after_allocation_started/stopped when registered)
 ```
 

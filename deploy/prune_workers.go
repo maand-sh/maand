@@ -19,11 +19,17 @@ func removeJobDeployArtifactsFromWorker(
 	assumeDead bool,
 ) error {
 	cmd := worker.JobDeployArtifactsCleanupCommand(bucketID, job)
+	cmdCtx := bucket.CommandContext{
+		Job:    job,
+		Phase:  "reconcile",
+		Action: "cleanup_deploy",
+		Cmd:    cmd,
+	}
 	var err error
 	if assumeDead {
-		runWorkerCommandOrAssumeDead(rt, workerIP, []string{cmd}, nil)
+		runWorkerCommandOrAssumeDead(rt, workerIP, cmdCtx, []string{cmd}, nil)
 	} else {
-		err = runWorkerCommand(rt, workerIP, []string{cmd}, nil)
+		err = runWorkerCommand(rt, workerIP, cmdCtx, []string{cmd}, nil)
 	}
 	if err = finishRemovedWorkerCommand(workerIP, err, assumeDead); err != nil {
 		return fmt.Errorf("worker %s job %s: %w", workerIP, job, err)
@@ -37,10 +43,17 @@ func removeJobDeployArtifactsFromWorker(
 
 func removeWorkerBucketFromWorker(rt *bucket.Runtime, bucketID, workerIP string) error {
 	remoteDir := fmt.Sprintf("/opt/worker/%s", bucketID)
+	cmd := fmt.Sprintf("rm -rf %s", remoteDir)
+	cmdCtx := bucket.CommandContext{
+		Phase:  "reconcile",
+		Action: "cleanup_worker",
+		Cmd:    cmd,
+	}
 	runWorkerCommandOrAssumeDead(
 		rt,
 		workerIP,
-		[]string{fmt.Sprintf("rm -rf %s", remoteDir)},
+		cmdCtx,
+		[]string{cmd},
 		nil,
 	)
 	localDir := bucket.GetTempWorkerPath(workerIP)

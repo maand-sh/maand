@@ -16,4 +16,4 @@ maand cat kv get maand/job/api version
 maand cat kv get --reveal secrets/job/api db_password
 ```
 
-Related: [cli/job-command.md](../cli/job-command.md) · [templates.md](../templates.md) · [cli/build.md](../cli/build.md)
+Related: [cli/job-command.md](../cli/job-command.md) · [templates.md](../templates.md) · [cli/build.md](../cli/build.md) · [observability/logging.md](../observability/logging.md)

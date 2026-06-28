@@ -3,8 +3,10 @@
 Maand uses three layers to place jobs and validate capacity:
 
 1. **`manifest.json`** — declares **min/max** memory and CPU for a job (portable bounds checked into git).
-2. **`bucket.jobs*.conf`** — sets the **actual reservation** (`current_memory_mb` / `current_cpu_mhz`) per bucket or environment.
+2. **`bucket.jobs*.conf`** — sets the **actual reservation** (`current_memory_mb` / `current_cpu_mhz`) for the current environment; values must stay within manifest min/max.
 3. **`workers.json`** — declares **host capacity** and **labels** used for placement and validation.
+
+**Environment file naming:** `maand.conf` → **`job_config_selector`** picks the override file. Empty selector → **`bucket.jobs.conf`**. Non-empty (e.g. `"prod"`) → **`bucket.jobs.prod.conf`**. General pattern: **`bucket.jobs.<selector>.conf`**.
 
 After edits, run **`maand build`**. Build fails if a reservation exceeds manifest bounds, or if active allocations on a worker need more memory/CPU than that worker declares.
 

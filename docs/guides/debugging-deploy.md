@@ -36,13 +36,25 @@ maand deploy --dry-run --force  # preview forced restart
 
 Dry-run **stages** locally and refreshes plan hashes; it does **not** change workers or commit hash promotion. It may not simulate **stop** of removed/disabled allocations (see [deploy.md](../reference/cli/deploy.md)).
 
+Per allocation, dry-run prints the planned action:
+
+| Action | Meaning |
+|--------|---------|
+| **start** | First deploy on this worker (`previous_hash` empty) |
+| **restart** | Full recreate — default policy **`always`**, or **`reload`** + **`restart_globs`** match |
+| **reload** | Soft apply — **`restart_policy: reload`** and no glob match |
+| **sync** | Rsync + promote only (**`--sync-only`** or **`restart_policy: never`**) |
+| **skip** | Already promoted |
+
+When **`restart_globs`** forces a restart, the line includes **`matched=`** with the changed paths (for example `matched=Makefile,bin/app`).
+
 Interpret output:
 
 | Message | Meaning |
 |---------|---------|
 | `deployment required` | At least one job needs rollout |
 | `no deployment required` | All active allocations promoted (hashes + versions match) |
-| `deploy required` per job | That job will stage/rsync/restart |
+| `deploy required` per job | That job will stage/rsync and run lifecycle (or sync-only) |
 | `skip` / `already promoted` | **`JobNeedsRollout`** false for that job |
 
 ---
@@ -58,10 +70,10 @@ maand cat deployments --workers 10.0.0.1
 | Rollout | Meaning | Typical action |
 |---------|---------|----------------|
 | `new` | Never promoted | First deploy → **start** |
-| `restart` | Staged content or version differs from promoted | **restart** on deploy |
+| `restart` | Staged content or version differs from promoted | Lifecycle on deploy — **`make restart`** (default **`always`**), **`make reload`** (**`reload`** policy), or **sync only** (**`never`** / **`--sync-only`**) |
 | `promoted` | In sync | Skipped unless **`--force`** |
 | `health_failed` | Health check marked allocation (`--update-hash`) | Fix health, then **`deploy`** or **`deploy --force`** |
-| `disabled` | Allocation disabled; stopped; catalog current | Re-enable via [disabled.md](disable-and-drain.md) |
+| `disabled` | Allocation disabled; stopped; catalog current | Re-enable via [disable and drain](disable-and-drain.md) |
 | `disabled_restart` | Disabled; catalog has pending content/version | Deploy updates plan; still no restart until active |
 | `removed` | Soft-deleted allocation | **`deploy`** then **`gc`** |
 
@@ -101,7 +113,7 @@ Hooks run on the **CLI host** (Python/Bun). Failures return **`deploy failed`** 
 
 ```bash
 maand cat job_commands --jobs api
-maand job_command api command_migrate --verbose   # reproduce cli event
+maand jobcommand command_migrate api --verbose   # reproduce cli event
 ```
 
 | Event | On failure |
@@ -176,7 +188,7 @@ maand cat kv get vars/job/api mykey
 
 | Symptom | Fix |
 |---------|-----|
-| Job stopped after disable | Expected; see [disabled.md](disable-and-drain.md) |
+| Job stopped after disable | Expected; see [disable and drain](disable-and-drain.md) |
 | Re-enabled job not starting | Run **`maand build`** after clearing **`disabled.json`**, then **`deploy`** |
 | KV missing on disabled job | Should be retained; if gone, check whether allocations were **removed** not disabled |
 | **`cat kv --jobs J`** empty | Job may be fully **removed** (no non-removed allocations) |
@@ -229,11 +241,14 @@ If deploy fails mid-run, this directory is removed when the command exits.
 
 ## Logging
 
-| Source | Location |
-|--------|----------|
-| Deploy command | stderr from **`maand deploy`** (skip lines, SSH errors, health) |
-| Job-command runtime API | **`logs/`** under bucket root |
-| Worker job logs | **`jobs/<job>/logs/`** on worker (job-defined) |
+Structured bucket logs: **`logs/<worker_ip>.log`**, **`logs/maand.log`**, and per-invocation **`logs/runs/<run_id>/`**.
+
+```bash
+maand logs show --worker 10.48.200.3 --job postgres --format human
+maand logs show --event deploy_skip --format human
+```
+
+Full reference (formats, terminal output, flags): [logging](../reference/observability/logging.md).
 
 ---
 
@@ -248,9 +263,11 @@ If deploy fails mid-run, this directory is removed when the command exits.
 | Deploy order | `maand cat jobs` |
 | KV for templates/hooks | `maand cat kv --jobs <job>` |
 | Ports | `maand cat job_ports --jobs <job>` |
-| Reproduce hook | `maand job_command <job> <cmd> --verbose` |
+| Reproduce hook | `maand jobcommand <cmd> [job] --verbose` |
+| Filter bucket logs | `maand logs show --worker <ip> --job <job> --format human` |
 | Health only | `maand health_check --jobs <job> --wait --verbose` |
 | Force reroll | `maand deploy --force --jobs <job>` |
+| Config-only push (no lifecycle) | `maand deploy --sync-only --jobs <job>` (fails if **start** required) |
 
 ---
 
@@ -270,8 +287,9 @@ If deploy fails mid-run, this directory is removed when the command exits.
 ## Related
 
 - [deploy.md](../reference/cli/deploy.md) — pipeline and failure table
-- [disabled.md](disable-and-drain.md) — disable and re-enable
+- [Applying changes on workers](../reference/cli/deploy.md#applying-changes-on-workers) — **`restart_policy`**, **`restart_globs`**, **`--sync-only`**, dry-run actions
+- [disable and drain](disable-and-drain.md) — disable and re-enable
 - [rolling-deploy](rolling-deploy.md) — **`update_parallel_count`** and reboot patterns
 - [health-check.md](../reference/cli/health-check.md) — **`--update-hash`**
 - [job-command-api.md](../reference/job-command-api.md) — hook debugging
-- [tutorials/day-2-operations.md](day-2-ops.md) — operations checklist
+- [day-2-ops.md](day-2-ops.md) — operations checklist

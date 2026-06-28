@@ -34,9 +34,11 @@ var deployCmd = &cobra.Command{
 		}
 
 		force, _ := flags.GetBool("force")
+		syncOnly, _ := flags.GetBool("sync-only")
 		dryRun, _ := flags.GetBool("dry-run")
+		opts := deploy.Options{Force: force, SyncOnly: syncOnly}
 		if dryRun {
-			result, err := deploy.DryRun(jobsFilter, force)
+			result, err := deploy.DryRun(jobsFilter, opts)
 			if err != nil {
 				log.Fatalln(err)
 			}
@@ -44,7 +46,7 @@ var deployCmd = &cobra.Command{
 			return
 		}
 
-		err := deploy.Execute(jobsFilter, force)
+		err := deploy.Execute(jobsFilter, opts)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -57,4 +59,5 @@ func init() {
 	deployCmd.Flags().BoolP("build", "b", false, "build before deploy")
 	deployCmd.Flags().BoolP("dry-run", "n", false, "show whether deploy is required using allocation hashes (no changes)")
 	deployCmd.Flags().Bool("force", false, "Redeploy jobs even when all allocations are already promoted")
+	deployCmd.Flags().Bool("sync-only", false, "Rsync and promote without start/restart/reload (fails when new allocations need start)")
 }

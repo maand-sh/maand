@@ -15,16 +15,23 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Runtime runs bucket-local and worker-prep commands on the maand CLI host.
 type Runtime struct {
 	logMu sync.Mutex
+	run   RunContext
 }
 
 // SetupRuntime prepares host execution for a bucket session.
-func SetupRuntime(_ string) (*Runtime, error) {
-	return &Runtime{}, nil
+func SetupRuntime(_ string, run RunContext) (*Runtime, error) {
+	return &Runtime{run: run}, nil
+}
+
+// Run returns the run context attached to this runtime.
+func (r *Runtime) Run() RunContext {
+	return r.run
 }
 
 // Stop releases runtime resources (no-op on host).
@@ -32,9 +39,16 @@ func (r *Runtime) Stop() error {
 	return nil
 }
 
+// LogEvent writes a structured event line to bucket logs.
+func (r *Runtime) LogEvent(workerIP, event string, extra map[string]string) error {
+	line := formatEventLine(r.run, workerIP, event, extra)
+	log.Printf("%s", line)
+	return r.appendLog(workerIP, line)
+}
+
 // Exec runs bash commands locally on the CLI host and logs output per workerIP.
 // Pass an empty workerIP for bucket-local commands (logged to maand.log).
-func (r *Runtime) Exec(workerIP string, commandLines []string, env []string, _ bool) error {
+func (r *Runtime) Exec(workerIP string, cmdCtx CommandContext, commandLines []string, env []string) error {
 	script := strings.Join([]string{
 		"#!/bin/bash",
 		"set -e",
@@ -50,17 +64,23 @@ func (r *Runtime) Exec(workerIP string, commandLines []string, env []string, _ b
 		cmd.Env = os.Environ()
 	}
 
-	return r.RunCommand(workerIP, cmd)
+	return r.RunCommand(workerIP, cmdCtx, cmd)
 }
 
 // RunCommand starts cmd, streams stdout/stderr to logs, and returns on completion.
-func (r *Runtime) RunCommand(workerIP string, cmd *exec.Cmd) error {
+func (r *Runtime) RunCommand(workerIP string, cmdCtx CommandContext, cmd *exec.Cmd) error {
+	cmdCtx = cmdCtx.withDefaults(workerIP, cmd, nil)
+
 	if cmd.Dir == "" {
 		bucketRoot, err := filepath.Abs(Location)
 		if err != nil {
 			return UnexpectedError(err)
 		}
 		cmd.Dir = bucketRoot
+	}
+
+	if err := r.appendLog(workerIP, formatCommandBegin(r.run, workerIP, cmdCtx)); err != nil {
+		return err
 	}
 
 	stdout, err := cmd.StdoutPipe()
@@ -72,6 +92,7 @@ func (r *Runtime) RunCommand(workerIP string, cmd *exec.Cmd) error {
 		return UnexpectedError(err)
 	}
 
+	started := time.Now()
 	if err := cmd.Start(); err != nil {
 		return UnexpectedError(err)
 	}
@@ -82,13 +103,14 @@ func (r *Runtime) RunCommand(workerIP string, cmd *exec.Cmd) error {
 		streamMu  sync.Mutex
 	)
 
-	stream := func(reader io.Reader) {
+	stream := func(reader io.Reader, streamName string) {
 		defer wg.Done()
 		scanner := bufio.NewScanner(reader)
 		for scanner.Scan() {
 			line := scanner.Text()
-			log.Printf("[%-12s] %s", workerIP, line)
-			if err := r.appendWorkerLog(workerIP, line); err != nil {
+			formatted := formatStreamLine(r.run, workerIP, cmdCtx, streamName, line)
+			log.Printf("%s", formatCLIStreamLine(workerIP, cmdCtx, streamName, line))
+			if err := r.appendLog(workerIP, formatted); err != nil {
 				streamMu.Lock()
 				if streamErr == nil {
 					streamErr = err
@@ -106,17 +128,30 @@ func (r *Runtime) RunCommand(workerIP string, cmd *exec.Cmd) error {
 	}
 
 	wg.Add(2)
-	go stream(stdout)
-	go stream(stderr)
+	go stream(stdout, "stdout")
+	go stream(stderr, "stderr")
 	wg.Wait()
+
+	exitCode := 0
+	waitErr := cmd.Wait()
+	if waitErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(waitErr, &exitErr) {
+			exitCode = exitErr.ExitCode()
+		}
+	}
+
+	if err := r.appendLog(workerIP, formatCommandEnd(r.run, workerIP, cmdCtx, exitCode, time.Since(started))); err != nil {
+		return err
+	}
 
 	if streamErr != nil {
 		_ = cmd.Process.Kill()
 		return streamErr
 	}
 
-	if err := cmd.Wait(); err != nil {
-		return commandFailedError(err)
+	if waitErr != nil {
+		return commandFailedError(waitErr)
 	}
 	return nil
 }
@@ -129,12 +164,7 @@ func commandFailedError(err error) error {
 	return UnexpectedError(err)
 }
 
-func (r *Runtime) appendWorkerLog(workerIP, line string) error {
-	logFileName := "maand.log"
-	if workerIP != "" {
-		logFileName = workerIP + ".log"
-	}
-
+func (r *Runtime) appendLog(workerIP, line string) error {
 	r.logMu.Lock()
 	defer r.logMu.Unlock()
 
@@ -142,7 +172,23 @@ func (r *Runtime) appendWorkerLog(workerIP, line string) error {
 		return UnexpectedError(err)
 	}
 
-	logFile, err := os.OpenFile(filepath.Join(LogLocation, logFileName), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err := appendLine(filepath.Join(LogLocation, workerLogFileName(workerIP)), line); err != nil {
+		return err
+	}
+
+	if r.run.RunID == "" {
+		return nil
+	}
+
+	runDir := runLogDir(r.run.RunID)
+	if err := os.MkdirAll(runDir, 0o755); err != nil {
+		return UnexpectedError(err)
+	}
+	return appendLine(filepath.Join(runDir, workerLogFileName(workerIP)), line)
+}
+
+func appendLine(path, line string) error {
+	logFile, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return UnexpectedError(err)
 	}

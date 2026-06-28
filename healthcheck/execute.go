@@ -184,7 +184,7 @@ func Execute(wait, verbose bool, jobsComma string, updateHash bool) error {
 		return err
 	}
 
-	rt, err := bucket.SetupRuntime(bucketID)
+	rt, err := bucket.SetupRuntime(bucketID, bucket.NewRunContext("healthcheck", 0))
 	if err != nil {
 		return err
 	}

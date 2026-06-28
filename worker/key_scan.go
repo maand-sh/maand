@@ -13,8 +13,13 @@ import (
 
 func KeyScan1(rt *bucket.Runtime, workerIP string) error {
 	sshDir := filepath.Join(bucket.Location, ".ssh")
-	return rt.Exec("", []string{
+	cmd := fmt.Sprintf("ssh-keyscan -H %s >> %s/known_hosts", workerIP, sshDir)
+	return rt.Exec("", bucket.CommandContext{
+		Phase:  "init",
+		Action: "ssh_keyscan",
+		Cmd:    cmd,
+	}, []string{
 		fmt.Sprintf("mkdir -p %s", sshDir),
-		fmt.Sprintf("ssh-keyscan -H %s >> %s/known_hosts", workerIP, sshDir),
-	}, nil, false)
+		cmd,
+	}, nil)
 }

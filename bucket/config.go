@@ -20,6 +20,7 @@ type MaandConf struct {
 	CertsTTL           int    `toml:"certs_ttl"`
 	CertsRenewalBuffer int    `toml:"certs_renewal_buffer"`
 	JobConfigSelector  string `toml:"job_config_selector,omitempty"`
+	LogFormat          string `toml:"log_format,omitempty"`
 }
 
 // SSHPort returns the SSH port from maand.conf (default 22).

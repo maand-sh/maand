@@ -15,16 +15,23 @@ import (
 	"maand/worker"
 )
 
-func syncWorkerFiles(rt *bucket.Runtime, bucketID, workerIP string) error {
+func syncWorkerFiles(rt *bucket.Runtime, bucketID, workerIP string, jobs []string) error {
+	mkdirCmd := fmt.Sprintf("mkdir -p /opt/worker/%s", bucketID)
 	if err := runWorkerCommand(
 		rt,
 		workerIP,
-		[]string{fmt.Sprintf("mkdir -p /opt/worker/%s", bucketID)},
+		bucket.CommandContext{
+			Job:    strings.Join(jobs, ","),
+			Phase:  "rsync",
+			Action: "mkdir",
+			Cmd:    mkdirCmd,
+		},
+		[]string{mkdirCmd},
 		nil,
 	); err != nil {
 		return err
 	}
-	return runRsync(rt, bucketID, workerIP)
+	return runRsync(rt, bucketID, workerIP, jobs)
 }
 
 func syncWorkers(rt *bucket.Runtime, bucketID string, workers []string, jobs []string, applyRules bool) error {
@@ -59,7 +66,7 @@ func syncWorkers(rt *bucket.Runtime, bucketID string, workers []string, jobs []s
 			defer wg.Done()
 			defer func() { <-sem }()
 
-			if err := syncWorkerFiles(rt, bucketID, ip); err != nil {
+			if err := syncWorkerFiles(rt, bucketID, ip, jobs); err != nil {
 				mu.Lock()
 				errs = append(errs, fmt.Errorf("worker %s: %w", ip, err))
 				mu.Unlock()

@@ -19,7 +19,7 @@ func TestRemoveJobDeployArtifactsFromWorker_live(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	var ran bool
 	SetTestHooks(&TestHooks{
-		WorkerCommand: func(_ *bucket.Runtime, workerIP string, commands []string, _ []string) error {
+		WorkerCommand: func(_ *bucket.Runtime, workerIP string, _ bucket.CommandContext, commands []string, _ []string) error {
 			assert.Equal(t, "10.0.0.1", workerIP)
 			ran = len(commands) == 1
 			return nil
@@ -41,7 +41,7 @@ func TestRemoveJobDeployArtifactsFromWorker_live(t *testing.T) {
 func TestRemoveJobDeployArtifactsFromWorker_assumeDead(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	SetTestHooks(&TestHooks{
-		WorkerCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		WorkerCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return assert.AnError
 		},
 	})
@@ -58,7 +58,7 @@ func TestRemoveJobDeployArtifactsFromWorker_assumeDead(t *testing.T) {
 func TestRemoveWorkerBucketFromWorker(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	SetTestHooks(&TestHooks{
-		WorkerCommand: func(_ *bucket.Runtime, _ string, _ []string, _ []string) error {
+		WorkerCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, _ []string, _ []string) error {
 			return nil
 		},
 	})

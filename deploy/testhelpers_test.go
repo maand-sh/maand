@@ -9,6 +9,7 @@ import (
 	"maand/bucket"
 	"maand/data"
 	"maand/kv"
+	"maand/workspace"
 
 	"github.com/stretchr/testify/require"
 )
@@ -149,8 +150,22 @@ func (e *deployTestEnv) seedMakefileJob(t *testing.T, tx *sql.Tx, jobName, worke
 	e.insertJobFile(t, tx, jobID, path.Join(jobName, "Makefile"), makefileContent(), false)
 }
 
+func (e *deployTestEnv) setRestartPolicy(t *testing.T, tx *sql.Tx, jobName, policy string) {
+	t.Helper()
+	_, err := tx.Exec(`UPDATE job SET restart_policy = ? WHERE name = ?`, policy, jobName)
+	require.NoError(t, err)
+}
+
+func (e *deployTestEnv) setRestartGlobs(t *testing.T, tx *sql.Tx, jobName string, globs []string) {
+	t.Helper()
+	encoded, err := workspace.EncodeRestartGlobs(globs)
+	require.NoError(t, err)
+	_, err = tx.Exec(`UPDATE job SET restart_globs = ? WHERE name = ?`, encoded, jobName)
+	require.NoError(t, err)
+}
+
 func makefileContent() string {
-	return `.PHONY: start stop restart
+	return `.PHONY: start stop restart reload
 dir:
 	mkdir -p ./data ./logs ./bin
 start: dir
@@ -161,6 +176,9 @@ stop:
 restart:
 	mkdir -p ./data
 	@echo $$(( $$(cat ./data/restart 2>/dev/null || echo 0) + 1 )) > ./data/restart
+reload:
+	mkdir -p ./data
+	@echo $$(( $$(cat ./data/reload 2>/dev/null || echo 0) + 1 )) > ./data/reload
 `
 }
 
@@ -195,10 +213,10 @@ func installNoopDeployHooks(t *testing.T, bucketID string) *CommandRecorder {
 	rec := &CommandRecorder{BucketID: bucketID}
 	SetTestHooks(&TestHooks{
 		WorkerCommand: rec.Record,
-		Rsync: func(*bucket.Runtime, string, string) error {
+		Rsync: func(*bucket.Runtime, string, string, []string) error {
 			return nil
 		},
-		SetupRuntime: func(string) (*bucket.Runtime, error) {
+		SetupRuntime: func(string, bucket.RunContext) (*bucket.Runtime, error) {
 			return nil, nil
 		},
 		CheckWorkerPrerequisites: func(*bucket.Runtime, []string) error {

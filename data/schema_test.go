@@ -54,6 +54,13 @@ func TestMigrateSchemaUpgradesLegacyColumns(t *testing.T) {
 	assert.Equal(t, 1, columnExists(t, db, "allocations", "new_version"))
 	assert.Equal(t, 1, columnExists(t, db, "hash", "current_version"))
 	assert.Equal(t, 1, columnExists(t, db, "job", "health_check"))
+	assert.Equal(t, 1, columnExists(t, db, "job", "deploy_parallel_count"))
+	assert.Equal(t, 1, columnExists(t, db, "job", "restart_policy"))
+	assert.Equal(t, 1, columnExists(t, db, "job", "restart_globs"))
+	assert.Equal(t, 1, columnExists(t, db, "hash", "current_files"))
+	assert.Equal(t, 1, columnExists(t, db, "hash", "previous_files"))
+	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
+	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
 }
 
 func withTestBucket(t *testing.T) func() {
@@ -93,82 +100,78 @@ func TestCheckSchemaVersionRequiresUpgrade(t *testing.T) {
 	assert.Contains(t, err.Error(), "run maand init")
 }
 
-func TestCheckSchemaVersionBlocksAtV1(t *testing.T) {
+func TestCheckSchemaVersionRequiresUpgradeForLegacyVersion(t *testing.T) {
 	defer withTestBucket(t)()
-	db := openDatabaseAtSchemaVersion(t, 1)
+	db := openDatabaseAtSchemaVersion(t, 4)
 	defer func() { _ = db.Close() }()
 
 	err := CheckSchemaVersion()
 	require.ErrorIs(t, err, bucket.ErrSchemaUpgradeRequired)
-	assert.Contains(t, err.Error(), "binary expects 4")
+	assert.Contains(t, err.Error(), "binary expects 1")
 }
 
-func TestMigrateSchemaUpgradesV1ToLatest(t *testing.T) {
+func TestMigrateSchemaRenumbersLegacyVersion(t *testing.T) {
 	defer withTestBucket(t)()
-	db := openDatabaseAtSchemaVersion(t, 1)
+	db := openDatabaseAtSchemaVersion(t, 4)
 	defer func() { _ = db.Close() }()
-
-	assert.Equal(t, 0, viewExists(t, db, "cat_deployments"))
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	require.NoError(t, MigrateSchema(tx))
 	require.NoError(t, tx.Commit())
 
-	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
-	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
 	var version int
 	require.NoError(t, db.QueryRow(`SELECT version FROM schema_version WHERE id = 1`).Scan(&version))
 	assert.Equal(t, LatestSchemaVersion, version)
 	require.NoError(t, CheckSchemaVersion())
 }
 
-func TestMigrateToV2IsIdempotent(t *testing.T) {
+func TestMigrateToV1IsIdempotent(t *testing.T) {
 	defer withTestBucket(t)()
-	db := openDatabaseAtSchemaVersion(t, 1)
+	db := openMigratedTestDB(t)
 	defer func() { _ = db.Close() }()
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	require.NoError(t, migrateToV2(tx))
-	require.NoError(t, migrateToV2(tx))
+	require.NoError(t, migrateToV1(tx))
+	require.NoError(t, migrateToV1(tx))
 	require.NoError(t, tx.Commit())
 
-	assert.Equal(t, 1, viewExists(t, db, "cat_hashes"))
-}
-
-func TestMigrateToV3RenamesHashesView(t *testing.T) {
-	defer withTestBucket(t)()
-	db := openDatabaseAtSchemaVersion(t, 2)
-	defer func() { _ = db.Close() }()
-
-	assert.Equal(t, 1, viewExists(t, db, "cat_hashes"))
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	require.NoError(t, migrateToV3(tx))
-	require.NoError(t, migrateToV3(tx))
-	require.NoError(t, tx.Commit())
-
-	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
 	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
+	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
 }
 
-func TestMigrateToV4AddsDeployParallelCount(t *testing.T) {
-	defer withTestBucket(t)()
-	db := openDatabaseAtSchemaVersion(t, 3)
+func TestMigrateToV1AddsDeployParallelCount(t *testing.T) {
+	db, err := sql.Open("sqlite3", "file:migratev1deploy?mode=memory&cache=shared")
+	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
+
+	_, err = db.Exec(`
+		CREATE TABLE allocations (
+			alloc_id TEXT, worker_ip TEXT, job TEXT,
+			disabled INT, removed INT, deployment_seq INT,
+			PRIMARY KEY(worker_ip, job)
+		);
+		CREATE TABLE hash (
+			namespace TEXT, key TEXT,
+			current_hash TEXT, previous_hash TEXT,
+			PRIMARY KEY(namespace, key)
+		);
+		CREATE TABLE job (
+			job_id TEXT, name TEXT, version TEXT,
+			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
+			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
+			update_parallel_count INT,
+			PRIMARY KEY(name)
+		);
+	`)
+	require.NoError(t, err)
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	_, err = tx.Exec(`INSERT INTO job (job_id, name, version, update_parallel_count) VALUES ('job-api', 'api', '1.0.0', 1)`)
 	require.NoError(t, err)
-	require.NoError(t, tx.Commit())
-
-	tx, err = db.Begin()
-	require.NoError(t, err)
-	require.NoError(t, migrateToV4(tx))
-	require.NoError(t, migrateToV4(tx))
+	require.NoError(t, migrateToV1(tx))
 	require.NoError(t, tx.Commit())
 
 	var deployParallel int
@@ -223,7 +226,7 @@ func TestCheckSchemaVersionTooNew(t *testing.T) {
 			version INTEGER NOT NULL
 		)`,
 	)))
-	require.NoError(t, writeSchemaVersion(tx, LatestSchemaVersion+1))
+	require.NoError(t, writeSchemaVersion(tx, legacySchemaVersionMax+1))
 	require.NoError(t, tx.Commit())
 	require.NoError(t, db.Close())
 
@@ -308,19 +311,7 @@ func TestMigrateToV1AddsSchemaVersionTable(t *testing.T) {
 
 	assert.Equal(t, 1, columnExists(t, db, "allocations", "new_version"))
 	assert.Equal(t, 1, columnExists(t, db, "schema_version", "version"))
-}
-
-func TestApplySchemaMigrationUnsupportedVersion(t *testing.T) {
-	db, err := sql.Open("sqlite3", "file:unsupportedschema?mode=memory&cache=shared")
-	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
-
-	tx, err := db.Begin()
-	require.NoError(t, err)
-	err = applySchemaMigration(tx, 99)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unsupported schema version")
-	require.NoError(t, tx.Rollback())
+	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
 }
 
 func TestMigrateToV1WithPreexistingColumns(t *testing.T) {
@@ -343,7 +334,7 @@ func TestMigrateToV1WithPreexistingColumns(t *testing.T) {
 			job_id TEXT, name TEXT, version TEXT,
 			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
 			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
-			update_parallel_count INT, health_check TEXT,
+			update_parallel_count INT, deploy_parallel_count INT NOT NULL DEFAULT 0, health_check TEXT,
 			PRIMARY KEY(name)
 		);
 	`)
@@ -355,6 +346,7 @@ func TestMigrateToV1WithPreexistingColumns(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	assert.Equal(t, 1, columnExists(t, db, "schema_version", "version"))
+	assert.Equal(t, 1, viewExists(t, db, "cat_deployments"))
 }
 
 func openDatabaseAtSchemaVersion(t *testing.T, targetVersion int) *sql.DB {
@@ -367,9 +359,14 @@ func openDatabaseAtSchemaVersion(t *testing.T, targetVersion int) *sql.DB {
 	tx, err := db.Begin()
 	require.NoError(t, err)
 	require.NoError(t, execStatements(tx, baseTableDDL()))
-	for version := 1; version <= targetVersion; version++ {
-		require.NoError(t, applySchemaMigration(tx, version))
-		require.NoError(t, writeSchemaVersion(tx, version))
+	require.NoError(t, execStatements(tx, []string{
+		`CREATE TABLE IF NOT EXISTS schema_version (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			version INTEGER NOT NULL
+		)`,
+	}))
+	if targetVersion > 0 {
+		require.NoError(t, writeSchemaVersion(tx, targetVersion))
 	}
 	require.NoError(t, tx.Commit())
 	return db

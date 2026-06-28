@@ -52,11 +52,14 @@ maand cat kv get maand/job/api name
 
 ```bash
 maand job restart api
+maand job run api --target reload
 maand job stop api --allocations 10.0.0.2
 maand job start api --health_check
 maand job run api --target migrate
 maand job status api
 ```
+
+Use **`maand job run --target reload`** after **`maand deploy --sync-only`** when you pushed config to disk but want the process to pick it up yourself.
 
 | vs deploy | `maand deploy` | `maand job` |
 |-----------|----------------|-------------|
@@ -155,7 +158,7 @@ See [run-command.md](../reference/cli/run-command.md).
 
 ## Disable an allocation temporarily
 
-See [disabled.md](disable-and-drain.md) for the full guide (per-allocation, per-job, per-worker, re-enable).
+See [disable and drain](disable-and-drain.md) for the full guide (per-allocation, per-job, per-worker, re-enable).
 
 Create or edit **`workspace/disabled.json`**:
 
@@ -194,7 +197,7 @@ maand build
 maand deploy
 ```
 
-Disabled allocations are skipped for start/restart/rsync; deploy **stops** them if running and **keeps** artifacts and KV. Re-enable: clear **`disabled.json`**, **`maand build`**, **`maand deploy`**.
+Disabled allocations are skipped for start/restart/reload/rsync; deploy **stops** them if running and **keeps** artifacts and KV. Re-enable: clear **`disabled.json`**, **`maand build`**, **`maand deploy`**.
 
 ---
 
@@ -240,6 +243,15 @@ maand deploy --force --jobs api
 maand deploy --dry-run --force    # preview
 ```
 
+Push files without lifecycle (rsync + promote only; fails when any allocation still needs **start**):
+
+```bash
+maand deploy --sync-only --jobs api
+maand deploy --dry-run --sync-only --jobs api    # preview sync actions
+```
+
+For ongoing config-only rollouts, prefer **`restart_policy: reload`** in the manifest — see [Applying changes on workers](../reference/cli/deploy.md#applying-changes-on-workers).
+
 See [deploy.md](../reference/cli/deploy.md).
 
 ---
@@ -284,7 +296,7 @@ See [rolling-deploy](rolling-deploy.md) for **`update_parallel_count`**, version
 
 ## Troubleshooting checklist
 
-See [deploy-debugging.md](debugging-deploy.md) for a full deploy troubleshooting guide.
+See [debugging-deploy.md](debugging-deploy.md) for a full deploy troubleshooting guide.
 
 | Symptom | Likely fix |
 |---------|------------|

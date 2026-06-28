@@ -2,9 +2,9 @@
 
 Use **`workspace/disabled.json`** for **maintenance** — drain a node, allocation, or entire job **without** removing workspace files, catalog rows, or worker **`data/`** / **`logs/`**.
 
-A disabled allocation is otherwise the same as an active one: it stays in **`allocations`**, build refreshes job and per-allocation KV and certs, and deploy **stages, hashes, and promotes** content. The **only** difference is runtime: maand **never starts** a disabled allocation (no start/restart/rsync on deploy).
+A disabled allocation is otherwise the same as an active one: it stays in **`allocations`**, build refreshes job and per-allocation KV and certs, and deploy **stages, hashes, and promotes** content. The **only** difference is runtime: maand **never starts** a disabled allocation (no lifecycle — start, restart, reload — and no rsync on deploy).
 
-For removal (soft-delete until GC), see [gc.md](../reference/cli/gc.md) and [day-2-operations.md](day-2-ops.md#remove-a-worker-or-job).
+For removal (soft-delete until GC), see [gc.md](../reference/cli/gc.md) and [day-2-ops.md](day-2-ops.md#remove-a-worker-or-job).
 
 ---
 
@@ -76,7 +76,7 @@ maand build
 maand deploy
 ```
 
-Every **`api`** allocation is stopped; deploy skips start/restart/rsync for **`api`**.
+Every **`api`** allocation is stopped; deploy skips lifecycle and rsync for **`api`**.
 
 ### Entire worker (all jobs on a host)
 
@@ -115,7 +115,7 @@ Use this before host maintenance: drain all jobs on the machine without deleting
 | **`maand build`** | Sets `allocations.disabled = 1`. Same job KV, per-allocation KV (`*_allocation_index`, `peer_workers`), and certs as active peers. Re-enable clears the flag when the entry is removed from `disabled.json`. |
 | **`maand deploy` reconcile** | **Stop** if previously deployed (`previous_hash` set). **Keep** deploy artifacts, **`data/`**, **`logs/`**, hash row, and KV. |
 | **Staging / hash / promote** | Same as active — content and **`new_version`** stay current. |
-| **Start / restart / rsync** | **Skipped** — the only runtime difference from active. |
+| **Lifecycle / rsync** | **Skipped** (no start, restart, reload, or rsync) — the only runtime difference from active. |
 | **`maand job start`** | Skipped unless you target active allocations only. |
 
 Inspect state:
@@ -140,8 +140,8 @@ After disable, **`maand deploy --dry-run`** should show **`stop`** on allocation
 ## How to re-enable
 
 1. Remove the job, allocation, or worker entry from **`disabled.json`** (or replace with `{}` / delete the file).
-2. **`maand build`** — clears `disabled = 0` and marks the allocation for **start** on the next deploy.
-3. **`maand deploy`** — runs **`make start`** (or **`job_control`**) on re-enabled workers.
+2. **`maand build`** — clears `disabled = 0` and marks the allocation for rollout on the next deploy.
+3. **`maand deploy`** — runs the planned lifecycle (**`make start`**, **`restart`**, or **`reload`** per **`restart_policy`**, or **`job_control`**) on re-enabled workers.
 
 ```bash
 # disabled.json no longer lists api on 10.0.0.2
@@ -179,7 +179,7 @@ maand gc
 
 These target **active** allocations only (`removed=0`, `disabled=0`):
 
-- Default deploy start/restart and per-job rsync
+- Default deploy lifecycle (start / restart / reload) and per-job rsync
 - **`maand job_command`** (unless you use hooks that run at build/deploy catalog level)
 - **`maand health_check`** default job list (use **`--jobs`** explicitly if needed)
 
@@ -234,4 +234,4 @@ maand deploy --dry-run
 - [deploy.md](../reference/cli/deploy.md#removed-and-disabled-allocations) — reconcile behavior
 - [build.md](../reference/cli/build.md) — `disabled.json` during build
 - [rolling-deploy](rolling-deploy.md) — rolling restarts and worker reboots
-- [deploy-debugging.md](debugging-deploy.md) — when disable/re-enable does not behave as expected
+- [debugging-deploy.md](debugging-deploy.md) — when disable/re-enable does not behave as expected

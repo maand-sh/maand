@@ -25,7 +25,7 @@ func TestDeployJobWithCommands_returnsErrorWithoutRuntime(t *testing.T) {
 
 	commands, err := data.GetJobCommands(tx, "app", "job_control")
 	require.NoError(t, err)
-	err = deployJobWithCommands(tx, nil, "app", commands, false)
+	err = deployJobWithCommands(tx, nil, "app", commands, Options{})
 	require.Error(t, err)
 	require.NoError(t, tx.Rollback())
 }

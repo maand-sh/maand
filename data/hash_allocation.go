@@ -18,21 +18,26 @@ func RemoveAllocationHash(tx *sql.Tx, job, allocID string) error {
 	return RemoveHash(tx, namespace, allocID)
 }
 
-// UpdateAllocationPlan records staged content hash for an allocation.
+// UpdateAllocationPlan records staged content hash and file manifest for an allocation.
 // Target version lives on the allocations row (updated by build).
-func UpdateAllocationPlan(tx *sql.Tx, namespace, key, hash string) error {
+func UpdateAllocationPlan(tx *sql.Tx, namespace, key, hash string, currentFiles FileManifest) error {
+	encodedFiles, err := currentFiles.Encode()
+	if err != nil {
+		return err
+	}
+
 	var storedCurrentHash string
 	row := tx.QueryRow(
 		`SELECT ifnull(current_hash, '') FROM hash WHERE namespace = ? AND key = ?`,
 		namespace, key,
 	)
-	err := row.Scan(&storedCurrentHash)
+	err = row.Scan(&storedCurrentHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			_, err = tx.Exec(
-				`INSERT INTO hash (namespace, key, current_hash, current_version)
-				 VALUES (?, ?, ?, ?)`,
-				namespace, key, hash, DefaultAllocationVersion,
+				`INSERT INTO hash (namespace, key, current_hash, current_version, current_files)
+				 VALUES (?, ?, ?, ?, ?)`,
+				namespace, key, hash, DefaultAllocationVersion, encodedFiles,
 			)
 			if err != nil {
 				return bucket.DatabaseError(err)
@@ -43,8 +48,8 @@ func UpdateAllocationPlan(tx *sql.Tx, namespace, key, hash string) error {
 	}
 
 	_, err = tx.Exec(
-		`UPDATE hash SET current_hash = ? WHERE namespace = ? AND key = ?`,
-		hash, namespace, key,
+		`UPDATE hash SET current_hash = ?, current_files = ? WHERE namespace = ? AND key = ?`,
+		hash, encodedFiles, namespace, key,
 	)
 	if err != nil {
 		return bucket.DatabaseError(err)
@@ -57,6 +62,7 @@ func PromoteAllocationState(tx *sql.Tx, namespace, key string) error {
 	_, err := tx.Exec(
 		`UPDATE hash
 		 SET previous_hash = current_hash,
+		     previous_files = current_files,
 		     current_version = COALESCE(
 		       (SELECT new_version FROM allocations WHERE alloc_id = ?),
 		       ?
@@ -74,7 +80,7 @@ func PromoteAllocationState(tx *sql.Tx, namespace, key string) error {
 func MarkAllocationStartPending(tx *sql.Tx, job, allocID string) error {
 	namespace := fmt.Sprintf("%s_allocation", job)
 	_, err := tx.Exec(
-		`UPDATE hash SET previous_hash = NULL WHERE namespace = ? AND key = ?`,
+		`UPDATE hash SET previous_hash = NULL, previous_files = NULL WHERE namespace = ? AND key = ?`,
 		namespace, allocID,
 	)
 	if err != nil {
@@ -86,7 +92,7 @@ func MarkAllocationStartPending(tx *sql.Tx, job, allocID string) error {
 // ClearAllocationLiveState clears promoted hash and running version for disabled allocations.
 func ClearAllocationLiveState(tx *sql.Tx, namespace, key string) error {
 	_, err := tx.Exec(
-		`UPDATE hash SET previous_hash = NULL, current_version = NULL WHERE namespace = ? AND key = ?`,
+		`UPDATE hash SET previous_hash = NULL, previous_files = NULL, current_version = NULL WHERE namespace = ? AND key = ?`,
 		namespace, key,
 	)
 	if err != nil {

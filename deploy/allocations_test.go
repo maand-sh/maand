@@ -92,7 +92,7 @@ func TestHandleUpdatedAllocations_restartsChangedAllocation(t *testing.T) {
 	require.NoError(t, tx.Commit())
 
 	tx = env.begin(t)
-	require.NoError(t, handleUpdatedAllocations(tx, nil, env.bucketID, "app", false))
+	require.NoError(t, handleUpdatedAllocations(tx, nil, env.bucketID, "app", Options{}))
 	assert.True(t, rec.HasAction("10.0.0.1", "restart", "app"))
 	require.NoError(t, tx.Rollback())
 }
@@ -142,7 +142,7 @@ func TestHandleStoppedAllocations_disabledStopsWithoutRemovingArtifacts(t *testi
 	env := setupDeployTestEnv(t)
 	var stopped, removedArtifacts bool
 	SetTestHooks(&TestHooks{
-		WorkerCommand: func(_ *bucket.Runtime, _ string, commands []string, _ []string) error {
+		WorkerCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, commands []string, _ []string) error {
 			for _, c := range commands {
 				if containsCmd(c, "stop") {
 					stopped = true
@@ -153,8 +153,8 @@ func TestHandleStoppedAllocations_disabledStopsWithoutRemovingArtifacts(t *testi
 			}
 			return nil
 		},
-		Rsync:        func(*bucket.Runtime, string, string) error { return nil },
-		SetupRuntime: func(string) (*bucket.Runtime, error) { return nil, nil },
+		Rsync:        func(*bucket.Runtime, string, string, []string) error { return nil },
+		SetupRuntime: func(string, bucket.RunContext) (*bucket.Runtime, error) { return nil, nil },
 	})
 	t.Cleanup(ClearTestHooks)
 
@@ -177,7 +177,7 @@ func TestHandleStoppedAllocations_stopsRemoved(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	var stopped bool
 	SetTestHooks(&TestHooks{
-		WorkerCommand: func(_ *bucket.Runtime, _ string, commands []string, _ []string) error {
+		WorkerCommand: func(_ *bucket.Runtime, _ string, _ bucket.CommandContext, commands []string, _ []string) error {
 			for _, c := range commands {
 				if containsCmd(c, "stop") {
 					stopped = true
@@ -185,8 +185,8 @@ func TestHandleStoppedAllocations_stopsRemoved(t *testing.T) {
 			}
 			return nil
 		},
-		Rsync: func(*bucket.Runtime, string, string) error { return nil },
-		SetupRuntime: func(string) (*bucket.Runtime, error) { return nil, nil },
+		Rsync: func(*bucket.Runtime, string, string, []string) error { return nil },
+		SetupRuntime: func(string, bucket.RunContext) (*bucket.Runtime, error) { return nil, nil },
 	})
 	t.Cleanup(ClearTestHooks)
 

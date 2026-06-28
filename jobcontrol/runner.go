@@ -59,7 +59,7 @@ func runRunnerTarget(
 		}
 		batch := selected[i:end]
 
-		if err := runWorkerBatch(rt, batch, command); err != nil {
+		if err := runWorkerBatch(rt, job, target, batch, command); err != nil {
 			return &JobRunError{Job: job, Target: target, Failures: err}
 		}
 
@@ -88,18 +88,25 @@ func filterWorkers(workers, workerFilter []string) []string {
 	return selected
 }
 
-func runWorkerBatch(rt *bucket.Runtime, workerIPs []string, command string) []WorkerFailure {
+func runWorkerBatch(rt *bucket.Runtime, job string, target Target, workerIPs []string, command string) []WorkerFailure {
 	var (
 		wg       sync.WaitGroup
 		failures []WorkerFailure
 		mu       sync.Mutex
 	)
 
+	cmdCtx := bucket.CommandContext{
+		Job:    job,
+		Phase:  "job_control",
+		Action: string(target),
+		Cmd:    command,
+	}
+
 	for _, workerIP := range workerIPs {
 		wg.Add(1)
 		go func(ip string) {
 			defer wg.Done()
-			if err := worker.ExecuteCommand(rt, ip, []string{command}, nil); err != nil {
+			if err := worker.ExecuteCommand(rt, ip, cmdCtx, []string{command}, nil); err != nil {
 				mu.Lock()
 				failures = append(failures, WorkerFailure{WorkerIP: ip, Err: err})
 				mu.Unlock()

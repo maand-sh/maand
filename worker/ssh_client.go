@@ -19,7 +19,7 @@ import (
 
 // RunRemoteScript runs script on workerIP over SSH, piping script to remote bash -s.
 // Environment variables must already be present in the script body.
-func RunRemoteScript(rt *bucket.Runtime, workerIP string, script io.Reader, _ bool) error {
+func RunRemoteScript(rt *bucket.Runtime, workerIP string, cmdCtx bucket.CommandContext, script io.Reader, _ bool) error {
 	user, keyPath, useSudo, err := sshSettingsFromConf()
 	if err != nil {
 		return err
@@ -32,16 +32,19 @@ func RunRemoteScript(rt *bucket.Runtime, workerIP string, script io.Reader, _ bo
 	args := SSHClientArgs(keyPath, workerIP)
 	args = append(args, sshTarget(user, workerIP), remoteShellCommand(useSudo))
 
-	ctx, cancel := context.WithTimeout(context.Background(), remoteExecTimeout())
+	ctx, cancel := contextWithRemoteTimeout()
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "ssh", args...)
 	cmd.Stdin = script
-	return rt.RunCommand(workerIP, cmd)
+	if cmdCtx.Cmd == "" {
+		cmdCtx.Action = "ssh"
+	}
+	return rt.RunCommand(workerIP, cmdCtx, cmd)
 }
 
 // RunRemoteScriptFile runs a local script file on workerIP over SSH.
-func RunRemoteScriptFile(rt *bucket.Runtime, workerIP, scriptPath string, _ bool) error {
+func RunRemoteScriptFile(rt *bucket.Runtime, workerIP string, cmdCtx bucket.CommandContext, scriptPath string, _ bool) error {
 	if err := ensureCommandScript(scriptPath); err != nil {
 		return err
 	}
@@ -54,7 +57,10 @@ func RunRemoteScriptFile(rt *bucket.Runtime, workerIP, scriptPath string, _ bool
 		_ = file.Close()
 	}()
 
-	return RunRemoteScript(rt, workerIP, file, false)
+	if cmdCtx.Cmd == "" {
+		cmdCtx.Cmd = scriptPath
+	}
+	return RunRemoteScript(rt, workerIP, cmdCtx, file, false)
 }
 
 // RemoteShellCommand runs a single remote shell command and returns an error on non-zero exit.
@@ -113,7 +119,7 @@ func RunRemoteScriptCombined(workerIP string, script io.Reader) (string, error) 
 	args := SSHClientArgs(keyPath, workerIP)
 	args = append(args, sshTarget(user, workerIP), remoteShellCommand(useSudo))
 
-	ctx, cancel := context.WithTimeout(context.Background(), remoteExecTimeout())
+	ctx, cancel := contextWithRemoteTimeout()
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "ssh", args...)
@@ -140,4 +146,8 @@ func sshSettingsFromConf() (user, keyPath string, useSudo bool, err error) {
 		return "", "", false, err
 	}
 	return sshSettings(conf)
+}
+
+func contextWithRemoteTimeout() (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.Background(), remoteExecTimeout())
 }

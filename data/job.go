@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"maand/bucket"
+	"maand/workspace"
 )
 
 func GetJobs(tx *sql.Tx) ([]string, error) {
@@ -321,6 +322,33 @@ func GetJobCommands(tx *sql.Tx, job, event string) ([]string, error) {
 	return commands, nil
 }
 
+// GetJobsWithCommand returns job names that register commandName for event, in catalog order.
+func GetJobsWithCommand(tx *sql.Tx, commandName, event string) ([]string, error) {
+	rows, err := tx.Query(
+		`SELECT DISTINCT job FROM job_commands WHERE name = ? AND executed_on = ? ORDER BY job`,
+		commandName, event,
+	)
+	if err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	defer func() {
+		_ = rows.Close()
+	}()
+
+	jobs := make([]string, 0)
+	for rows.Next() {
+		var job string
+		if err := rows.Scan(&job); err != nil {
+			return nil, bucket.DatabaseError(err)
+		}
+		jobs = append(jobs, job)
+	}
+	if err := rowsErr(rows); err != nil {
+		return nil, err
+	}
+	return jobs, nil
+}
+
 func GetUpdateParallelCount(tx *sql.Tx, job string) (int, error) {
 	var updateParallelCount int
 	row := tx.QueryRow("SELECT update_parallel_count FROM job WHERE name = ?", job)
@@ -342,6 +370,25 @@ func GetDeployParallelCount(tx *sql.Tx, job string) (int, error) {
 		return 0, nil
 	}
 	return deployParallelCount, nil
+}
+
+func GetRestartPolicy(tx *sql.Tx, job string) (string, error) {
+	var policy string
+	row := tx.QueryRow("SELECT restart_policy FROM job WHERE name = ?", job)
+	err := row.Scan(&policy)
+	if err != nil {
+		return "", bucket.DatabaseError(err)
+	}
+	return workspace.NormalizeRestartPolicy(policy)
+}
+
+func GetRestartGlobs(tx *sql.Tx, job string) ([]string, error) {
+	var raw string
+	row := tx.QueryRow("SELECT restart_globs FROM job WHERE name = ?", job)
+	if err := row.Scan(&raw); err != nil {
+		return nil, bucket.DatabaseError(err)
+	}
+	return workspace.ParseRestartGlobs(raw)
 }
 
 func GetJobsByDeploymentSeq(tx *sql.Tx, deploymentSeq int) ([]string, error) {

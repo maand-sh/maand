@@ -17,28 +17,35 @@ import (
 
 // deployJob runs the full deploy pipeline for one job on the current deployment sequence.
 // Called sequentially per job because *sql.Tx is not safe for concurrent use (SQLite).
-func deployJob(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string, force bool) error {
+func deployJob(tx *sql.Tx, rt *bucket.Runtime, bucketID, job string, opts Options) error {
+	if opts.SyncOnly {
+		if err := validateSyncOnlyRollout(tx, job); err != nil {
+			return &JobError{Job: job, Err: err}
+		}
+		return finalizeJobDeploy(tx, rt, job)
+	}
+
 	commands, err := data.GetJobCommands(tx, job, "job_control")
 	if err != nil {
 		return &JobError{Job: job, Err: err}
 	}
 
 	if len(commands) > 0 {
-		return deployJobWithCommands(tx, rt, job, commands, force)
+		return deployJobWithCommands(tx, rt, job, commands, opts)
 	}
 
 	if err := handleNewAllocations(tx, rt, bucketID, job); err != nil {
 		return &JobError{Job: job, Err: fmt.Errorf("start new allocations: %w", err)}
 	}
-	if err := handleUpdatedAllocations(tx, rt, bucketID, job, force); err != nil {
+	if err := handleUpdatedAllocations(tx, rt, bucketID, job, opts); err != nil {
 		return &JobError{Job: job, Err: fmt.Errorf("restart updated allocations: %w", err)}
 	}
 
 	return finalizeJobDeploy(tx, rt, job)
 }
 
-func deployJobWithCommands(tx *sql.Tx, rt *bucket.Runtime, job string, commands []string, force bool) error {
-	if !force {
+func deployJobWithCommands(tx *sql.Tx, rt *bucket.Runtime, job string, commands []string, opts Options) error {
+	if !opts.Force {
 		needsRollout, err := JobNeedsRollout(tx, job)
 		if err != nil {
 			return &JobError{Job: job, Err: err}
@@ -57,7 +64,7 @@ func deployJobWithCommands(tx *sql.Tx, rt *bucket.Runtime, job string, commands 
 	if err != nil {
 		return &JobError{Job: job, Err: err}
 	}
-	updatedAllocations, err := allocationsNeedingRestart(tx, job, force)
+	updatedAllocations, err := allocationsNeedingRestart(tx, job, opts.Force)
 	if err != nil {
 		return &JobError{Job: job, Err: err}
 	}

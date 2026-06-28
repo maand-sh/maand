@@ -32,11 +32,11 @@ func TestRsync_executesWithLocalStaging(t *testing.T) {
 	keyPath := path.Join(bucket.SecretLocation, "worker.key")
 	require.NoError(t, os.WriteFile(keyPath, []byte("dummy-key"), 0o600))
 
-	rt, err := bucket.SetupRuntime(env.bucketID)
+	rt, err := bucket.SetupRuntime(env.bucketID, bucket.NewRunContext("test", 0))
 	require.NoError(t, err)
 	defer func() { _ = rt.Stop() }()
 
-	err = rsync(rt, env.bucketID, workerIP)
+	err = rsync(rt, env.bucketID, workerIP, []string{"app"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "rsync failed")
 	require.Contains(t, err.Error(), workerIP)

@@ -76,6 +76,10 @@ func TestJobCommandAndHealthQueries(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"init"}, commands)
 
+	jobs, err := GetJobsWithCommand(tx, "init", "pre_deploy")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"api"}, jobs)
+
 	parallel, err := GetUpdateParallelCount(tx, "api")
 	require.NoError(t, err)
 	assert.Equal(t, 1, parallel)

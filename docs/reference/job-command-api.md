@@ -18,7 +18,7 @@ Commit (CLI path) or return error to caller (deploy/health_check)
 
 Important details:
 
-- **Where code runs:** bash on the **CLI host**, working directory = bucket root. Output is logged to `logs/<worker_ip>.log` (or `maand.log` for bucket-local).
+- **Where code runs:** bash on the **CLI host**, working directory = bucket root. Output is logged to structured lines in `logs/<worker_ip>.log` (or `logs/maand.log` for bucket-local). Each line includes timestamp, run id, command phase, and payload. Per-run copies live under `logs/runs/<run_id>/`.
 - **Per-allocation context:** one process per allocation; env vars identify worker IP and allocation UUID even though the process is local.
 - **Worker access:** use Python **`run_ssh`**, **`run_runner_target`**, or **`run_make_target`** to execute on `ALLOCATION_IP`. Bun scripts must shell out to `ssh` themselves or call a Python helper.
 - **Staging:** `tmp/workers/<ip>/jobs/<job>/` mirrors deploy layout (files + certs) so scripts can read local copies if needed.

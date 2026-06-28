@@ -13,9 +13,13 @@ import (
 )
 
 var jobCommandCmd = &cobra.Command{
-	Use:   "job_command [job] [command]",
-	Short: "Runs job command across allocations",
-	Args:  cobra.MinimumNArgs(2),
+	Use:     "jobcommand <command> [job]",
+	Aliases: []string{"job_command"},
+	Short:   "Run a manifest job command across allocations",
+	Long: `Run a job command registered for the cli event.
+
+When job is omitted, the command runs on every job in the catalog that defines it.`,
+	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		flags := cmd.Flags()
 		verbose, _ := flags.GetBool("verbose")
@@ -25,10 +29,13 @@ var jobCommandCmd = &cobra.Command{
 			log.Fatal("concurrency must be at least 1")
 		}
 
-		job := args[0]
-		command := args[1]
+		command := args[0]
+		job := ""
+		if len(args) > 1 {
+			job = args[1]
+		}
 
-		err := jobcommand.Execute(job, command, "cli", concurrency, verbose, []string{})
+		err := jobcommand.Execute(command, job, "cli", concurrency, verbose, []string{})
 		if err != nil {
 			log.Fatalln(err)
 		}

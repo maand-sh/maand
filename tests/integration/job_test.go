@@ -21,7 +21,7 @@ import (
 
 func TestIntegrationJobControlLifecycle(t *testing.T) {
 	setupIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
 	require.NoError(t, jobcontrol.Execute(integrationJobName, "", "stop", false))
 	require.NoError(t, jobcontrol.Execute(integrationJobName, "", "start", false))
@@ -31,7 +31,7 @@ func TestIntegrationJobControlLifecycle(t *testing.T) {
 
 func TestIntegrationJobRunCustomTarget(t *testing.T) {
 	setupIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
 	require.NoError(t, jobcontrol.Execute(integrationJobName, "", "migrate", false))
 
@@ -43,7 +43,7 @@ func TestIntegrationJobRunCustomTarget(t *testing.T) {
 
 func TestIntegrationJobControlSingleWorker(t *testing.T) {
 	setupIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
 	worker := workerIPs(t)[0]
 	require.NoError(t, jobcontrol.Execute(integrationJobName, worker, "stop", false))
@@ -52,40 +52,40 @@ func TestIntegrationJobControlSingleWorker(t *testing.T) {
 
 func TestIntegrationHealthCheck(t *testing.T) {
 	setupFullIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
 	require.NoError(t, healthcheck.Execute(false, true, integrationJobName, false))
 }
 
 func TestIntegrationJobCommandCLI(t *testing.T) {
 	setupFullIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
-	require.NoError(t, jobcommand.Execute(integrationJobName, "command_cli", "cli", 2, true, nil))
+	require.NoError(t, jobcommand.Execute("command_cli", integrationJobName, "cli", 2, true, nil))
 }
 
 func TestIntegrationJobCommandCLIKV(t *testing.T) {
 	setupFullIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
-	require.NoError(t, jobcommand.Execute(integrationJobName, "command_cli_kv", "cli", 2, true, nil))
+	require.NoError(t, jobcommand.Execute("command_cli_kv", integrationJobName, "cli", 2, true, nil))
 }
 
 func TestIntegrationJobCommandCLISecret(t *testing.T) {
 	setupFullIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
-	require.NoError(t, jobcommand.Execute(integrationJobName, "command_cli_secret", "cli", 2, true, nil))
+	require.NoError(t, jobcommand.Execute("command_cli_secret", integrationJobName, "cli", 2, true, nil))
 }
 
 func TestIntegrationDeployHooks(t *testing.T) {
 	setupFullIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 }
 
 func TestIntegrationJobControlWithHealthCheck(t *testing.T) {
 	setupFullIntegrationBucket(t)
-	require.NoError(t, deploy.Execute(nil, false))
+	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
 	require.NoError(t, jobcontrol.Execute(integrationJobName, "", "restart", true))
 }

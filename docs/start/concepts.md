@@ -28,12 +28,12 @@ A **bucket** is one maand project directory. Run all maand commands from that di
 
 | Path | Role |
 |------|------|
-| `maand.conf` | SSH user/key, sudo, cert TTL, optional job config selector |
+| `maand.conf` | SSH user/key, sudo, cert TTL, `job_config_selector`, `log_format` |
 | `data/maand.db` | SQLite catalog: workers, jobs, allocations, hashes, KV history |
 | `workspace/` | Source of truth you edit: `workers.json`, `jobs/<name>/`, optional `disabled.json` |
 | `secrets/` | CA, worker SSH private key, KV encryption key |
 | `tmp/` | Staging for deploy and job-command workspaces |
-| `logs/` | Runtime API logs from job commands |
+| `logs/` | Structured command logs from deploy, rsync, SSH, job commands (`logs/runs/<run_id>/` per invocation) |
 
 Each bucket has a stable **`bucket_id`** (UUID) and an **`update_seq`** incremented on every deploy. Workers store both in `worker.json` so manual job control can detect drift.
 
@@ -114,10 +114,12 @@ workspace/jobs/api/
 |-------|---------|
 | `version` | Semver-like release id; required when the job participates in the [dependency graph](../reference/deployment-sequence.md); drives deploy **`new_version`** per allocation |
 | `selectors` | Worker **labels** for placement; when omitted, the **job name** is used |
-| `resources.memory` / `cpu` | Min/max bounds; actual reservation from `bucket.jobs.conf` — see [resources-and-placement.md](../reference/resources-and-placement.md) |
+| `resources.memory` / `cpu` | **Min/max bounds** in the manifest; **actual** memory/CPU for the current environment from `bucket.jobs.conf` or `bucket.jobs.<env>.conf` (selected by `job_config_selector` in `maand.conf`) — [resources-and-placement.md](../reference/resources-and-placement.md) |
 | `resources.ports` | Named ports: `{}` (maand assigns from `bucket.conf` pool) or an integer (fixed in manifest) |
-| `update_parallel_count` | Rolling restart batch size during deploy |
-| `deploy_parallel_count` | Rolling start batch size on first deploy (0 = all at once) |
+| `update_parallel_count` | Rolling batch size for **`restart`** / **`reload`** during deploy |
+| `restart_policy` | `always` / `reload` / `never` — how upgrades apply after rsync ([deploy](../reference/cli/deploy.md#applying-changes-on-workers)) |
+| `restart_globs` | Optional; with `reload`, paths that force **`restart`** when changed |
+| `deploy_parallel_count` | Rolling batch size for **`start`** on first deploy (0 = all at once) |
 | `commands` | Named hooks (`command_*`) with `executed_on` events |
 | `health_check` | Optional built-in probes (tcp/http/ssh) and/or a `health_check` command (probes first) |
 | `certs` | TLS definitions → generated at build, deployed under `jobs/<job>/certs/` — [certs.md](../reference/certs.md) |
@@ -126,7 +128,17 @@ Manifest reference: [manifest.md](../reference/manifest.md). Configuration: [con
 
 ### Job lifecycle on workers
 
-Deploy stages files, then runs **`make start`** or **`make restart`** (or a **`job_control`** command) per allocation. The worker Makefile receives **`CURRENT_VERSION`** (running) and **`NEW_VERSION`** (target) for upgrade hooks. Runtime state lives in **`data/`**, **`logs/`**, and **`bin/`** under the job directory on the worker — these directories must **not** exist in the workspace (build rejects them).
+Each deploy wave **rsyncs** the job tree, then optionally runs Makefile targets on the worker:
+
+1. **New allocation** → **`make start`**
+2. **Upgrade** → depends on **`restart_policy`**:
+   - **`always`** → **`make restart`**
+   - **`reload`** → **`make reload`**, or **`make restart`** when a changed file matches **`restart_globs`**
+   - **`never`** → no lifecycle (files only)
+
+The Makefile receives **`CURRENT_VERSION`** (running) and **`NEW_VERSION`** (target). Custom rollouts use a **`job_control`** command instead of the default targets.
+
+Runtime state lives in **`data/`**, **`logs/`**, and **`bin/`** on the worker — not in the workspace (build rejects those dirs in git).
 
 ---
 
@@ -169,15 +181,15 @@ Each allocation tracks catalog **`current_version`** (last promoted, in **`hash`
 
 ### Active vs inactive
 
-An allocation is **active** when `removed = 0` and `disabled = 0`. A **disabled** allocation (`removed = 0`, `disabled = 1`) still gets build KV (certs, per-allocation metadata, deploy staging). Deploy **never starts** disabled allocations (no start/restart/rsync).
+An allocation is **active** when `removed = 0` and `disabled = 0`. A **disabled** allocation (`removed = 0`, `disabled = 1`) still gets build KV (certs, per-allocation metadata, deploy staging). Deploy **never starts** disabled allocations (no start/restart/reload/rsync). Content and version changes are still staged and promoted; after re-enable, deploy **starts** the allocation.
 
 **KV nuance:** `maand/job/<job>/workers`, `maand/job/<job>/deploy_order`, and `maand/worker/<ip>/jobs` list **active** allocations only. Per-allocation keys such as **`peer_workers`** use **non-removed** peers (disabled peers may still appear). See [KV namespaces](../reference/kv/namespaces.md).
 
 Only **active** allocations receive:
 
-- Deploy start/restart/rsync and rollout hooks that run on workers
+- Deploy rsync and lifecycle (start/restart/reload) plus rollout hooks that run on workers
 - `maand job_command`, `maand health_check`
-- Default targets for `maand job start|stop|restart`
+- Default targets for `maand job start|stop|restart|run --target reload`
 
 Inspect allocations:
 
@@ -205,7 +217,7 @@ maand cat allocations --jobs api --workers 10.0.0.1
 
 Run **`maand build`** after editing `disabled.json`.
 
-Full how-to (disable one allocation, entire job, entire worker, re-enable): [disabled.md](../guides/disable-and-drain.md).
+Full how-to (disable one allocation, entire job, entire worker, re-enable): [disable and drain](../guides/disable-and-drain.md).
 
 ---
 
@@ -235,7 +247,7 @@ Details in [cli/build.md](../reference/cli/build.md) and [cli/deploy.md](../refe
 
 | Mechanism | Runs on | Trigger | Use case |
 |-----------|---------|---------|----------|
-| **Makefile** (`start`/`stop`/`restart`) | Worker | Deploy, `maand job` | Process lifecycle |
+| **Makefile** (`start`/`stop`/`restart`/`reload`) | Worker | Deploy, `maand job` | Process lifecycle |
 | **Job commands** (`command_*`) | CLI host | build/deploy/CLI/health_check | Migrations, KV, hooks |
 | **`maand run_command`** | Worker (raw shell) | Manual | Ops, debugging |
 
@@ -252,11 +264,11 @@ edit workspace/workers.json, workspace/jobs/*
    maand build          ← catalog + KV + certs; no SSH to workers
         │
         ▼
-   maand deploy         ← rsync + start/restart + hooks
+   maand deploy         ← rsync + lifecycle (start/restart/reload) + hooks
         │
         ├── maand health_check
         ├── maand job restart <job>
-        ├── maand job_command <job> <cmd>
+        ├── maand jobcommand <cmd> [job]
         ├── maand run_command "…"
         └── maand gc     ← after removals
 ```
@@ -267,4 +279,5 @@ edit workspace/workers.json, workspace/jobs/*
 
 - [overview.md](./overview.md) — capabilities and limits
 - [quickstart.md](./quickstart.md) — hands-on first deploy
+- [reference/README.md](../reference/README.md) — configuration, manifest, CLI, KV, logging
 - [../README.md](../README.md) — full doc index
