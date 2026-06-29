@@ -39,7 +39,7 @@ func Workers() error {
 		return bucket.NotFoundError("workers")
 	}
 
-	rows, err := tx.Query(`SELECT worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position, labels FROM cat_workers`)
+	rows, err := tx.Query(`SELECT worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position, labels, zone FROM cat_workers`)
 	if err != nil {
 		return bucket.DatabaseError(err)
 	}
@@ -47,7 +47,7 @@ func Workers() error {
 		_ = rows.Close()
 	}()
 
-	t := utils.GetTable(table.Row{"Worker IP", "CPU (mhz)", "Memory (mb)", "Position", "labels"})
+	t := utils.GetTable(table.Row{"Worker IP", "zone", "CPU (mhz)", "Memory (mb)", "Position", "labels"})
 
 	for rows.Next() {
 		var workerID string
@@ -56,13 +56,14 @@ func Workers() error {
 		var availableMemoryMB float64
 		var availableCPUMHZ float64
 		var labels string
+		var zone sql.NullString
 
-		err = rows.Scan(&workerID, &workerIP, &availableCPUMHZ, &availableMemoryMB, &position, &labels)
+		err = rows.Scan(&workerID, &workerIP, &availableCPUMHZ, &availableMemoryMB, &position, &labels, &zone)
 		if err != nil {
 			return bucket.DatabaseError(err)
 		}
 
-		t.AppendRows([]table.Row{{workerIP, availableMemoryMB, availableCPUMHZ, position, labels}})
+		t.AppendRows([]table.Row{{workerIP, zone.String, availableMemoryMB, availableCPUMHZ, position, labels}})
 	}
 	if err := data.RowsErr(rows); err != nil {
 		return err

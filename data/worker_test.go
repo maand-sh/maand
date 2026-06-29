@@ -130,7 +130,7 @@ func TestJobHasNoActiveAllocations(t *testing.T) {
 	require.NoError(t, err)
 	_, err = tx.Exec(`
 		INSERT INTO bucket (bucket_id, update_seq) VALUES ('bucket-1', 0);
-		INSERT INTO job (job_id, name, version, update_parallel_count)
+		INSERT INTO job (job_id, name, version, max_concurrent_upgrades)
 		VALUES ('job-empty', 'empty', '1.0.0', 1);
 	`)
 	require.NoError(t, err)

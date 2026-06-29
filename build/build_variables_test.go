@@ -67,7 +67,7 @@ func TestJobShouldPurgeBuildKV(t *testing.T) {
 	assert.True(t, purge)
 }
 
-func TestBuildJobVariablesSyncsDeployOrder(t *testing.T) {
+func TestBuildJobVariablesSyncsRolloutOrder(t *testing.T) {
 	db := openBuildAllocationsTestDB(t)
 	defer func() { _ = db.Close() }()
 
@@ -79,7 +79,7 @@ func TestBuildJobVariablesSyncsDeployOrder(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, deploy_parallel_count, health_check
+			max_concurrent_upgrades, max_concurrent_starts, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, 0, '');
 		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
 		VALUES ('a1', '10.0.0.1', 'api', 0, 0, 0, '0.0.0'),
@@ -96,7 +96,7 @@ func TestBuildJobVariablesSyncsDeployOrder(t *testing.T) {
 	require.NoError(t, buildJobVariables(tx, nil, false))
 	require.NoError(t, tx.Commit())
 
-	order, err := kv.GetKVStore().Get("maand/job/api", "deploy_order")
+	order, err := kv.GetKVStore().Get("maand/job/api", "rollout_order")
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.1,10.0.0.2", order.Value)
 }
@@ -112,7 +112,7 @@ func TestBuildJobVariables_emptyWorkersWhenDisabledOnly(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, deploy_parallel_count, health_check
+			max_concurrent_upgrades, max_concurrent_starts, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, 0, '');
 		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
 		VALUES ('a1', '10.0.0.1', 'api', 1, 0, 0, '0.0.0');
@@ -146,7 +146,7 @@ func TestBuildJobVariablesPurgesCommandKVWhenRequested(t *testing.T) {
 			job_id TEXT, name TEXT, version TEXT,
 			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
 			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
-			update_parallel_count INT, health_check TEXT,
+			max_concurrent_upgrades INT, health_check TEXT,
 			PRIMARY KEY(name)
 		);
 		CREATE TABLE job_selectors (job_id TEXT, selector TEXT);
@@ -155,7 +155,7 @@ func TestBuildJobVariablesPurgesCommandKVWhenRequested(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq)
 		VALUES ('a1', '10.0.0.1', 'api', 0, 1, 0);
@@ -196,7 +196,7 @@ func TestBuildJobVariablesPurgesRemovedJobKV(t *testing.T) {
 			job_id TEXT, name TEXT, version TEXT,
 			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
 			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
-			update_parallel_count INT, health_check TEXT,
+			max_concurrent_upgrades INT, health_check TEXT,
 			PRIMARY KEY(name)
 		);
 		CREATE TABLE job_selectors (job_id TEXT, selector TEXT);
@@ -205,7 +205,7 @@ func TestBuildJobVariablesPurgesRemovedJobKV(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-gone', 'gone', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq)
 		VALUES ('a1', '10.0.0.1', 'gone', 0, 1, 0);
@@ -314,7 +314,7 @@ func TestBuildBucketVariablesSyncsBucketConf(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO job_ports (job_id, name, port) VALUES ('job-api', 'http_port', 9090);
 		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
@@ -364,7 +364,7 @@ func TestBuildBucketVariables_skipsPortsWithoutActiveAllocations(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES
 			('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, ''),
 			('job-idle', 'idle', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
@@ -456,7 +456,7 @@ func TestBuildJobVariablesSyncsActiveJobKV(t *testing.T) {
 			job_id TEXT, name TEXT, version TEXT,
 			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
 			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
-			update_parallel_count INT, health_check TEXT,
+			max_concurrent_upgrades INT, health_check TEXT,
 			PRIMARY KEY(name)
 		);
 		CREATE TABLE job_selectors (job_id TEXT, selector TEXT);
@@ -468,7 +468,7 @@ func TestBuildJobVariablesSyncsActiveJobKV(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '128', '256', '128', '100', '200', '100', 2, '');
 		INSERT INTO job_selectors (job_id, selector) VALUES ('job-api', 'web');
 		INSERT INTO job_ports (job_id, name, port) VALUES ('job-api', 'http_port', 8080);

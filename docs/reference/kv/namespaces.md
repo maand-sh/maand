@@ -171,7 +171,7 @@ Three namespaces serve different purposes.
 | `version` | Target version from manifest |
 | `selectors` | Job selectors |
 | `workers`, `workers_length`, `worker_0`, … | **Active** worker IPs (ordered); disabled allocations omitted |
-| `deploy_order` | Comma-separated **active** worker IPs for rollout order (synced from catalog on build). Override for one deploy via **`put_deploy_order`** in **`pre_deploy`** or **`cli`** — [job-command-api.md](../job-command-api.md) |
+| `rollout_order` | Comma-separated **active** worker IPs for rollout order (synced from catalog on build). Override for one deploy via **`put_rollout_order`** in **`pre_deploy`** or **`cli`** — [job-command-api.md](../job-command-api.md) |
 | `memory`, `cpu` | Current reservation |
 | `min_memory_mb`, `max_memory_mb`, `min_cpu_mhz`, `max_cpu_mhz` | Manifest bounds |
 

@@ -102,7 +102,7 @@ for seq in 0..max:
   commit partial progress; continue even if one job failed
 ```
 
-Within one sequence value, jobs roll out **independently**. Each job applies its own **`deploy_parallel_count`** (starts) and **`update_parallel_count`** (upgrades: restart or reload). Worker order within batches uses KV **`deploy_order`**.
+Within one sequence value, jobs roll out **independently**. Each job applies its own **`max_concurrent_starts`** (starts) and **`max_concurrent_upgrades`** (upgrades: restart or reload). Worker order within batches uses KV **`rollout_order`**.
 
 Deploy **never** runs a higher sequence before a lower one finishes its wave.
 
@@ -186,9 +186,9 @@ maand deploy --dry-run
 | `deployment_seq` | `allocations.deployment_seq` | `BuildDeploymentSequence` |
 | Deploy wave order | — | `maand deploy` (0 → max) |
 | `post_build` order | — | `maand build` (0 → max) |
-| Rolling upgrades | `update_parallel_count` | Per job, per wave (restart or reload) |
-| Rolling first deploy | `deploy_parallel_count` | Per job, per wave |
-| Rollout worker order | `deploy_order` KV | Build sync; optional `pre_deploy` override |
+| Rolling upgrades | `max_concurrent_upgrades` | Per job, per wave (restart or reload) |
+| Rolling first deploy | `max_concurrent_starts` | Per job, per wave |
+| Rollout worker order | `rollout_order` KV | Build sync; optional `pre_deploy` override |
 
 ---
 

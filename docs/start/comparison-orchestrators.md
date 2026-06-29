@@ -10,7 +10,7 @@ A side-by-side comparison of orchestration models and where maand fits.
 |---------|-------|-----------|-------|
 | **Model** | Worker pool + job batching | Pod/container cluster | Task/job scheduler |
 | **Scale** | Single cluster, tens of workers | Multi-cluster, thousands+ of nodes | Multi-cloud/DC, 1000s of nodes |
-| **Deployment order** | Built-in (`deploy_order`), per-deploy override | StatefulSet ordinals, not restart order | External orchestration required |
+| **Deployment order** | Built-in (`rollout_order`), per-deploy override | StatefulSet ordinals, not restart order | External orchestration required |
 | **State management** | Integrated KV store, per-job bootstrap commands | External etcd; no native bootstrap | Consul KV; external orchestration |
 | **Configuration** | Go templates + KV, per-worker SSH | ConfigMaps, volumes, declarative | HCL + Consul templates |
 | **Bootstrap complexity** | Simple: `command_node_up` per node | Operators / init containers | External (e.g., Consul leader election) |
@@ -46,11 +46,11 @@ A side-by-side comparison of orchestration models and where maand fits.
 
 ### maand — **first-class feature**
 ```
-deploy_order: ["10.0.0.1", "10.0.0.3", "10.0.0.2"]
-deploy_parallel_count: 1  (or any N)
+rollout_order: ["10.0.0.1", "10.0.0.3", "10.0.0.2"]
+max_concurrent_starts: 1  (or any N)
 ```
-- Each restart/start batch respects `deploy_order`.
-- Override per-deploy in `pre_deploy` via `put_deploy_order(...)` — e.g., leader-last for Raft clusters.
+- Each restart/start batch respects `rollout_order`.
+- Override per-deploy in `pre_deploy` via `put_rollout_order(...)` — e.g., leader-last for Raft clusters.
 - Example: Vault rolling restart → followers first, active leader last (≤1 leadership transfer).
 
 ### Kubernetes — **no native ordering**

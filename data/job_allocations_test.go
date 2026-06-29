@@ -80,7 +80,7 @@ func TestJobCommandAndHealthQueries(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"api"}, jobs)
 
-	parallel, err := GetUpdateParallelCount(tx, "api")
+	parallel, err := GetMaxConcurrentUpgrades(tx, "api")
 	require.NoError(t, err)
 	assert.Equal(t, 1, parallel)
 

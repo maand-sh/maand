@@ -86,7 +86,7 @@ Deploy runs `make start` / `restart` / `reload` over SSH on each allocation.
 {
   "version": "1.2.0",
   "selectors": ["worker", "web"],
-  "update_parallel_count": 2,
+  "max_concurrent_upgrades": 2,
   "restart_policy": "always",
   "resources": {
     "memory": { "min": "256 mb", "max": "512 mb" },
@@ -100,7 +100,7 @@ Deploy runs `make start` / `restart` / `reload` over SSH on each allocation.
 |-------|---------|
 | `version` | Release id (semver-style); drives rollout when it changes |
 | `selectors` | Worker labels required for placement (chapter 6) |
-| `update_parallel_count` | Rolling batch size for restart/reload during deploy |
+| `max_concurrent_upgrades` | Rolling batch size for restart/reload during deploy |
 | `restart_policy` | `always` / `reload` / `never` — see [chapter 8](./08-deploy.md) |
 | `resources` | Bounds validated against worker capacity; ports from pool or fixed |
 

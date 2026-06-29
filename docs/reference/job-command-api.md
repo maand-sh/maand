@@ -57,8 +57,8 @@ Deploy **`job_control`** also sets:
 | `BATCH_INDEX` | Zero-based batch index |
 | `BATCH_COUNT` | Total batches in the current phase |
 | `DEPLOY_PHASE` | `new`, `update`, or `stop` |
-| `DEPLOY_ORDER` | Full comma-separated order list |
-| `DEPLOY_ORDER_SOURCE` | `kv` or `default` |
+| `ROLLOUT_ORDER` | Full comma-separated order list |
+| `ROLLOUT_ORDER_SOURCE` | `kv` or `default` |
 | `JOB` | Job name (same as env above; set again for batch hooks) |
 
 ### Concurrency
@@ -105,27 +105,27 @@ Embedded **`maand.py`** / **`maand.ts`** set these headers automatically from en
 | `maand/bucket`, `maand/worker`, `maand/worker/<ip>`, tags | ✓ | ✗ | ✗ |
 | `vars/bucket`, `vars/bucket/job/<job>` | ✓ | ✗ | ✗ |
 | `maand/job/<job>/worker/<ip>` | ✓ | ✗ | ✗ |
-| `maand/job/<job>` key **`deploy_order`** only | ✓ | ✓ on **`pre_deploy`** or **`cli`** | ✗ |
+| `maand/job/<job>` key **`rollout_order`** only | ✓ | ✓ on **`pre_deploy`** or **`cli`** | ✗ |
 | `vars/job/<job>` (current job) | ✓ | ✓ | ✗ |
 | `secrets/job/<job>` (current job) | ✓ (decrypted) | ✗ | ✓ |
 | Upstream demand jobs (`maand/job/*`, `vars/job/*`, `secrets/job/*`) | ✓ if declared in manifest **`demands`** | ✗ | ✗ |
 
-Writes to other **`maand/*`** keys, **`vars/bucket/*`**, and upstream jobs are rejected. Use **`put_deploy_order`** / **`putDeployOrder`** (or PUT `/kv` on `maand/job/<job>` + key `deploy_order`) to override rollout order for one deploy; build resets it on the next **`maand build`**.
+Writes to other **`maand/*`** keys, **`vars/bucket/*`**, and upstream jobs are rejected. Use **`put_rollout_order`** / **`putRolloutOrder`** (or PUT `/kv` on `maand/job/<job>` + key `rollout_order`) to override rollout order for one deploy; build resets it on the next **`maand build`**.
 
-**PUT `deploy_order`** body:
+**PUT `rollout_order`** body:
 
 ```json
 {
   "namespace": "maand/job/api",
-  "key": "deploy_order",
+  "key": "rollout_order",
   "value": "10.0.0.2,10.0.0.1"
 }
 ```
 
 ```python
-from maand import put_deploy_order
+from maand import put_rollout_order
 
-put_deploy_order(["10.0.0.2", "10.0.0.1"]).raise_for_status()
+put_rollout_order(["10.0.0.2", "10.0.0.1"]).raise_for_status()
 ```
 
 **GET `/kv`** body:
@@ -268,8 +268,8 @@ Aliases: `get_allocation_id`, `get_job`, `kv_get`, etc. (both runtimes).
 |--------|-----|-----|
 | `get_store_value(ns, key)` | `getStoreValue(ns, key)` | GET `/kv` → `Response` |
 | `get_kv_value(ns, key)` | *(parse JSON yourself)* | GET `/kv` → plaintext `value` |
-| `put_deploy_order(order)` | `putDeployOrder(order)` | PUT `/kv` → `maand/job/<job>/deploy_order` |
-| `get_deploy_order()` | `getDeployOrder()` | GET `/kv` → `deploy_order` |
+| `put_rollout_order(order)` | `putRolloutOrder(order)` | PUT `/kv` → `maand/job/<job>/rollout_order` |
+| `get_rollout_order()` | `getRolloutOrder()` | GET `/kv` → `rollout_order` |
 | `put_job_variable(key, val)` | `putJobVariable(key, val)` | PUT `/kv` |
 | `put_job_secret(key, val)` | `putJobSecret(key, val)` | PUT `/kv/secret` |
 | `delete_job_variable(key)` | `deleteJobVariable(key)` | DELETE `/kv` |

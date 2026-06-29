@@ -41,7 +41,7 @@ func TestPrepareWorkerWorkspaceWritesSDKAndBunScript(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count
+			max_concurrent_upgrades
 		) VALUES (?, ?, '1', '0', '0', '0', '0', '0', '0', 1)`,
 		jobID, jobName,
 	)

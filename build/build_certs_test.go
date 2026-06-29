@@ -59,7 +59,7 @@ func seedBuildCertsDB(t *testing.T, db *sql.DB, sharedCert bool) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO job_certs (job_id, name, pkcs8, one, subject)
 		VALUES ('job-api', 'tls', 1, ?, ?);
@@ -143,7 +143,7 @@ func TestBuildCerts_purgesCertKVWhenJobHasNoSpecs(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO allocations (alloc_id, worker_ip, job, disabled, removed, deployment_seq, new_version)
 		VALUES ('a1', '10.0.0.1', 'api', 0, 0, 0, '0.0.0');
@@ -174,7 +174,7 @@ func TestBuildCerts_purgesCertKVWhenAllAllocationsRemoved(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO job_certs (job_id, name, pkcs8, one, subject)
 		VALUES ('job-api', 'tls', 1, 0, '{"common_name":"api"}');

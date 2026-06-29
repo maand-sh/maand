@@ -65,9 +65,9 @@ Requires **`cli`** in manifest **`executed_on`**. KV commits on success.
 
 ### Batch env (allocation hooks)
 
-See [job-command-api.md](../job-command-api.md#environment-variables-job-command-scripts) for per-allocation env (`ALLOCATION_ID`, `ALLOCATION_IP`, **`ALLOCATION_INDEX`**, `CURRENT_VERSION`, `NEW_VERSION`, …) and batch hooks (`BATCH_*`, `DEPLOY_PHASE`, `DEPLOY_ORDER`).
+See [job-command-api.md](../job-command-api.md#environment-variables-job-command-scripts) for per-allocation env (`ALLOCATION_ID`, `ALLOCATION_IP`, **`ALLOCATION_INDEX`**, `CURRENT_VERSION`, `NEW_VERSION`, …) and batch hooks (`BATCH_*`, `DEPLOY_PHASE`, `ROLLOUT_ORDER`).
 
-**`pre_deploy`** may override **`deploy_order`** with **`put_deploy_order()`** for one deploy; build resets it on the next **`maand build`**. See [job-command-api.md](../job-command-api.md).
+**`pre_deploy`** may override **`rollout_order`** with **`put_rollout_order()`** for one deploy; build resets it on the next **`maand build`**. See [job-command-api.md](../job-command-api.md).
 
 ### Demands
 
@@ -83,7 +83,7 @@ Validate artifacts, codegen, seed **`vars/job/*`**, cross-job checks. Runs in **
 
 ### `pre_deploy`
 
-Fetch secrets, write **`secrets/job/*`** and **`vars/job/*`** for `.tpl` on this deploy, external prerequisite checks. Override rollout order with **`put_deploy_order("10.0.0.2,10.0.0.1")`**. Failure: job not staged this deploy.
+Fetch secrets, write **`secrets/job/*`** and **`vars/job/*`** for `.tpl` on this deploy, external prerequisite checks. Override rollout order with **`put_rollout_order("10.0.0.2,10.0.0.1")`**. Failure: job not staged this deploy.
 
 ### `post_deploy`
 

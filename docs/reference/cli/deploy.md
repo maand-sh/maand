@@ -75,7 +75,7 @@ Return joined errors if any job failed
 
 Jobs with the same **`deployment_seq`** (from build) are processed in the same wave. Lower sequences complete before higher ones. This respects **`demands`** between job commands (e.g. job B depends on job A).
 
-Reference: [deployment-sequence.md](../deployment-sequence.md) — demand graph, `deployment_seq` algorithm, `update_parallel_count` within a wave, examples.
+Reference: [deployment-sequence.md](../deployment-sequence.md) — demand graph, `deployment_seq` algorithm, `max_concurrent_upgrades` within a wave, examples.
 
 Within one sequence, jobs are independent except they share worker staging directories under `tmp/workers/<ip>/`.
 
@@ -197,9 +197,9 @@ If the job has **no** `job_control` commands:
 
 1. **`handleNewAllocations`**: Workers where `previous_hash IS NULL` (new alloc) →  
    `python3 /opt/worker/<bucket_id>/bin/runner.py <bucket_id> start --jobs <job>`  
-   in batches of **`deploy_parallel_count`** (0 = all at once), ordered by **`deploy_order`**.  
+   in batches of **`max_concurrent_starts`** (0 = all at once), ordered by **`rollout_order`**.  
    **`after_allocation_started`** hooks run after each batch. **One** health check runs after all start batches complete.
-2. **`handleUpdatedAllocations`**: Workers where hash or version changed → lifecycle per **`restart_policy`** (see below) in batches of **`update_parallel_count`**, ordered by **`deploy_order`**.  
+2. **`handleUpdatedAllocations`**: Workers where hash or version changed → lifecycle per **`restart_policy`** (see below) in batches of **`max_concurrent_upgrades`**, ordered by **`rollout_order`**.  
    **`after_allocation_started`** hooks run after each batch, then **health_check** (wait/retry) before the next batch when a lifecycle target runs.
 3. **`post_deploy`**: Job commands with event `post_deploy`.
 4. **`promoteAllocationHash`**: Mark current tree and **`current_version`** as the new baseline.
@@ -247,7 +247,7 @@ When the job has no **`job_control`** commands, deploy calls **`runner.py`** on 
 
 Each target receives **`CURRENT_VERSION`** and **`NEW_VERSION`** in the environment (see [Allocation version tracking](#allocation-version-tracking)).
 
-Rolling batches use **`deploy_parallel_count`** (starts) and **`update_parallel_count`** (restarts/reloads), ordered by **`deploy_order`**. Health checks run after start batches complete and after each update batch when a lifecycle target runs.
+Rolling batches use **`max_concurrent_starts`** (starts) and **`max_concurrent_upgrades`** (restarts/reloads), ordered by **`rollout_order`**. Health checks run after start batches complete and after each update batch when a lifecycle target runs.
 
 ### `restart_policy` (manifest)
 
@@ -470,7 +470,7 @@ Hash state lives in table **`hash`** with namespace `<job>_allocation` and key `
 - [KV namespaces](../kv/namespaces.md) · [KV persistence](../kv/persistence.md)
 - [job-command.md](job-command.md) · [job-command-api.md](../job-command-api.md)
 - [disable and drain](../../guides/disable-and-drain.md) — disable/re-enable
-- [rolling-deploy](../../guides/rolling-deploy.md) — `update_parallel_count`, version upgrades
+- [rolling-deploy](../../guides/rolling-deploy.md) — `max_concurrent_upgrades`, version upgrades
 - [debugging-deploy.md](../../guides/debugging-deploy.md) — dry-run, `cat deployments`, failures
 - [health-check.md](health-check.md) — standalone health checks
 - [job.md](job.md) — manual start/stop/restart/reload

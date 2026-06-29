@@ -139,6 +139,10 @@ func Execute(opts ...Options) error {
 		return err
 	}
 
+	if err := ValidateMinAllocationsCount(buildTx, jobWorkspace); err != nil {
+		return err
+	}
+
 	if err := BuildDeploymentSequence(buildTx); err != nil {
 		return err
 	}

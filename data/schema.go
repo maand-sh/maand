@@ -73,7 +73,8 @@ func CheckSchemaVersion() error {
 
 var requiredSchemaColumns = map[string][]string{
 	"job": {
-		"deploy_parallel_count",
+		"max_concurrent_starts",
+		"max_concurrent_upgrades",
 		"health_check",
 		"restart_policy",
 		"restart_globs",
@@ -91,11 +92,11 @@ var requiredSchemaColumns = map[string][]string{
 }
 
 var requiredCatalogViewColumns = map[string][]string{
-	"cat_allocations":   {"alloc_id", "worker_ip", "job", "disabled", "removed", "new_version"},
+	"cat_allocations":   {"alloc_id", "worker_ip", "job", "disabled", "removed", "new_version", "zone"},
 	"cat_jobs":          {"job_id", "name", "version", "disabled", "deployment_seq", "selectors", "current_memory_mb", "current_memory_source", "current_cpu_mhz", "current_cpu_source"},
 	"cat_job_commands":  {"job", "command_name", "executed_on", "demand_job", "demand_command", "demand_config"},
 	"cat_kv":            {"namespace", "key", "value", "version", "ttl", "created_date", "deleted"},
-	"cat_workers":       {"worker_id", "worker_ip", "available_memory_mb", "available_cpu_mhz", "position", "labels"},
+	"cat_workers":       {"worker_id", "worker_ip", "available_memory_mb", "available_cpu_mhz", "position", "labels", "zone"},
 	"cat_deployments":   {"alloc_id", "worker_ip", "job", "disabled", "removed", "current_hash", "previous_hash", "current_version", "new_version"},
 }
 
@@ -235,7 +236,7 @@ func migrateToV1(tx *sql.Tx) error {
 	if err := ensureTableColumn(tx, "job", "health_check", `ALTER TABLE job ADD COLUMN health_check TEXT`); err != nil {
 		return err
 	}
-	if err := ensureTableColumn(tx, "job", "deploy_parallel_count", `ALTER TABLE job ADD COLUMN deploy_parallel_count INT NOT NULL DEFAULT 0`); err != nil {
+	if err := migrateJobRolloutColumns(tx); err != nil {
 		return err
 	}
 	if err := ensureTableColumn(tx, "job", "restart_policy", `ALTER TABLE job ADD COLUMN restart_policy TEXT NOT NULL DEFAULT 'always'`); err != nil {
@@ -260,6 +261,43 @@ func migrateToV1(tx *sql.Tx) error {
 		return err
 	}
 	return ensureCatDeploymentsView(tx)
+}
+
+func migrateJobRolloutColumns(tx *sql.Tx) error {
+	if err := ensureTableColumn(tx, "job", "update_parallel_count", `ALTER TABLE job ADD COLUMN update_parallel_count INT NOT NULL DEFAULT 1`); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "job", "deploy_parallel_count", `ALTER TABLE job ADD COLUMN deploy_parallel_count INT NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := renameTableColumn(tx, "job", "update_parallel_count", "max_concurrent_upgrades"); err != nil {
+		return err
+	}
+	if err := renameTableColumn(tx, "job", "deploy_parallel_count", "max_concurrent_starts"); err != nil {
+		return err
+	}
+	if err := ensureTableColumn(tx, "job", "max_concurrent_upgrades", `ALTER TABLE job ADD COLUMN max_concurrent_upgrades INT NOT NULL DEFAULT 1`); err != nil {
+		return err
+	}
+	return ensureTableColumn(tx, "job", "max_concurrent_starts", `ALTER TABLE job ADD COLUMN max_concurrent_starts INT NOT NULL DEFAULT 0`)
+}
+
+func renameTableColumn(tx *sql.Tx, table, from, to string) error {
+	var fromCount, toCount int
+	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, from).Scan(&fromCount); err != nil {
+		return bucket.DatabaseError(err)
+	}
+	if err := tx.QueryRow(`SELECT count(*) FROM pragma_table_info(?) WHERE name = ?`, table, to).Scan(&toCount); err != nil {
+		return bucket.DatabaseError(err)
+	}
+	if fromCount == 0 || toCount > 0 {
+		return nil
+	}
+	_, err := tx.Exec(fmt.Sprintf(`ALTER TABLE %s RENAME COLUMN %s TO %s`, table, from, to))
+	if err != nil {
+		return bucket.DatabaseError(err)
+	}
+	return nil
 }
 
 func ensureCatDeploymentsView(tx *sql.Tx) error {
@@ -333,8 +371,8 @@ func baseTableDDL() []string {
 			max_cpu_mhz TEXT,
 			current_cpu_mhz TEXT,
 			current_cpu_source TEXT NOT NULL DEFAULT 'manifest',
-			update_parallel_count INT,
-			deploy_parallel_count INT NOT NULL DEFAULT 0,
+			max_concurrent_upgrades INT NOT NULL DEFAULT 1,
+			max_concurrent_starts INT NOT NULL DEFAULT 0,
 			restart_policy TEXT NOT NULL DEFAULT 'always',
 			restart_globs TEXT NOT NULL DEFAULT '[]',
 			health_check TEXT,
@@ -382,8 +420,12 @@ func recreateCatalogViews(tx *sql.Tx) error {
 		`DROP VIEW IF EXISTS cat_job_commands`,
 		`DROP VIEW IF EXISTS cat_kv`,
 		`DROP VIEW IF EXISTS cat_workers`,
-		`CREATE VIEW cat_allocations (alloc_id, worker_ip, job, disabled, removed, new_version) AS
-			SELECT alloc_id, worker_ip, job, disabled, removed, new_version FROM allocations ORDER BY job`,
+		`CREATE VIEW cat_allocations (alloc_id, worker_ip, job, disabled, removed, new_version, zone) AS
+			SELECT a.alloc_id, a.worker_ip, a.job, a.disabled, a.removed, a.new_version,
+				(SELECT wt.value FROM worker_tags wt
+				 JOIN worker w ON w.worker_id = wt.worker_id
+				 WHERE w.worker_ip = a.worker_ip AND wt.key = 'zone') AS zone
+			FROM allocations a ORDER BY job`,
 		`CREATE VIEW cat_jobs (job_id, name, version, disabled, deployment_seq, selectors, current_memory_mb, current_memory_source, current_cpu_mhz, current_cpu_source) AS
 			SELECT DISTINCT job_id, name, version,
 				(CASE WHEN (SELECT COUNT(1) FROM allocations wj WHERE j.name = wj.job AND wj.disabled = 0) > 0 THEN 0 ELSE 1 END) AS disabled,
@@ -405,9 +447,10 @@ func recreateCatalogViews(tx *sql.Tx) error {
 					max(version) as version, ttl, created_date, deleted
 				FROM key_value GROUP BY namespace, key
 			) t ORDER BY namespace, key`,
-		`CREATE VIEW cat_workers (worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position, labels) AS
-			SELECT worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position,
-				(SELECT group_concat(label) AS labels FROM worker_labels WHERE worker_id = w.worker_id) AS labels
+		`CREATE VIEW cat_workers (worker_id, worker_ip, available_memory_mb, available_cpu_mhz, position, labels, zone) AS
+			SELECT w.worker_id, w.worker_ip, w.available_memory_mb, w.available_cpu_mhz, w.position,
+				(SELECT group_concat(label) AS labels FROM worker_labels WHERE worker_id = w.worker_id) AS labels,
+				(SELECT wt.value FROM worker_tags wt WHERE wt.worker_id = w.worker_id AND wt.key = 'zone') AS zone
 			FROM worker w ORDER BY position`,
 	}
 	return execStatements(tx, views)

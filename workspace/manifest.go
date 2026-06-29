@@ -44,20 +44,26 @@ func (m Manifest) JobVersion() string {
 	return m.Version
 }
 
-// ParallelDeployCount returns first-deploy batch size; 0 means all allocations in one batch.
-func (m Manifest) ParallelDeployCount() int {
-	if m.DeployParallelCount < 0 {
+// GetMaxConcurrentStarts returns max_concurrent_starts (0 = all-at-once on first deploy).
+func GetMaxConcurrentStarts(manifest Manifest) int {
+	if manifest.MaxConcurrentStarts < 0 {
 		return 0
 	}
-	return m.DeployParallelCount
+	return manifest.MaxConcurrentStarts
 }
 
-// ParallelUpdateCount returns a positive rollout parallelism (minimum 1).
-func (m Manifest) ParallelUpdateCount() int {
-	if m.UpdateParallelCount <= 0 {
+// GetMaxConcurrentUpgrades returns max_concurrent_upgrades (minimum 1).
+func GetMaxConcurrentUpgrades(manifest Manifest) int {
+	if manifest.MaxConcurrentUpgrades <= 0 {
 		return 1
 	}
-	return m.UpdateParallelCount
+	return manifest.MaxConcurrentUpgrades
+}
+func (m Manifest) MinRequiredAllocations() int {
+	if m.MinAllocationsCount < 0 {
+		return 0
+	}
+	return m.MinAllocationsCount
 }
 
 // PlacementSelectors returns worker labels required to place this job.
@@ -124,14 +130,9 @@ func GetCommands(manifest Manifest) []JobCommand {
 	return manifest.ListedCommands()
 }
 
-// GetDeployParallelCount returns manifest deploy_parallel_count (0 = all-at-once on first deploy).
-func GetDeployParallelCount(manifest Manifest) int {
-	return manifest.ParallelDeployCount()
-}
-
-// GetUpdateParallelCount is deprecated; use Manifest.ParallelUpdateCount.
-func GetUpdateParallelCount(manifest Manifest) int {
-	return manifest.ParallelUpdateCount()
+// MinRequiredAllocations returns min_allocations_count (0 when unset).
+func GetMinAllocationsCount(manifest Manifest) int {
+	return manifest.MinRequiredAllocations()
 }
 
 // GetPlacementSelectors returns effective placement selectors for a job.

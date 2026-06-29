@@ -164,14 +164,14 @@ func TestRuntimeAPI_deployOrderPutGet(t *testing.T) {
 
 	put := runtimeRequest(t, tx, http.MethodPut, RouteStoreKeys, storeKeyPayload{
 		Namespace: "maand/job/api",
-		Key:       "deploy_order",
+		Key:       "rollout_order",
 		Value:     "10.0.0.2,10.0.0.1",
 	}, "pre_deploy")
 	require.Equal(t, http.StatusOK, put.Code)
 
 	get := runtimeRequest(t, tx, http.MethodGet, RouteStoreKeys, storeKeyPayload{
 		Namespace: "maand/job/api",
-		Key:       "deploy_order",
+		Key:       "rollout_order",
 	}, "pre_deploy")
 	require.Equal(t, http.StatusOK, get.Code)
 
@@ -185,7 +185,7 @@ func TestRuntimeAPI_deployOrderWriteDeniedWrongEvent(t *testing.T) {
 
 	put := runtimeRequest(t, tx, http.MethodPut, RouteStoreKeys, storeKeyPayload{
 		Namespace: "maand/job/api",
-		Key:       "deploy_order",
+		Key:       "rollout_order",
 		Value:     "10.0.0.1",
 	}, "post_deploy")
 	assert.Equal(t, http.StatusBadRequest, put.Code)
@@ -228,7 +228,7 @@ func TestRuntimeAPI_kvWriteBlockedDuringHealthCheck(t *testing.T) {
 
 	deployOrder := runtimeRequest(t, tx, http.MethodPut, RouteStoreKeys, storeKeyPayload{
 		Namespace: "maand/job/api",
-		Key:       "deploy_order",
+		Key:       "rollout_order",
 		Value:     "10.0.0.1",
 	}, "health_check")
 	assert.Equal(t, http.StatusBadRequest, deployOrder.Code)

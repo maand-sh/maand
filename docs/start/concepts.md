@@ -119,10 +119,10 @@ workspace/jobs/api/
 | `selectors` | Worker **labels** for placement; when omitted, the **job name** is used |
 | `resources.memory` / `cpu` | **Min/max bounds** in the manifest; **actual** memory/CPU for the current environment from `bucket.jobs.conf` or `bucket.jobs.<env>.conf` (selected by `job_config_selector` in `maand.conf`) — [resources-and-placement.md](../reference/resources-and-placement.md) |
 | `resources.ports` | Named ports: `{}` (maand assigns from `bucket.conf` pool) or an integer (fixed in manifest) |
-| `update_parallel_count` | Rolling batch size for **`restart`** / **`reload`** during deploy |
+| `max_concurrent_upgrades` | Rolling batch size for **`restart`** / **`reload`** during deploy |
 | `restart_policy` | `always` / `reload` / `never` — how upgrades apply after rsync ([deploy](../reference/cli/deploy.md#applying-changes-on-workers)) |
 | `restart_globs` | Optional; with `reload`, paths that force **`restart`** when changed |
-| `deploy_parallel_count` | Rolling batch size for **`start`** on first deploy (0 = all at once) |
+| `max_concurrent_starts` | Rolling batch size for **`start`** on first deploy (0 = all at once) |
 | `commands` | Named hooks (`command_*`) with `executed_on` events |
 | `health_check` | Optional built-in probes (tcp/http/ssh) and/or a `health_check` command (probes first) |
 | `certs` | TLS definitions → generated at build, deployed under `jobs/<job>/certs/` — [certs.md](../reference/certs.md) |
@@ -186,7 +186,7 @@ Each allocation tracks catalog **`current_version`** (last promoted, in **`hash`
 
 An allocation is **active** when `removed = 0` and `disabled = 0`. A **disabled** allocation (`removed = 0`, `disabled = 1`) still gets build KV (certs, per-allocation metadata, deploy staging). Deploy **never starts** disabled allocations (no start/restart/reload/rsync). Content and version changes are still staged and promoted; after re-enable, deploy **starts** the allocation.
 
-**KV nuance:** `maand/job/<job>/workers`, `maand/job/<job>/deploy_order`, and `maand/worker/<ip>/jobs` list **active** allocations only. Per-allocation keys such as **`peer_workers`** use **non-removed** peers (disabled peers may still appear). See [KV namespaces](../reference/kv/namespaces.md).
+**KV nuance:** `maand/job/<job>/workers`, `maand/job/<job>/rollout_order`, and `maand/worker/<ip>/jobs` list **active** allocations only. Per-allocation keys such as **`peer_workers`** use **non-removed** peers (disabled peers may still appear). See [KV namespaces](../reference/kv/namespaces.md).
 
 Only **active** allocations receive:
 

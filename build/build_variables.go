@@ -413,7 +413,7 @@ func buildJobVariables(tx *sql.Tx, removedJobs []string, purgeJobCommandKV bool)
 		for idx, workerIP := range workersForVars {
 			variables[fmt.Sprintf("worker_%d", idx)] = workerIP
 		}
-		variables["deploy_order"] = strings.Join(workersForVars, ",")
+		variables["rollout_order"] = strings.Join(workersForVars, ",")
 
 		jobNamespace := fmt.Sprintf("maand/job/%s", jobName)
 		err = syncKeyValues(tx, jobNamespace, variables)

@@ -129,7 +129,7 @@ func TestKVJobFilter(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-vault', 'vault', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '')`)
 	require.NoError(t, err)
 	_, err = db.Exec(`
@@ -197,7 +197,7 @@ func TestKVJobFilterDisabledJob(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-vault', 'vault', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '')`)
 	require.NoError(t, err)
 	_, err = db.Exec(`
@@ -241,7 +241,7 @@ func TestKVJobFilterRemovedOnlyReturnsNotFound(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-gone', 'gone', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '')`)
 	require.NoError(t, err)
 	_, err = db.Exec(`

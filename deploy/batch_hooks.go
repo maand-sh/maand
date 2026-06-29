@@ -27,7 +27,7 @@ type BatchContext struct {
 	BatchIndex      int
 	BatchCount      int
 	BatchAllocation []string
-	DeployOrder     string
+	RolloutOrder    string
 	OrderSource     string
 }
 
@@ -47,8 +47,8 @@ func batchEnv(ctx BatchContext) []string {
 		fmt.Sprintf("BATCH_INDEX=%d", ctx.BatchIndex),
 		fmt.Sprintf("BATCH_COUNT=%d", ctx.BatchCount),
 		fmt.Sprintf("DEPLOY_PHASE=%s", ctx.Phase),
-		fmt.Sprintf("DEPLOY_ORDER=%s", ctx.DeployOrder),
-		fmt.Sprintf("DEPLOY_ORDER_SOURCE=%s", ctx.OrderSource),
+		fmt.Sprintf("ROLLOUT_ORDER=%s", ctx.RolloutOrder),
+		fmt.Sprintf("ROLLOUT_ORDER_SOURCE=%s", ctx.OrderSource),
 		fmt.Sprintf("JOB=%s", ctx.Job),
 	}
 }

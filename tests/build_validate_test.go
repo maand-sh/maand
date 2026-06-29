@@ -50,3 +50,30 @@ func TestBuildRejectsJobMemoryWhenWorkerUnconfigured(t *testing.T) {
 	assert.ErrorIs(t, err, bucket.ErrInsufficientResource)
 	assert.Contains(t, err.Error(), "must specify memory")
 }
+
+func TestBuildRejectsJobBelowMinAllocationsCount(t *testing.T) {
+	initFreshBucket(t)
+	writeWorkersJSON(t, `[{"host":"10.0.0.1"}]`)
+
+	writeMinimalJob(t, "api", `{
+		"selectors": ["worker"],
+		"min_allocations_count": 2
+	}`)
+
+	err := executeBuildErr(t)
+	assert.ErrorIs(t, err, bucket.ErrInsufficientAllocations)
+	assert.Contains(t, err.Error(), "job api has 1 allocation(s)")
+}
+
+func TestBuildAcceptsJobAtMinAllocationsCount(t *testing.T) {
+	initFreshBucket(t)
+	writeWorkersJSON(t, `[{"host":"10.0.0.1"},{"host":"10.0.0.2"}]`)
+
+	writeMinimalJob(t, "api", `{
+		"selectors": ["worker"],
+		"min_allocations_count": 2
+	}`)
+
+	err := executeBuildErr(t)
+	assert.NoError(t, err)
+}

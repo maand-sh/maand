@@ -27,7 +27,7 @@ func TestIntegrationDeployRollingUpgradeOnContentChange(t *testing.T) {
 
 	const parallel = 1
 	setupRollingIntegrationBucket(t, parallel)
-	assert.Equal(t, parallel, jobUpdateParallelCount(t, integrationJobName))
+	assert.Equal(t, parallel, jobMaxConcurrentUpgrades(t, integrationJobName))
 
 	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 	assert.True(t, jobAllocationHashesPromoted(t, integrationJobName))
@@ -69,7 +69,7 @@ func TestIntegrationDeployRollingUpgradeParallelism(t *testing.T) {
 
 	const parallel = 2
 	setupRollingIntegrationBucket(t, parallel)
-	assert.Equal(t, parallel, jobUpdateParallelCount(t, integrationJobName))
+	assert.Equal(t, parallel, jobMaxConcurrentUpgrades(t, integrationJobName))
 
 	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 

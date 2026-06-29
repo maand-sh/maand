@@ -73,10 +73,10 @@ Reference: [deploy.md](../reference/cli/deploy.md#applying-changes-on-workers).
 
 | Manifest field | Controls |
 |----------------|----------|
-| `deploy_parallel_count` | Batch size for **`start`** on first rollout |
-| `update_parallel_count` | Batch size for **`restart`** / **`reload`** on upgrades |
+| `max_concurrent_starts` | Batch size for **`start`** on first rollout |
+| `max_concurrent_upgrades` | Batch size for **`restart`** / **`reload`** on upgrades |
 
-Within each batch, order comes from **`deploy_order`** (KV key, overridable in `pre_deploy`).
+Within each batch, order comes from **`rollout_order`** (KV key, overridable in `pre_deploy`).
 
 Guide: [rolling-deploy.md](../guides/rolling-deploy.md).
 
@@ -86,7 +86,7 @@ Guide: [rolling-deploy.md](../guides/rolling-deploy.md).
 
 | Event | Runs on | Typical use |
 |-------|---------|-------------|
-| `pre_deploy` | CLI host, per allocation | Secrets, `put_deploy_order`, migrations prep |
+| `pre_deploy` | CLI host, per allocation | Secrets, `put_rollout_order`, migrations prep |
 | `post_deploy` | CLI host, per allocation | Notify, KV updates |
 | `after_allocation_started` | CLI host | Post-start validation |
 | `job_control` | CLI host | Replace default start/restart with custom script |

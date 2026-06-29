@@ -349,27 +349,27 @@ func GetJobsWithCommand(tx *sql.Tx, commandName, event string) ([]string, error)
 	return jobs, nil
 }
 
-func GetUpdateParallelCount(tx *sql.Tx, job string) (int, error) {
-	var updateParallelCount int
-	row := tx.QueryRow("SELECT update_parallel_count FROM job WHERE name = ?", job)
-	err := row.Scan(&updateParallelCount)
+func GetMaxConcurrentUpgrades(tx *sql.Tx, job string) (int, error) {
+	var maxConcurrentUpgrades int
+	row := tx.QueryRow("SELECT max_concurrent_upgrades FROM job WHERE name = ?", job)
+	err := row.Scan(&maxConcurrentUpgrades)
 	if err != nil {
 		return 0, bucket.DatabaseError(err)
 	}
-	return updateParallelCount, nil
+	return maxConcurrentUpgrades, nil
 }
 
-func GetDeployParallelCount(tx *sql.Tx, job string) (int, error) {
-	var deployParallelCount int
-	row := tx.QueryRow("SELECT deploy_parallel_count FROM job WHERE name = ?", job)
-	err := row.Scan(&deployParallelCount)
+func GetMaxConcurrentStarts(tx *sql.Tx, job string) (int, error) {
+	var maxConcurrentStarts int
+	row := tx.QueryRow("SELECT max_concurrent_starts FROM job WHERE name = ?", job)
+	err := row.Scan(&maxConcurrentStarts)
 	if err != nil {
 		return 0, bucket.DatabaseError(err)
 	}
-	if deployParallelCount < 0 {
+	if maxConcurrentStarts < 0 {
 		return 0, nil
 	}
-	return deployParallelCount, nil
+	return maxConcurrentStarts, nil
 }
 
 func GetRestartPolicy(tx *sql.Tx, job string) (string, error) {

@@ -20,7 +20,7 @@ Related: [README.md](README.md) (guided tour) · [concepts.md](concepts.md) · [
 | **Environment overrides** | `job_config_selector` in `maand.conf` picks `bucket.jobs.<env>.conf` for per-environment memory/CPU without changing manifests — see [configuration.md](../reference/configuration.md) |
 | **Build** | Reconcile workspace → `maand.db` + KV; validate resources, ports, job dependencies; generate and **auto-rotate TLS** certs; sync `disabled.json`; run **`post_build`** hooks in `deployment_seq` order — see [build.md](../reference/cli/build.md), [certs.md](../reference/certs.md) |
 | **Deploy** | Rsync to workers; Makefile **`start` / `restart` / `reload`** (or **`job_control`**); **`restart_policy`**, **`restart_globs`**, **`--sync-only`**; hash skip and partial resume; **`--dry-run`**, **`--force`**, **`--jobs`**; waves via **`deployment_seq`** — [deploy.md](../reference/cli/deploy.md) |
-| **Rolling upgrades** | `deploy_parallel_count` / `update_parallel_count`, health gates, `deploy_order`; semver version tracking — [guides/rolling-deploy.md](../guides/rolling-deploy.md) |
+| **Rolling upgrades** | `max_concurrent_starts` / `max_concurrent_upgrades`, health gates, `rollout_order`; semver version tracking — [guides/rolling-deploy.md](../guides/rolling-deploy.md) |
 | **Dependencies** | Cross-job **command demands** with version constraints; build computes **`deployment_seq`** and detects circular demands — see [deployment-sequence.md](../reference/deployment-sequence.md) |
 | **Job commands & runtime API** | Python/Bun hooks on the CLI host: `post_build`, `pre_deploy`, `post_deploy`, `job_control`, `health_check`, `after_allocation_started`, `after_allocation_stopped`, **`cli`** — [reference/cli/job-command.md](../reference/cli/job-command.md) |
 | **Health** | Built-in TCP/HTTP/SSH manifest probes and/or custom **`health_check`** commands (probes first); **`--wait`** — see [health-check.md](../reference/cli/health-check.md) |
@@ -48,7 +48,7 @@ See [README.md](../README.md#typical-workflow) for the command sequence.
 | Place jobs on labeled workers | Selectors + allocation auto-match | [concepts.md](concepts.md), [resources-and-placement.md](../reference/resources-and-placement.md) |
 | Different CPU/memory per env | `bucket.jobs.prod.conf` + `job_config_selector` | [configuration.md](../reference/configuration.md) |
 | Ordered multi-job deploy | Command **demands** → `deployment_seq` waves | [deployment-sequence.md](../reference/deployment-sequence.md) |
-| Rolling restart without downtime | `update_parallel_count` + health between batches | [rolling-deploy](../guides/rolling-deploy.md) |
+| Rolling restart without downtime | `max_concurrent_upgrades` + health between batches | [rolling-deploy](../guides/rolling-deploy.md) |
 | Push config without restarting the process | `restart_policy: reload` (+ optional `restart_globs`) | [deploy.md](../reference/cli/deploy.md#applying-changes-on-workers) |
 | Skip redeploy when nothing changed | Content hashes + version promotion per allocation | [deploy.md](../reference/cli/deploy.md), `maand cat deployments` |
 | Bootstrap secrets before templates | `pre_deploy` + `put_job_secret` / runtime API | [job-command-api.md](../reference/job-command-api.md), [KV namespaces](../reference/kv/namespaces.md) |

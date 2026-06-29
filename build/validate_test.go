@@ -6,9 +6,12 @@ package build
 
 import (
 	"database/sql"
+	"os"
+	"path"
 	"testing"
 
 	"maand/bucket"
+	"maand/workspace"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,4 +132,82 @@ func TestValidateWorkerResources_skipsWhenJobHasNoRequirements(t *testing.T) {
 	defer func() { _ = tx.Rollback() }()
 
 	require.NoError(t, ValidateWorkerResources(tx))
+}
+
+func setupValidateMinAllocationsWorkspace(t *testing.T, manifest string) *workspace.DefaultWorkspace {
+	t.Helper()
+	root := t.TempDir()
+	orig := bucket.Location
+	bucket.Location = root
+	bucket.UpdatePath()
+	t.Cleanup(func() {
+		bucket.Location = orig
+		bucket.UpdatePath()
+	})
+
+	jobDir := path.Join(bucket.WorkspaceLocation, "jobs", "app")
+	require.NoError(t, os.MkdirAll(jobDir, 0o755))
+	require.NoError(t, os.WriteFile(path.Join(jobDir, "manifest.json"), []byte(manifest), 0o644))
+	return workspace.Default()
+}
+
+func TestValidateMinAllocationsCount_rejectsWhenBelowMinimum(t *testing.T) {
+	db := openValidateTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := db.Exec(`
+		INSERT INTO allocations (job, worker_ip, removed, disabled) VALUES ('app', '10.0.0.1', 0, 0);
+	`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+
+	jobWorkspace := setupValidateMinAllocationsWorkspace(t, `{"min_allocations_count":2}`)
+
+	err = ValidateMinAllocationsCount(tx, jobWorkspace)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, bucket.ErrInsufficientAllocations)
+	assert.Contains(t, err.Error(), "job app has 1 allocation(s)")
+}
+
+func TestValidateMinAllocationsCount_skipsRemovedAllocations(t *testing.T) {
+	db := openValidateTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := db.Exec(`
+		INSERT INTO allocations (job, worker_ip, removed, disabled) VALUES ('app', '10.0.0.1', 0, 0);
+		INSERT INTO allocations (job, worker_ip, removed, disabled) VALUES ('app', '10.0.0.2', 1, 0);
+	`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+
+	jobWorkspace := setupValidateMinAllocationsWorkspace(t, `{"min_allocations_count":2}`)
+
+	err = ValidateMinAllocationsCount(tx, jobWorkspace)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "job app has 1 allocation(s)")
+}
+
+func TestValidateMinAllocationsCount_passesWhenMinimumMet(t *testing.T) {
+	db := openValidateTestDB(t)
+	defer func() { _ = db.Close() }()
+
+	_, err := db.Exec(`
+		INSERT INTO allocations (job, worker_ip, removed, disabled) VALUES ('app', '10.0.0.1', 0, 0);
+		INSERT INTO allocations (job, worker_ip, removed, disabled) VALUES ('app', '10.0.0.2', 0, 1);
+	`)
+	require.NoError(t, err)
+
+	tx, err := db.Begin()
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+
+	jobWorkspace := setupValidateMinAllocationsWorkspace(t, `{"min_allocations_count":2}`)
+
+	require.NoError(t, ValidateMinAllocationsCount(tx, jobWorkspace))
 }

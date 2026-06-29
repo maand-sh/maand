@@ -40,7 +40,7 @@ func TestMigrateSchemaUpgradesLegacyColumns(t *testing.T) {
 			job_id TEXT, name TEXT, version TEXT,
 			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
 			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
-			update_parallel_count INT,
+			max_concurrent_upgrades INT,
 			PRIMARY KEY(name)
 		);
 	`)
@@ -54,7 +54,7 @@ func TestMigrateSchemaUpgradesLegacyColumns(t *testing.T) {
 	assert.Equal(t, 1, columnExists(t, db, "allocations", "new_version"))
 	assert.Equal(t, 1, columnExists(t, db, "hash", "current_version"))
 	assert.Equal(t, 1, columnExists(t, db, "job", "health_check"))
-	assert.Equal(t, 1, columnExists(t, db, "job", "deploy_parallel_count"))
+	assert.Equal(t, 1, columnExists(t, db, "job", "max_concurrent_starts"))
 	assert.Equal(t, 1, columnExists(t, db, "job", "restart_policy"))
 	assert.Equal(t, 1, columnExists(t, db, "job", "restart_globs"))
 	assert.Equal(t, 1, columnExists(t, db, "job", "current_memory_source"))
@@ -155,7 +155,7 @@ func TestMigrateToV1IsIdempotent(t *testing.T) {
 	assert.Equal(t, 0, viewExists(t, db, "cat_hashes"))
 }
 
-func TestMigrateToV1AddsDeployParallelCount(t *testing.T) {
+func TestMigrateToV1AddsMaxConcurrentStarts(t *testing.T) {
 	db, err := sql.Open("sqlite3", "file:migratev1deploy?mode=memory&cache=shared")
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
@@ -175,7 +175,7 @@ func TestMigrateToV1AddsDeployParallelCount(t *testing.T) {
 			job_id TEXT, name TEXT, version TEXT,
 			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
 			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
-			update_parallel_count INT,
+			max_concurrent_upgrades INT,
 			PRIMARY KEY(name)
 		);
 	`)
@@ -183,13 +183,13 @@ func TestMigrateToV1AddsDeployParallelCount(t *testing.T) {
 
 	tx, err := db.Begin()
 	require.NoError(t, err)
-	_, err = tx.Exec(`INSERT INTO job (job_id, name, version, update_parallel_count) VALUES ('job-api', 'api', '1.0.0', 1)`)
+	_, err = tx.Exec(`INSERT INTO job (job_id, name, version, max_concurrent_upgrades) VALUES ('job-api', 'api', '1.0.0', 1)`)
 	require.NoError(t, err)
 	require.NoError(t, migrateToV1(tx))
 	require.NoError(t, tx.Commit())
 
 	var deployParallel int
-	err = db.QueryRow(`SELECT deploy_parallel_count FROM job WHERE name = 'api'`).Scan(&deployParallel)
+	err = db.QueryRow(`SELECT max_concurrent_starts FROM job WHERE name = 'api'`).Scan(&deployParallel)
 	require.NoError(t, err)
 	assert.Equal(t, 0, deployParallel)
 }
@@ -361,7 +361,7 @@ func TestMigrateToV1AddsSchemaVersionTable(t *testing.T) {
 			job_id TEXT, name TEXT, version TEXT,
 			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
 			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
-			update_parallel_count INT,
+			max_concurrent_upgrades INT,
 			PRIMARY KEY(name)
 		);
 	`)
@@ -398,7 +398,7 @@ func TestMigrateToV1WithPreexistingColumns(t *testing.T) {
 			job_id TEXT, name TEXT, version TEXT,
 			min_memory_mb TEXT, max_memory_mb TEXT, current_memory_mb TEXT,
 			min_cpu_mhz TEXT, max_cpu_mhz TEXT, current_cpu_mhz TEXT,
-			update_parallel_count INT, deploy_parallel_count INT NOT NULL DEFAULT 0, health_check TEXT,
+			max_concurrent_upgrades INT, max_concurrent_starts INT NOT NULL DEFAULT 0, health_check TEXT,
 			PRIMARY KEY(name)
 		);
 	`)

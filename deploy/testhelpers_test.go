@@ -103,7 +103,7 @@ func (e *deployTestEnv) insertJob(t *testing.T, tx *sql.Tx, jobName string, depl
 	jobID := "job-" + jobName
 	_, err := tx.Exec(
 		`INSERT INTO job (job_id, name, version, min_memory_mb, max_memory_mb, current_memory_mb,
-		 min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, update_parallel_count)
+		 min_cpu_mhz, max_cpu_mhz, current_cpu_mhz, max_concurrent_upgrades)
 		 VALUES (?, ?, '1', '128', '256', '128', '100', '200', '100', ?)`,
 		jobID, jobName, updateParallel,
 	)

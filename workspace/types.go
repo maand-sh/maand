@@ -52,9 +52,10 @@ type Manifest struct {
 		One     bool        `json:"one"`
 		Subject CertSubject `json:"subject"`
 	} `json:"certs"`
-	HealthCheck         *ManifestHealthCheck `json:"health_check,omitempty"`
-	UpdateParallelCount int                  `json:"update_parallel_count"`
-	DeployParallelCount int                  `json:"deploy_parallel_count"`
-	RestartPolicy       string               `json:"restart_policy,omitempty"`
-	RestartGlobs        []string             `json:"restart_globs,omitempty"`
+	HealthCheck           *ManifestHealthCheck `json:"health_check,omitempty"`
+	MaxConcurrentUpgrades int                  `json:"max_concurrent_upgrades"`
+	MaxConcurrentStarts   int                  `json:"max_concurrent_starts"`
+	MinAllocationsCount   int                  `json:"min_allocations_count"`
+	RestartPolicy         string               `json:"restart_policy,omitempty"`
+	RestartGlobs          []string             `json:"restart_globs,omitempty"`
 }

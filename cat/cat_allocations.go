@@ -75,9 +75,9 @@ func Allocations(jobsCSV, workersCSV string) error {
 		return bucket.DatabaseError(err)
 	}
 
-	t := utils.GetTable(table.Row{"allocation_id", "worker_ip", "job", "disabled", "removed"})
+	t := utils.GetTable(table.Row{"allocation_id", "worker_ip", "zone", "job", "disabled", "removed"})
 
-	query = "SELECT alloc_id, worker_ip, job, disabled, removed FROM cat_allocations"
+	query = "SELECT alloc_id, worker_ip, job, disabled, removed, zone FROM cat_allocations"
 	if len(jobsFilter) > 0 || len(workersFilter) > 0 {
 		query = fmt.Sprintf("%s WHERE", query)
 	}
@@ -106,13 +106,14 @@ func Allocations(jobsCSV, workersCSV string) error {
 		var job string
 		var disabled int
 		var removed int
+		var zone sql.NullString
 
-		err = rows.Scan(&allocID, &workerIP, &job, &disabled, &removed)
+		err = rows.Scan(&allocID, &workerIP, &job, &disabled, &removed, &zone)
 		if err != nil {
 			return bucket.DatabaseError(err)
 		}
 
-		t.AppendRows([]table.Row{{allocID, workerIP, job, disabled, removed}})
+		t.AppendRows([]table.Row{{allocID, workerIP, zone.String, job, disabled, removed}})
 	}
 	if err := data.RowsErr(rows); err != nil {
 		return err

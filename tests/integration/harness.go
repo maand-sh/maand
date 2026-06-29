@@ -389,7 +389,7 @@ func writeRollingIntegrationJob(t *testing.T, updateParallel int) {
 	t.Helper()
 	jobDir := filepath.Join(bucket.WorkspaceLocation, "jobs", integrationJobName)
 	require.NoError(t, os.MkdirAll(jobDir, 0o755))
-	manifest := fmt.Sprintf(`{"selectors":["worker"],"update_parallel_count":%d}`, updateParallel)
+	manifest := fmt.Sprintf(`{"selectors":["worker"],"max_concurrent_upgrades":%d}`, updateParallel)
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "manifest.json"), []byte(manifest), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(jobDir, "Makefile"), []byte(integrationMakefile()), 0o644))
 }
@@ -404,7 +404,7 @@ func setupRollingIntegrationBucket(t *testing.T, updateParallel int) {
 	executeBuild(t)
 }
 
-func jobUpdateParallelCount(t *testing.T, job string) int {
+func jobMaxConcurrentUpgrades(t *testing.T, job string) int {
 	t.Helper()
 	db, err := data.OpenDatabase(true)
 	require.NoError(t, err)
@@ -414,7 +414,7 @@ func jobUpdateParallelCount(t *testing.T, job string) int {
 	require.NoError(t, err)
 	defer func() { _ = tx.Rollback() }()
 
-	count, err := data.GetUpdateParallelCount(tx, job)
+	count, err := data.GetMaxConcurrentUpgrades(tx, job)
 	require.NoError(t, err)
 	return count
 }

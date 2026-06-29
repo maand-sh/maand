@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestResolveDeployOrder_usesKVWhenValid(t *testing.T) {
+func TestResolveRolloutOrder_usesKVWhenValid(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
@@ -19,16 +19,16 @@ func TestResolveDeployOrder_usesKVWhenValid(t *testing.T) {
 	tx = env.begin(t)
 	require.NoError(t, kv.Initialize(tx))
 	store := kv.GetKVStore()
-	store.Put("maand/job/app", "deploy_order", "10.0.0.2,10.0.0.1", 0)
+	store.Put("maand/job/app", "rollout_order", "10.0.0.2,10.0.0.1", 0)
 
-	resolved, err := ResolveDeployOrder(tx, "app", []string{"10.0.0.1", "10.0.0.2"})
+	resolved, err := ResolveRolloutOrder(tx, "app", []string{"10.0.0.1", "10.0.0.2"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"10.0.0.2", "10.0.0.1"}, resolved.Ordered)
 	assert.Equal(t, orderSourceKV, resolved.Source)
 	require.NoError(t, tx.Rollback())
 }
 
-func TestResolveDeployOrder_fallbackOnMismatch(t *testing.T) {
+func TestResolveRolloutOrder_fallbackOnMismatch(t *testing.T) {
 	env := setupDeployTestEnv(t)
 	tx := env.begin(t)
 	env.seedMakefileJob(t, tx, "app", "10.0.0.1", 0)
@@ -39,9 +39,9 @@ func TestResolveDeployOrder_fallbackOnMismatch(t *testing.T) {
 	tx = env.begin(t)
 	require.NoError(t, kv.Initialize(tx))
 	store := kv.GetKVStore()
-	store.Put("maand/job/app", "deploy_order", "10.0.0.1", 0)
+	store.Put("maand/job/app", "rollout_order", "10.0.0.1", 0)
 
-	resolved, err := ResolveDeployOrder(tx, "app", []string{"10.0.0.1", "10.0.0.2"})
+	resolved, err := ResolveRolloutOrder(tx, "app", []string{"10.0.0.1", "10.0.0.2"})
 	require.NoError(t, err)
 	assert.Equal(t, orderSourceDefault, resolved.Source)
 	assert.Equal(t, []string{"10.0.0.1", "10.0.0.2"}, resolved.Ordered)
@@ -55,11 +55,11 @@ func TestBatchEnv(t *testing.T) {
 		BatchIndex:      1,
 		BatchCount:      3,
 		BatchAllocation: []string{"10.0.0.2"},
-		DeployOrder:     "10.0.0.2,10.0.0.1",
+		RolloutOrder:     "10.0.0.2,10.0.0.1",
 		OrderSource:     orderSourceKV,
 	})
 	assert.Contains(t, env, "BATCH_ALLOCATIONS=10.0.0.2")
 	assert.Contains(t, env, "BATCH_INDEX=1")
 	assert.Contains(t, env, "DEPLOY_PHASE=new")
-	assert.Contains(t, env, "DEPLOY_ORDER_SOURCE=kv")
+	assert.Contains(t, env, "ROLLOUT_ORDER_SOURCE=kv")
 }

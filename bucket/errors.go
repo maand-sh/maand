@@ -31,6 +31,7 @@ var (
 	ErrJobCommandFileNotFound           = errors.New("job command file not found")
 	ErrInvalidJob                       = errors.New("invalid job")
 	ErrInsufficientResource             = errors.New("insufficient resource")
+	ErrInsufficientAllocations          = errors.New("missing allocations")
 	ErrHealthCheckFailed                = errors.New("health check failed")
 	ErrUnsupportedResourceConfiguration = errors.New("unsupported resource configuration")
 	ErrRunCommand                       = errors.New("run command failed")

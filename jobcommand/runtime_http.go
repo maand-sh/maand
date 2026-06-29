@@ -65,7 +65,7 @@ func validateStoreKeyWrite(payload storeKeyPayload, jobName, event string) *apiR
 	if payload.Namespace == varsNamespace {
 		return nil
 	}
-	if payload.Namespace == kv.JobCatalogNamespace(jobName) && payload.Key == kv.DeployOrderKey {
+	if payload.Namespace == kv.JobCatalogNamespace(jobName) && payload.Key == kv.RolloutOrderKey {
 		if _, ok := deployOrderWriteEvents[event]; !ok {
 			return runtimeAPIErrors.namespaceDenied
 		}

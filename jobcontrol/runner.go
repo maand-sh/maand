@@ -41,7 +41,7 @@ func runRunnerTarget(
 		return nil
 	}
 
-	parallelBatchCount, err := data.GetUpdateParallelCount(tx, job)
+	parallelBatchCount, err := data.GetMaxConcurrentUpgrades(tx, job)
 	if err != nil {
 		return &JobRunError{Job: job, Target: target, Err: err}
 	}

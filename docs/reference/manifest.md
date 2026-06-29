@@ -38,8 +38,9 @@ maand cat job_commands
 |-------|---------|
 | `version` | Semver-like release id; see [Version](#version) |
 | `selectors` | Worker **labels** required for placement (all must match). When omitted, the **job name** is used — see [Placement selectors](#placement-selectors). |
-| `update_parallel_count` | Rolling **restart** batch size during deploy (default **1**) |
-| `deploy_parallel_count` | Rolling **start** batch size on first deploy (**0** = all at once) |
+| `max_concurrent_upgrades` | Rolling **restart** batch size during deploy (default **1**) |
+| `max_concurrent_starts` | Rolling **start** batch size on first deploy (**0** = all at once) |
+| `min_allocations_count` | Minimum non-removed allocations required after placement (default **0** = no minimum) |
 | `restart_policy` | How deploy applies **updated** allocations after rsync: `always`, `reload`, or `never` (default `always`) |
 | `restart_globs` | With `reload` only — globs; matching changed paths trigger `restart` instead of `reload` |
 | `resources` | Memory, CPU, ports — [resources-and-placement.md](resources-and-placement.md) |
@@ -53,8 +54,8 @@ Example:
 {
   "version": "2.1.0",
   "selectors": ["worker"],
-  "update_parallel_count": 2,
-  "deploy_parallel_count": 1,
+  "max_concurrent_upgrades": 2,
+  "max_concurrent_starts": 1,
   "resources": {
     "memory": { "min": "256 mb", "max": "1 gb" },
     "cpu": { "min": "200 mhz", "max": "1000 mhz" },
@@ -145,6 +146,19 @@ Label that worker in **`workers.json`**:
 ```
 
 Shared pool jobs use `"selectors": ["worker"]`. Environment-specific jobs add labels such as `"prod"` / `"staging"` — see [resources-and-placement.md](resources-and-placement.md).
+
+### Minimum allocations
+
+Set **`min_allocations_count`** when a job must land on at least N workers after label matching. Build counts **non-removed** allocation rows (disabled allocations still count) and fails with **`ErrInsufficientAllocations`** when the count is lower than the manifest minimum. Omit the field or set **`0`** for no minimum.
+
+```json
+{
+  "selectors": ["worker"],
+  "min_allocations_count": 2
+}
+```
+
+Typical use: HA services that need replicas across zones — pair with worker **`tags.zone`** and enough workers per zone in `workers.json`.
 
 ---
 
@@ -258,11 +272,11 @@ Requires a **`reload:`** target in the Makefile (and **`restart:`** for glob-tri
 
 | Field / KV | Purpose | Guide |
 |------------|---------|-------|
-| `deploy_parallel_count` | Batch size for **first deploy** starts | [guides/rolling-deploy](../guides/rolling-deploy.md) |
-| `update_parallel_count` | Batch size for **restart** / **reload** upgrades | [guides/rolling-deploy](../guides/rolling-deploy.md) |
+| `max_concurrent_starts` | Batch size for **first deploy** starts | [guides/rolling-deploy](../guides/rolling-deploy.md) |
+| `max_concurrent_upgrades` | Batch size for **restart** / **reload** upgrades | [guides/rolling-deploy](../guides/rolling-deploy.md) |
 | `restart_policy` | `always` / `reload` / `never` on updated allocations | [cli/deploy.md](./cli/deploy.md#applying-changes-on-workers) |
 | `restart_globs` | Critical paths when policy is `reload` | [cli/deploy.md](./cli/deploy.md#applying-changes-on-workers) |
-| `deploy_order` KV | Worker order within batches (build-synced; override via **`put_deploy_order`** in `pre_deploy` or `cli`) | [kv/namespaces.md](./kv/namespaces.md) |
+| `rollout_order` KV | Worker order within batches (build-synced; override via **`put_rollout_order`** in `pre_deploy` or `cli`) | [kv/namespaces.md](./kv/namespaces.md) |
 
 ---
 

@@ -42,12 +42,12 @@ func rolloutStartBatches(
 		return nil
 	}
 
-	resolved, err := ResolveDeployOrder(tx, job, active)
+	resolved, err := ResolveRolloutOrder(tx, job, active)
 	if err != nil {
 		return err
 	}
 
-	parallelism, err := data.GetDeployParallelCount(tx, job)
+	parallelism, err := data.GetMaxConcurrentStarts(tx, job)
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func rolloutStartBatches(
 			BatchIndex:      i / batchSize,
 			BatchCount:      totalBatches,
 			BatchAllocation: append([]string(nil), batch...),
-			DeployOrder:     resolved.FullOrder,
+			RolloutOrder:    resolved.FullOrder,
 			OrderSource:     resolved.Source,
 		}
 		if err := executeAfterAllocationStarted(tx, rt, job, batch, ctx); err != nil {
@@ -100,12 +100,12 @@ func rolloutRestartBatches(
 		return nil
 	}
 
-	resolved, err := ResolveDeployOrder(tx, job, active)
+	resolved, err := ResolveRolloutOrder(tx, job, active)
 	if err != nil {
 		return err
 	}
 
-	parallelism, err := data.GetUpdateParallelCount(tx, job)
+	parallelism, err := data.GetMaxConcurrentUpgrades(tx, job)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func rolloutRestartBatches(
 			BatchIndex:      i / parallelism,
 			BatchCount:      totalBatches,
 			BatchAllocation: append([]string(nil), batch...),
-			DeployOrder:     resolved.FullOrder,
+			RolloutOrder:    resolved.FullOrder,
 			OrderSource:     resolved.Source,
 		}
 		if err := executeAfterAllocationStarted(tx, rt, job, batch, ctx); err != nil {

@@ -298,7 +298,7 @@ maand deploy
 
 ## Rolling upgrades
 
-See [rolling-deploy](rolling-deploy.md) for **`update_parallel_count`**, version-only deploys, and rolling worker reboots.
+See [rolling-deploy](rolling-deploy.md) for **`max_concurrent_upgrades`**, version-only deploys, and rolling worker reboots.
 
 ---
 

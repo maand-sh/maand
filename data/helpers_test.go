@@ -37,7 +37,7 @@ func seedWorkerJobAllocation(t *testing.T, tx *sql.Tx) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-api', 'api', '1.2.3', '128', '256', '128', '100', '200', '100', 1, '');
 		INSERT INTO job_selectors (job_id, selector) VALUES ('job-api', 'web');
 		INSERT INTO job_ports (job_id, name, port) VALUES ('job-api', 'http_port', 8080);

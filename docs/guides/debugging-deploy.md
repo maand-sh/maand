@@ -289,7 +289,7 @@ Full reference (formats, terminal output, flags): [logging](../reference/observa
 - [deploy.md](../reference/cli/deploy.md) — pipeline and failure table
 - [Applying changes on workers](../reference/cli/deploy.md#applying-changes-on-workers) — **`restart_policy`**, **`restart_globs`**, **`--sync-only`**, dry-run actions
 - [disable and drain](disable-and-drain.md) — disable and re-enable
-- [rolling-deploy](rolling-deploy.md) — **`update_parallel_count`** and reboot patterns
+- [rolling-deploy](rolling-deploy.md) — **`max_concurrent_upgrades`** and reboot patterns
 - [health-check.md](../reference/cli/health-check.md)
 - [job-command-api.md](../reference/job-command-api.md) — hook debugging
 - [day-2-ops.md](day-2-ops.md) — operations checklist

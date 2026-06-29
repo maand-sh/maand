@@ -6,8 +6,8 @@ package kv
 
 import "fmt"
 
-// DeployOrderKey is the KV key for rollout worker order under JobCatalogNamespace.
-const DeployOrderKey = "deploy_order"
+// RolloutOrderKey is the KV key for rollout worker order under JobCatalogNamespace.
+const RolloutOrderKey = "rollout_order"
 
 // JobCatalogNamespace returns maand/job/<job> (build-synced catalog metadata).
 func JobCatalogNamespace(job string) string {

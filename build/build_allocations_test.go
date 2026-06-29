@@ -43,7 +43,7 @@ func seedBuildAllocationFixture(t *testing.T, db *sql.DB) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-web', 'web', '1.0.0', '0', '0', '0', '0', '0', '0', 1, ''),
 		          ('job-db', 'db', '2.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO job_selectors (job_id, selector) VALUES ('job-web', 'web'), ('job-db', 'db');
@@ -242,7 +242,7 @@ func TestBuildAllocations_createsNewAllocation(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-web', 'web', '2.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO job_selectors (job_id, selector) VALUES ('job-web', 'web');
 	`)

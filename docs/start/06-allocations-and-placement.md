@@ -30,6 +30,7 @@ Dedicated nodes: a job named `prometheus` on a worker labeled `prometheus` can o
 | `worker_ip` / `job` | The pair |
 | `disabled` | `1` = drained (see below) |
 | `removed` | `1` = soft-deleted (worker or job left workspace) |
+| `zone` | Worker tag `zone` from `workers.json` (empty when unset) |
 
 Inspect:
 
@@ -38,6 +39,8 @@ maand cat allocations
 maand cat allocations --jobs api --workers 10.0.0.1
 maand cat deployments    # hash + version state per allocation
 ```
+
+The **`zone`** column comes from each worker's **`tags.zone`** entry in `workers.json`.
 
 ---
 
@@ -79,6 +82,7 @@ At build, maand checks:
 - Sum of job memory/CPU reservations (from `bucket.jobs*.conf`) against worker capacity
 - Port collisions between jobs
 - Manifest min/max vs assigned reservations
+- **`min_allocations_count`** vs non-removed allocation count per job
 
 Failures stop **build** before any deploy. Details: [resources-and-placement.md](../reference/resources-and-placement.md).
 

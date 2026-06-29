@@ -126,7 +126,7 @@ Ensure **`manifest.json`** includes selectors when the job should run on the sha
 {
   "version": "1.0.0",
   "selectors": ["worker"],
-  "update_parallel_count": 1,
+  "max_concurrent_upgrades": 1,
   "resources": {
     "memory": { "min": "64 mb", "max": "256 mb" },
     "cpu": { "min": "100 mhz", "max": "500 mhz" }
@@ -234,7 +234,7 @@ maand build
 maand deploy
 ```
 
-Deploy compares **content hashes** per allocation and rolls out only jobs that changed. With `update_parallel_count: 2`, lifecycle actions (**restart** or **reload**, per **`restart_policy`**) happen in rolling batches of two workers.
+Deploy compares **content hashes** per allocation and rolls out only jobs that changed. With `max_concurrent_upgrades: 2`, lifecycle actions (**restart** or **reload**, per **`restart_policy`**) happen in rolling batches of two workers.
 
 Each **`make start`**, **`make restart`**, or **`make reload`** receives **`CURRENT_VERSION`** (what was last promoted on that worker) and **`NEW_VERSION`** (the target from your manifest after build). Use them in the Makefile for migrations or upgrade scripts — see [deploy.md](../reference/cli/deploy.md#allocation-version-tracking).
 

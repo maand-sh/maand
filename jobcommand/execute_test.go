@@ -77,7 +77,7 @@ func seedJobCommand(t *testing.T, tx *sql.Tx, job, command, event string) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES (?, ?, '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config)
 		VALUES (?, ?, ?, ?, '', '', '');`,

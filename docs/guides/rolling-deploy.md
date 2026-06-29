@@ -38,8 +38,8 @@ Two manifest fields control rollout batching:
 
 | Field | Phase | Default | Behavior |
 |-------|-------|---------|----------|
-| **`deploy_parallel_count`** | First deploy (**start** new allocations) | `0` (= all at once) | Start new allocations in batches of N; **one health check** after all batches |
-| **`update_parallel_count`** | Upgrades (**restart** / **reload** changed allocations) | `1` | Lifecycle in batches of N; **health check after each batch** when a target runs |
+| **`max_concurrent_starts`** | First deploy (**start** new allocations) | `0` (= all at once) | Start new allocations in batches of N; **one health check** after all batches |
+| **`max_concurrent_upgrades`** | Upgrades (**restart** / **reload** changed allocations) | `1` | Lifecycle in batches of N; **health check after each batch** when a target runs |
 
 In **`workspace/jobs/<job>/manifest.json`**:
 
@@ -47,14 +47,14 @@ In **`workspace/jobs/<job>/manifest.json`**:
 {
   "version": "2.0.0",
   "selectors": ["worker"],
-  "deploy_parallel_count": 2,
-  "update_parallel_count": 2
+  "max_concurrent_starts": 2,
+  "max_concurrent_upgrades": 2
 }
 ```
 
-Both fields use **`deploy_order`** (KV key `maand/job/<job>/deploy_order`, synced from catalog on build) to pick worker order within each batch. Override in **`pre_deploy`** with **`put_deploy_order()`** — see [job-command-api.md](../reference/job-command-api.md). Deploy validates softly and falls back to catalog order if the list is stale.
+Both fields use **`rollout_order`** (KV key `maand/job/<job>/rollout_order`, synced from catalog on build) to pick worker order within each batch. Override in **`pre_deploy`** with **`put_rollout_order()`** — see [job-command-api.md](../reference/job-command-api.md). Deploy validates softly and falls back to catalog order if the list is stale.
 
-Example: job **`api`** on workers `10.0.0.1` … `10.0.0.4` with **`update_parallel_count: 2`** and **`restart_policy: always`**:
+Example: job **`api`** on workers `10.0.0.1` … `10.0.0.4` with **`max_concurrent_upgrades: 2`** and **`restart_policy: always`**:
 
 ```text
 Batch 1: restart 10.0.0.1 and 10.0.0.2 (parallel)
@@ -65,7 +65,7 @@ Batch 2: restart 10.0.0.3 and 10.0.0.4 (parallel)
 
 With **`restart_policy: reload`**, the same batches call **`make reload`** instead (or **`restart`** on workers where **`restart_globs`** matched).
 
-Set **`update_parallel_count`** to the largest restart burst you can tolerate while keeping the service healthy (often 1 for stateful jobs, higher for stateless). Use **`deploy_parallel_count`** the same way for **first deploy** when bringing up a multi-node cluster (Vault, Cassandra, Postgres primaries/replicas).
+Set **`max_concurrent_upgrades`** to the largest restart burst you can tolerate while keeping the service healthy (often 1 for stateful jobs, higher for stateless). Use **`max_concurrent_starts`** the same way for **first deploy** when bringing up a multi-node cluster (Vault, Cassandra, Postgres primaries/replicas).
 
 After each batch start, restart, or reload, maand runs **`after_allocation_started`** hooks (if registered), then the health gate for that phase.
 
@@ -90,7 +90,7 @@ After a successful deploy wave, **`promoteAllocationHash`** sets **`current_vers
 
 ### Deployment sequence (`deployment_seq`)
 
-Jobs with **demands** deploy in waves by **`deployment_seq`** (lower first). Within one sequence value, jobs are independent; each job applies its own **`deploy_parallel_count`** (starts) and **`update_parallel_count`** (restarts).
+Jobs with **demands** deploy in waves by **`deployment_seq`** (lower first). Within one sequence value, jobs are independent; each job applies its own **`max_concurrent_starts`** (starts) and **`max_concurrent_upgrades`** (restarts).
 
 ```bash
 maand cat jobs                    # deployment_seq column

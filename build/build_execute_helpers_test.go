@@ -44,7 +44,7 @@ func TestBuildVariablesSyncsWorkerAndBucketKV(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-api', 'api', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 	`)
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestBuildDeploymentSequenceOrdersJobs(t *testing.T) {
 			job_id, name, version,
 			min_memory_mb, max_memory_mb, current_memory_mb,
 			min_cpu_mhz, max_cpu_mhz, current_cpu_mhz,
-			update_parallel_count, health_check
+			max_concurrent_upgrades, health_check
 		) VALUES ('job-b', 'b', '1.0.0', '0', '0', '0', '0', '0', '0', 1, ''),
 		          ('job-a', 'a', '1.0.0', '0', '0', '0', '0', '0', '0', 1, '');
 		INSERT INTO job_commands (job_id, job, name, executed_on, demand_job, demand_command, demand_config)

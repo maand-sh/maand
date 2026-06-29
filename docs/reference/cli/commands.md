@@ -19,9 +19,9 @@ Configuration files: [configuration.md](../configuration.md) · KV: [KV persiste
 | Command | Summary |
 |---------|---------|
 | `maand info` | Bucket ID, update sequence, counts | [info.md](info.md) |
-| `maand cat workers` | Worker catalog |
+| `maand cat workers` | Worker catalog (includes **`zone`** from `tags.zone`) |
 | `maand cat jobs` | Job catalog (includes **`deployment_seq`**) |
-| `maand cat allocations` | Job × worker rows (`--jobs`, `--workers` filters) |
+| `maand cat allocations` | Job × worker rows (`--jobs`, `--workers` filters; includes worker **`zone`**) |
 | `maand cat deployments` | Allocation `current_hash` / `previous_hash` and rollout state (`--jobs`, `--workers`) |
 | `maand cat job_commands` | Commands from manifests |
 | `maand cat job_ports` | Declared ports per job |

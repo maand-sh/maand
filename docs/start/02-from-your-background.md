@@ -27,7 +27,7 @@ Maand adds a **catalog** (who runs what) and **orchestrated rollouts** on top of
 | Play per host / role | **Job** + **allocation** (job × worker) |
 | `ansible-playbook` push | `maand deploy` (rsync + lifecycle) |
 | Variables per host | KV namespaces + Go **templates** (`.tpl`) rendered at deploy |
-| Handlers / rolling serial | `update_parallel_count`, `deploy_order`, health between batches |
+| Handlers / rolling serial | `max_concurrent_upgrades`, `rollout_order`, health between batches |
 | Vault for secrets | `secrets/job/<job>` in KV (encrypted); `put_job_secret` in hooks |
 
 Maand is **not** a general-purpose CM tool. It optimizes for **declared jobs on a fixed worker pool** with versioned deploys and hash-based skip, not arbitrary ad-hoc playbooks.
@@ -71,7 +71,7 @@ Deploy runs `make start` once per new allocation and `make restart` or `make rel
 | Pod | Your process/container on the worker — outside maand's object model |
 | `kubectl apply` | `maand build` then `maand deploy` |
 | ConfigMap / Secret | KV + templates; encrypted secrets namespace |
-| RollingUpdate | `update_parallel_count` + `maand health_check` between batches |
+| RollingUpdate | `max_concurrent_upgrades` + `maand health_check` between batches |
 | PodDisruptionBudget / drain | `disabled.json` + build + deploy |
 
 Maand has **no pod abstraction**. Identity is **(job, worker IP, alloc_id)**. Good fit when you want K8s-*like* rolling deploys without running a cluster control plane.
@@ -89,7 +89,7 @@ Deeper comparison: [comparison-orchestrators.md](./comparison-orchestrators.md).
 | Allocation | Same word: job instance on one worker |
 | `nomad job run` | `maand deploy` |
 | Consul KV | Maand embedded KV (scoped namespaces) |
-| Update stanza (parallel, canary) | `deploy_parallel_count` / `update_parallel_count`, `job_control` hooks |
+| Update stanza (parallel, canary) | `max_concurrent_starts` / `max_concurrent_upgrades`, `job_control` hooks |
 
 Nomad scales to dynamic scheduling; maand assumes you **named the workers** in advance.
 

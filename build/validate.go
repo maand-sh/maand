@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"maand/bucket"
+	"maand/data"
+	"maand/workspace"
 )
 
 func ValidateWorkerResources(tx *sql.Tx) error {
@@ -65,6 +67,43 @@ func ValidateWorkerResources(tx *sql.Tx) error {
 
 	if len(resourceErrors) != 0 {
 		return fmt.Errorf("%w\n%s", bucket.ErrInsufficientResource, strings.Join(resourceErrors, "\n"))
+	}
+
+	return nil
+}
+
+func ValidateMinAllocationsCount(tx *sql.Tx, jobWorkspace *workspace.DefaultWorkspace) error {
+	jobNames, err := jobWorkspace.GetJobs()
+	if err != nil {
+		return err
+	}
+
+	var validationErrors []string
+	for _, jobName := range jobNames {
+		manifest, err := jobWorkspace.GetJobManifest(jobName)
+		if err != nil {
+			return err
+		}
+
+		minCount := manifest.MinRequiredAllocations()
+		if minCount == 0 {
+			continue
+		}
+
+		count, err := data.CountJobAllocations(tx, jobName, false)
+		if err != nil {
+			return err
+		}
+		if count < minCount {
+			validationErrors = append(validationErrors, fmt.Sprintf(
+				"job %s has %d allocation(s), min_allocations_count is %d",
+				jobName, count, minCount,
+			))
+		}
+	}
+
+	if len(validationErrors) != 0 {
+		return fmt.Errorf("%w\n%s", bucket.ErrInsufficientAllocations, strings.Join(validationErrors, "\n"))
 	}
 
 	return nil

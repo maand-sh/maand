@@ -60,8 +60,8 @@ Workers removed from `workers.json` are marked **`removed`** on allocations (not
 {
   "version": "1.0.0",
   "selectors": ["worker"],
-  "update_parallel_count": 2,
-  "deploy_parallel_count": 0,
+  "max_concurrent_upgrades": 2,
+  "max_concurrent_starts": 0,
   "resources": {
     "memory": { "min": "128 mb", "max": "512 mb" },
     "cpu": { "min": "100 mhz", "max": "500 mhz" },
@@ -91,10 +91,11 @@ Workers removed from `workers.json` are marked **`removed`** on allocations (not
 |-------|---------|
 | `version` | Job version string — see [Job version](#job-version) below |
 | `selectors` | Worker **labels** for placement. When omitted, the **job name** is used (all selectors must match worker labels). |
-| `update_parallel_count` | Rolling restart batch size during **deploy** upgrades (minimum 1; default 1). |
+| `max_concurrent_upgrades` | Rolling restart batch size during **deploy** upgrades (minimum 1; default 1). |
 | `restart_policy` | Default **`always`**. **`reload`** runs `make reload` on upgrades; **`never`** rsyncs without lifecycle. |
 | `restart_globs` | Only with **`reload`**. Changed paths matching a glob run **`restart`** instead of **`reload`**. |
-| `deploy_parallel_count` | Rolling **start** batch size on first deploy (0 = all new allocations at once). |
+| `max_concurrent_starts` | Rolling **start** batch size on first deploy (0 = all new allocations at once). |
+| `min_allocations_count` | Minimum non-removed allocations after placement (0 = no minimum). Build fails when fewer workers match. |
 | `resources.memory` / `cpu` | **Min/max bounds** in manifest; **actual** reservation from `bucket.jobs.conf` or `bucket.jobs.<env>.conf` (`job_config_selector` in `maand.conf`) — [resources-and-placement.md](../resources-and-placement.md). |
 | `resources.ports` | Named ports: `{}` (maand assigns from pool) or integer (fixed; any port number) |
 | `commands` | Named commands (must be prefixed `command_`). |
@@ -298,6 +299,8 @@ After the main commit, build runs every command registered with **`executed_on` 
 
 If allocated jobs require memory or CPU (`resources.memory` / `resources.cpu` in the manifest), each worker hosting those jobs **must** declare `memory` / `cpu` in `workers.json`. Build fails when requirements exceed capacity or when a worker omits capacity while jobs require it.
 
+When **`min_allocations_count`** is set on a job manifest, build fails with **`ErrInsufficientAllocations`** if label matching produces fewer non-removed allocations than the minimum.
+
 ---
 
 ## Database tables touched
@@ -331,6 +334,7 @@ maand cat kv
 | `ErrInvalidPortRange` | Bad `port_min` / `port_max` in `bucket.conf` |
 | `ErrPortRangeExhausted` | No free ports left in the pool |
 | `ErrCircularJobCommandDependency` | Demand cycle between jobs |
+| `ErrInsufficientAllocations` | Job has fewer non-removed allocations than `min_allocations_count` |
 | Worker resource validation | Job memory/CPU exceeds worker capacity, or worker missing memory/CPU when jobs require it |
 
 ---

@@ -131,7 +131,7 @@ func TestExecute_rollingUpgradeParallelismFromJob(t *testing.T) {
 	env.ensureWorker(t, tx, "10.0.0.3", 2)
 	env.insertAllocation(t, tx, "alloc-10.0.0.2", "10.0.0.2", "app", 0, 0, 0)
 	env.insertAllocation(t, tx, "alloc-10.0.0.3", "10.0.0.3", "app", 0, 0, 0)
-	_, err := tx.Exec(`UPDATE job SET update_parallel_count = 2 WHERE name = 'app'`)
+	_, err := tx.Exec(`UPDATE job SET max_concurrent_upgrades = 2 WHERE name = 'app'`)
 	require.NoError(t, err)
 	env.setAllocationHash(t, tx, "app", "alloc-app-10.0.0.1", "n", "o")
 	env.setAllocationHash(t, tx, "app", "alloc-10.0.0.2", "n", "o")
@@ -148,7 +148,7 @@ func TestExecute_rollingUpgradeParallelismFromJob(t *testing.T) {
 	assert.Equal(t, 3, restarts)
 
 	tx = env.begin(t)
-	parallelism, err := data.GetUpdateParallelCount(tx, "app")
+	parallelism, err := data.GetMaxConcurrentUpgrades(tx, "app")
 	require.NoError(t, err)
 	assert.Equal(t, 2, parallelism)
 	require.NoError(t, tx.Rollback())

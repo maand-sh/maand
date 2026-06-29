@@ -14,8 +14,8 @@ func TestManifestDefaults(t *testing.T) {
 	if m.JobVersion() != "unknown" {
 		t.Fatalf("JobVersion: %q", m.JobVersion())
 	}
-	if m.ParallelUpdateCount() != 1 {
-		t.Fatalf("ParallelUpdateCount: %d", m.ParallelUpdateCount())
+	if GetMaxConcurrentUpgrades(m) != 1 {
+		t.Fatalf("GetMaxConcurrentUpgrades: %d", GetMaxConcurrentUpgrades(m))
 	}
 }
 

@@ -32,6 +32,7 @@ Edit **`workspace/workers.json`**:
 | `labels` | Placement tags — jobs match via **selectors** (chapter 6) |
 | `memory` / `cpu` | Capacity for resource validation at build |
 | `tags` | Metadata → KV `maand/worker/<ip>/tags/<key>` for templates |
+| `tags.zone` | Shown as **`zone`** in `maand cat workers` and `maand cat allocations` |
 
 Maand automatically adds the label **`worker`** to every host. You typically include `"worker"` in job selectors for a shared pool.
 
