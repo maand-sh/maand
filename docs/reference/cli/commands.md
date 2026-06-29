@@ -160,7 +160,7 @@ See [job-command.md](job-command.md) and [job-command-api.md](../job-command-api
 ## `maand health_check`
 
 ```bash
-maand health_check [--jobs j1,j2] [--wait] [--verbose] [--update-hash]
+maand health_check [--jobs j1,j2] [--wait] [--verbose]
 ```
 
 | Flag | Description |
@@ -168,7 +168,6 @@ maand health_check [--jobs j1,j2] [--wait] [--verbose] [--update-hash]
 | `--jobs` | Limit to named jobs |
 | `--wait` | Retry until pass (up to 30 attempts per job) |
 | `--verbose` | Stream command output |
-| `--update-hash` | Mark failed allocations for redeploy (command-based health only) |
 
 See [health-check.md](health-check.md).
 

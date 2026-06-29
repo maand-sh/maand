@@ -54,7 +54,7 @@ func TestIntegrationHealthCheck(t *testing.T) {
 	setupFullIntegrationBucket(t)
 	require.NoError(t, deploy.Execute(nil, deploy.Options{}))
 
-	require.NoError(t, healthcheck.Execute(false, true, integrationJobName, false))
+	require.NoError(t, healthcheck.Execute(false, true, integrationJobName))
 }
 
 func TestIntegrationJobCommandCLI(t *testing.T) {

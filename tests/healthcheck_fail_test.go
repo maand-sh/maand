@@ -22,7 +22,7 @@ func TestHealthCheckFailsForUnknownJobFilter(t *testing.T) {
 	writeMinimalJob(t, "app", `{"selectors":["worker"]}`)
 	runBuild(t)
 
-	err := healthcheck.Execute(false, false, "missing", false)
+	err := healthcheck.Execute(false, false, "missing")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "jobs not in this bucket")
 }

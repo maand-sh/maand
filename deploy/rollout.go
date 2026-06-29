@@ -77,7 +77,7 @@ func rolloutStartBatches(
 		}
 	}
 
-	_, err = healthcheck.HealthCheck(tx, rt, true, false, job, true)
+	err = healthcheck.HealthCheck(tx, rt, true, job, true)
 	return err
 }
 
@@ -135,7 +135,7 @@ func rolloutRestartBatches(
 		if err := executeAfterAllocationStarted(tx, rt, job, batch, ctx); err != nil {
 			return err
 		}
-		if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
+		if err := healthcheck.HealthCheck(tx, rt, true, job, true); err != nil {
 			return err
 		}
 	}

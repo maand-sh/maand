@@ -60,7 +60,7 @@ func runJobControlCommands(
 	}
 
 	if healthCheck {
-		if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
+		if err := healthcheck.HealthCheck(tx, rt, true, job, true); err != nil {
 			return true, &JobRunError{Job: job, Target: target, Err: err}
 		}
 	}

@@ -24,9 +24,8 @@ its health_check commands pass or the retry limit is reached.`,
 		wait, _ := flags.GetBool("wait")
 		jobsComma, _ := flags.GetString("jobs")
 		verbose, _ := flags.GetBool("verbose")
-		updateHash, _ := flags.GetBool("update-hash")
 
-		if err := healthcheck.Execute(wait, verbose, jobsComma, updateHash); err != nil {
+		if err := healthcheck.Execute(wait, verbose, jobsComma); err != nil {
 			log.Fatalln(err)
 		}
 	},
@@ -37,9 +36,4 @@ func init() {
 	healthCheckCmd.Flags().Bool("verbose", false, "Stream command output from workers")
 	healthCheckCmd.Flags().Bool("wait", false, "Retry until health checks pass (up to 30 attempts per job)")
 	healthCheckCmd.Flags().String("jobs", "", "Comma-separated job names (default: all jobs)")
-	healthCheckCmd.Flags().Bool(
-		"update-hash",
-		false,
-		"Mark failed allocations for redeploy when health_check commands fail",
-	)
 }

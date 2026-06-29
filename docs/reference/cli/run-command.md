@@ -21,6 +21,7 @@ Examples:
 maand run_command "uptime"
 maand run_command "df -h /opt/worker" --workers 10.0.0.1,10.0.0.2
 maand run_command "hostname" --concurrency 4
+maand run_command "make -s -C jobs/api logs" --workers 10.0.0.1
 ```
 
 ## Prerequisites

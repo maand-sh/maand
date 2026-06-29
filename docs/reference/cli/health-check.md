@@ -29,7 +29,6 @@ maand health_check [flags]
 | `--jobs` | all jobs | Comma-separated job names. Unknown names error. |
 | `--wait` | false | Retry until success or **30 attempts** (1 second apart). |
 | `--verbose` | false | Stream command output. |
-| `--update-hash` | false | Mark failed allocations for redeploy when **`health_check` commands** fail (manifest probes only; no effect). |
 
 Examples:
 
@@ -37,7 +36,6 @@ Examples:
 maand health_check
 maand health_check --jobs api,worker
 maand health_check --jobs api --wait --verbose
-maand health_check --update-hash --jobs vault
 ```
 
 ---
@@ -150,7 +148,7 @@ Run jobs in parallel (up to 4 jobs at a time)
     Manifest health_check probes (tcp/http/ssh per allocation), if defined
     Then each health_check command (in DB order), if defined:
       jobcommand.JobCommand(..., event="health_check", concurrency=1)
-Commit transaction on success (or on failure when --update-hash marked allocations)
+Commit transaction on success
 ```
 
 ### Per-allocation execution
@@ -182,29 +180,14 @@ Without `--wait`, a single failure prints `health check failed: <job>` and retur
 
 ---
 
-## `--update-hash` and redeploy
-
-When **`--update-hash`** is set and a **`health_check` command** exits non-zero on a worker, that allocation is marked for redeploy (`previous_hash` diverges from `current_hash`). Marks are **committed even when the health check fails**.
-
-Does **not** apply to manifest probe failures — use **`maand deploy --force`** to roll those jobs again.
-
-```bash
-maand health_check --update-hash --jobs vault   # command-based jobs
-maand deploy --jobs vault                       # restarts marked allocations only
-
-maand deploy --force --jobs cassandra           # force full redeploy (e.g. after manifest probe issues)
-```
-
----
-
 ## Relationship to deploy
 
-| Context | `wait` | `verbose` | `--update-hash` |
-|---------|--------|-----------|-----------------|
-| `maand health_check` | User-controlled (`--wait`) | User-controlled (`--verbose`) | CLI only |
-| Deploy after **restart** / **job_control** | **true** (wait for recovery) | **true** | not used |
+| Context | `wait` | `verbose` |
+|---------|--------|-----------|
+| `maand health_check` | User-controlled (`--wait`) | User-controlled (`--verbose`) |
+| Deploy after **restart** / **job_control** | **true** (wait for recovery) | **true** |
 
-Production deploy waits for health to pass after rolling updates; ad-hoc CLI checks can be one-shot unless you pass `--wait`. See [`deploy.md`](deploy.md#which-jobs-run-in-a-deploy-wave) for **`--force`**.
+Production deploy waits for health to pass after rolling updates; ad-hoc CLI checks can be one-shot unless you pass `--wait`. Use **`maand deploy --force`** to redeploy without a workspace change. See [`deploy.md`](deploy.md#which-jobs-run-in-a-deploy-wave).
 
 ---
 
@@ -253,13 +236,6 @@ maand health_check --jobs myservice --verbose
 
 ```bash
 maand health_check --wait && echo OK
-```
-
-**Mark unhealthy nodes for redeploy** (command-based health only):
-
-```bash
-maand health_check --update-hash --jobs vault
-maand deploy --jobs vault
 ```
 
 **Force redeploy** without workspace or hash changes:

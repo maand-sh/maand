@@ -10,7 +10,7 @@ Official site: [maand.sh/latest](https://maand.sh/latest)
 
 | Tier | Purpose | Start here |
 |------|---------|------------|
-| **Start** | Mental model and first deploy | [start/README.md](./start/README.md) |
+| **Start** | Guided tour (Linux/K8s background → every feature) and first deploy | [start/README.md](./start/README.md) |
 | **Guides** | Task-oriented how-tos | [guides/README.md](./guides/README.md) |
 | **Reference** | Schemas, CLI, KV, configuration | [reference/README.md](./reference/README.md) |
 
@@ -54,7 +54,9 @@ maand init → edit workspace → maand build → maand deploy → health_check 
 
 | Goal | Path |
 |------|------|
-| First deploy | [quickstart](./start/quickstart.md) → [concepts](./start/concepts.md) |
+| Learn maand from scratch | [start/README.md](./start/README.md) (chapters 1–12) → [quickstart](./start/quickstart.md) |
+| First deploy only | [quickstart](./start/quickstart.md) |
+| Glossary | [concepts](./start/concepts.md) |
 | Memory / CPU / environments | [resources-and-placement](./reference/resources-and-placement.md) → [configuration](./reference/configuration.md) |
 | Rolling cluster upgrade | [rolling-deploy](./guides/rolling-deploy.md) → [manifest](./reference/manifest.md) |
 | Multi-job deploy order | [deployment-sequence](./reference/deployment-sequence.md) → [deploy](./reference/cli/deploy.md) |

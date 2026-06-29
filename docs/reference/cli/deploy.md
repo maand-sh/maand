@@ -94,7 +94,7 @@ A job is considered only if it appears in the sequence and passes the **`--jobs`
 | `previous_hash == current_hash` (promoted after success) | **Skipped** — log: `deploy: skip job "..." (already promoted on all allocations)`. |
 | **`--force`** | Stage and **restart** all active allocations (except new ones, which still **start**). |
 
-After a successful deploy, **`promoteAllocationHash`** sets `previous_hash = current_hash` and **`hash.current_version = allocations.new_version`**. A re-run of `maand deploy` therefore **continues from failed jobs only** (partial deploy resume). Use **`--force`** to roll the same content again without a workspace change (for example after **`maand health_check --update-hash`**).
+After a successful deploy, **`promoteAllocationHash`** sets `previous_hash = current_hash` and **`hash.current_version = allocations.new_version`**. A re-run of `maand deploy` therefore **continues from failed jobs only** (partial deploy resume). Use **`--force`** to roll the same content again without a workspace change.
 
 ---
 
@@ -418,7 +418,7 @@ Those writes commit when deploy commits (including **partial deploy** — succes
    - Job A: **skipped** (already promoted).
    - Job B: staged and deployed again.
 
-Use **`maand deploy --force`** to redeploy promoted jobs without a workspace change (pairs with **`maand health_check --update-hash`** for command-based health).
+Use **`maand deploy --force`** to redeploy promoted jobs without a workspace change.
 
 ---
 

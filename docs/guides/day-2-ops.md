@@ -1,6 +1,6 @@
 # Tutorial: Day-2 operations
 
-After [getting started](../start/quickstart.md), use these patterns for everyday cluster operations. Assumes a working bucket with deployed jobs.
+After the [guided tour](../start/README.md) or [quickstart](../start/quickstart.md), use these patterns for everyday cluster operations. Assumes a working bucket with deployed jobs.
 
 ---
 
@@ -96,10 +96,9 @@ maand health_check
 maand health_check --jobs api --wait --verbose
 ```
 
-Mark unhealthy command-based allocations and redeploy:
+Redeploy after fixing health:
 
 ```bash
-maand health_check --update-hash --jobs api
 maand deploy --jobs api
 ```
 

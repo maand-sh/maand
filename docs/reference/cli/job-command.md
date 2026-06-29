@@ -95,7 +95,7 @@ Implement custom rollout with `NEW_ALLOCATIONS` / `UPDATED_ALLOCATIONS` and **`r
 
 ### `health_check`
 
-See [health-check.md](health-check.md). KV writes rejected. **`maand health_check --update-hash`** can mark failed allocations for redeploy.
+See [health-check.md](health-check.md). KV writes rejected.
 
 ### `after_allocation_started` / `after_allocation_stopped`
 

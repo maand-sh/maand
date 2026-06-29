@@ -43,7 +43,7 @@ func TestHealthCheckSkipsJobWithoutConfig(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rt.Stop() })
 
-	_, err = HealthCheck(tx, rt, false, false, "plain", false)
+	err = HealthCheck(tx, rt, false, "plain", false)
 	require.NoError(t, err)
 }
 

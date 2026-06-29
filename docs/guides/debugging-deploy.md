@@ -72,7 +72,7 @@ maand cat deployments --workers 10.0.0.1
 | `new` | Never promoted | First deploy → **start** |
 | `restart` | Staged content or version differs from promoted | Lifecycle on deploy — **`make restart`** (default **`always`**), **`make reload`** (**`reload`** policy), or **sync only** (**`never`** / **`--sync-only`**) |
 | `promoted` | In sync | Skipped unless **`--force`** |
-| `health_failed` | Health check marked allocation (`--update-hash`) | Fix health, then **`deploy`** or **`deploy --force`** |
+| `health_failed` | Legacy hash state from prior health-check marking | Fix health, then **`deploy`** or **`deploy --force`** |
 | `disabled` | Allocation disabled; stopped; catalog current | Re-enable via [disable and drain](disable-and-drain.md) |
 | `disabled_restart` | Disabled; catalog has pending content/version | Deploy updates plan; still no restart until active |
 | `removed` | Soft-deleted allocation | **`deploy`** then **`gc`** |
@@ -149,7 +149,7 @@ maand health_check --jobs api --wait --verbose
 | Cause | Fix |
 |-------|-----|
 | Probe not ready yet | Increase wait; fix startup order / **`deployment_seq`** |
-| Command health failed | Fix script; **`maand health_check --update-hash`** then **`deploy`** |
+| Command health failed | Fix script; then **`deploy`** or **`deploy --force`** |
 | Wrong port in manifest | **`maand cat job_ports --jobs api`** |
 
 ### `worker.json` / `update_seq` mismatch (`maand job` only)
@@ -290,6 +290,6 @@ Full reference (formats, terminal output, flags): [logging](../reference/observa
 - [Applying changes on workers](../reference/cli/deploy.md#applying-changes-on-workers) — **`restart_policy`**, **`restart_globs`**, **`--sync-only`**, dry-run actions
 - [disable and drain](disable-and-drain.md) — disable and re-enable
 - [rolling-deploy](rolling-deploy.md) — **`update_parallel_count`** and reboot patterns
-- [health-check.md](../reference/cli/health-check.md) — **`--update-hash`**
+- [health-check.md](../reference/cli/health-check.md)
 - [job-command-api.md](../reference/job-command-api.md) — hook debugging
 - [day-2-ops.md](day-2-ops.md) — operations checklist

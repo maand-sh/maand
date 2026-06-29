@@ -143,7 +143,7 @@ maand deploy
 
 ### Force redeploy (same tree)
 
-After **`maand health_check --update-hash`** or operator-initiated reroll:
+After operator-initiated reroll:
 
 ```bash
 maand deploy --force --jobs api

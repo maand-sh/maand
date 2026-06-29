@@ -1,5 +1,7 @@
 # Core concepts
 
+> **First time here?** Read the [guided tour](./README.md) (chapters 1–12) for a slower introduction. This page is a consolidated reference for bucket, worker, job, and allocation.
+
 Maand is an **agentless** workload orchestrator. You run the **`maand` CLI** on a **host machine** (laptop, CI runner, or bastion). That host holds the **bucket** — local files and SQLite state. Workers are ordinary Linux hosts reached over **SSH**; nothing is installed on them except what you deploy (job files, `runner.py`, and runtime directories).
 
 ```text

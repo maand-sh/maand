@@ -1,12 +1,14 @@
 # Capabilities overview
 
+> **Learning maand?** Start with the [guided tour](./README.md). Use this page as a **feature checklist** once you know the basics.
+
 Maand is an **agentless workload orchestrator** for Linux clusters — more than a simple deploy script, but narrower in scope than Kubernetes or Nomad.
 
 A **CLI host** (laptop, CI runner, or bastion) holds a local **bucket**: SQLite catalog, encrypted KV, secrets, and staged files. **Workers** are ordinary Linux hosts reached over **SSH** and **rsync**. Nothing maand-specific is installed on workers except what you deploy (`runner.py`, job files, Makefiles).
 
 That design fits **small-to-medium fleets** where you want declarative jobs, rolling deploys, and ops hooks without running a separate control-plane cluster.
 
-Related: [concepts.md](concepts.md) · [commands.md](../reference/cli/commands.md) · [configuration.md](../reference/configuration.md) · [getting started](quickstart.md)
+Related: [README.md](README.md) (guided tour) · [concepts.md](concepts.md) · [commands.md](../reference/cli/commands.md) · [configuration.md](../reference/configuration.md) · [quickstart.md](quickstart.md)
 
 ---
 
@@ -21,7 +23,7 @@ Related: [concepts.md](concepts.md) · [commands.md](../reference/cli/commands.m
 | **Rolling upgrades** | `deploy_parallel_count` / `update_parallel_count`, health gates, `deploy_order`; semver version tracking — [guides/rolling-deploy.md](../guides/rolling-deploy.md) |
 | **Dependencies** | Cross-job **command demands** with version constraints; build computes **`deployment_seq`** and detects circular demands — see [deployment-sequence.md](../reference/deployment-sequence.md) |
 | **Job commands & runtime API** | Python/Bun hooks on the CLI host: `post_build`, `pre_deploy`, `post_deploy`, `job_control`, `health_check`, `after_allocation_started`, `after_allocation_stopped`, **`cli`** — [reference/cli/job-command.md](../reference/cli/job-command.md) |
-| **Health** | Built-in TCP/HTTP/SSH manifest probes and/or custom **`health_check`** commands (probes first); **`--wait`**, **`--update-hash`** to trigger redeploy — see [health-check.md](../reference/cli/health-check.md) |
+| **Health** | Built-in TCP/HTTP/SSH manifest probes and/or custom **`health_check`** commands (probes first); **`--wait`** — see [health-check.md](../reference/cli/health-check.md) |
 | **Prometheus** | Per-job optional **`_prometheus/`** (scrape, alerts, runbooks, dashboards); build validates and stores in `job_files`; scrape configs go to KV — see [prometheus.md](../guides/prometheus.md) |
 | **Maintenance (disable)** | **`disabled.json`** drains workers, jobs, or single allocations **without** removing workspace or catalog rows. Disabled allocations still get build/KV/certs and deploy staging; maand **never starts** them — see [disable and drain](../guides/disable-and-drain.md) |
 | **Day-2 ops** | `maand job start\|stop\|restart\|run\|status`; `maand worker_facts` for worker capacity; `maand run_command` for ad-hoc SSH; soft-remove via workspace edits + **GC** for purged rows and disk — see [job.md](../reference/cli/job.md), [worker-facts.md](../reference/cli/worker-facts.md), [gc.md](../reference/cli/gc.md), [day-2-ops.md](../guides/day-2-ops.md) |

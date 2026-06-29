@@ -157,9 +157,10 @@ func jobAssignedPort(t *testing.T, job, portName string) string {
 }
 
 func nodeExporterMakefile() string {
-	return `.PHONY: start stop restart test
+	return `.PHONY: start stop restart test logs
 
 COMPOSE := docker compose -f docker-compose.yml
+LOG_TAIL ?= 100
 
 include config.env
 export
@@ -171,6 +172,9 @@ stop:
 	$(COMPOSE) down --remove-orphans
 
 restart: stop start
+
+logs:
+	$(COMPOSE) logs --tail=$(LOG_TAIL) --no-color
 
 test:
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
@@ -182,9 +186,10 @@ test:
 }
 
 func prometheusMakefile() string {
-	return `.PHONY: start stop restart test
+	return `.PHONY: start stop restart test logs
 
 COMPOSE := docker compose -f docker-compose.yml
+LOG_TAIL ?= 100
 
 include config.env
 export
@@ -196,6 +201,9 @@ stop:
 	$(COMPOSE) down --remove-orphans
 
 restart: stop start
+
+logs:
+	$(COMPOSE) logs --tail=$(LOG_TAIL) --no-color
 
 test:
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \

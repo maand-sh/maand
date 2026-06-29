@@ -1,5 +1,7 @@
 # Tutorial: Getting started
 
+Hands-on capstone for the [guided tour](./README.md). For concepts first, read [01 — Introduction](./01-introduction.md) through [12 — Day-2 operations](./12-day-2-operations.md).
+
 This walkthrough creates a maand bucket, registers two workers, adds a simple job, builds the catalog, and deploys it. You need:
 
 - **CLI host:** `maand` binary built with `CGO_ENABLED=1`, plus `bash`, `ssh`, `rsync`, `python3`
@@ -99,7 +101,9 @@ This creates `workspace/jobs/hello/` with `manifest.json` and a minimal **Makefi
 
 ```bash
 cat > workspace/jobs/hello/Makefile <<'EOF'
-.PHONY: start stop restart status
+.PHONY: start stop restart status logs
+
+LOG_TAIL ?= 50
 
 dir:
 	mkdir -p ./data ./logs ./bin
@@ -115,6 +119,9 @@ restart: stop start
 
 status:
 	@cat ./data/status 2>/dev/null || echo not running
+
+logs:
+	@tail -n $(LOG_TAIL) ./logs/start.log 2>/dev/null || echo "no logs yet"
 EOF
 ```
 
@@ -206,6 +213,7 @@ Check remote state with **`maand run_command`**:
 ```bash
 maand run_command "cat /opt/worker/*/jobs/hello/data/status"
 maand run_command "hostname && cat /opt/worker/*/jobs/hello/data/status"
+maand run_command "make -s -C jobs/hello logs" --workers 10.0.0.1
 ```
 
 Or SSH manually:
@@ -256,6 +264,7 @@ Bump **`version`** in `manifest.json` when you want templates, KV, and deploy to
 
 ## Next steps
 
+- [Learn maand index](./README.md) — full guided tour (chapters 1–12)
 - [Day-2 operations](../guides/day-2-ops.md) — disable allocations, health checks, GC, manual job control
 - [Job commands tutorial](../guides/job-commands-tutorial.md) — Python/Bun hooks and KV
 - [job-command-api.md](../reference/job-command-api.md) — runtime API reference

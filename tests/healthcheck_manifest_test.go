@@ -91,7 +91,7 @@ func TestManifestTCPHealthCheck(t *testing.T) {
 	tx, rt, cleanup := openHealthCheckSession(t)
 	defer cleanup()
 
-	_, err = healthcheck.HealthCheck(tx, rt, false, false, "app", false)
+	err = healthcheck.HealthCheck(tx, rt, false, "app", false)
 	require.NoError(t, err)
 }
 
@@ -131,7 +131,7 @@ func TestBuildAllowsManifestAndCommandHealthCheck(t *testing.T) {
 	tx, rt, cleanup := openHealthCheckSession(t)
 	defer cleanup()
 
-	_, err = healthcheck.HealthCheck(tx, rt, false, false, "app", false)
+	err = healthcheck.HealthCheck(tx, rt, false, "app", false)
 	require.NoError(t, err)
 }
 
@@ -208,7 +208,7 @@ func TestManifestHTTPHealthCheck(t *testing.T) {
 	tx, rt, cleanup := openHealthCheckSession(t)
 	defer cleanup()
 
-	_, err = healthcheck.HealthCheck(tx, rt, false, false, "app", false)
+	err = healthcheck.HealthCheck(tx, rt, false, "app", false)
 	require.NoError(t, err)
 }
 
@@ -221,7 +221,7 @@ func TestHealthCheckSkipsJobWithNoManifestOrCommands(t *testing.T) {
 	tx, rt, cleanup := openHealthCheckSession(t)
 	defer cleanup()
 
-	_, err := healthcheck.HealthCheck(tx, rt, false, false, "plain", false)
+	err := healthcheck.HealthCheck(tx, rt, false, "plain", false)
 	require.NoError(t, err)
 }
 

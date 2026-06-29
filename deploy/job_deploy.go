@@ -82,7 +82,7 @@ func deployJobWithCommands(tx *sql.Tx, rt *bucket.Runtime, job string, commands 
 		}
 	}
 
-	if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
+	if err := healthcheck.HealthCheck(tx, rt, true, job, true); err != nil {
 		return &JobError{Job: job, Err: err}
 	}
 	return finalizeJobDeploy(tx, rt, job)

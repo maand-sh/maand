@@ -294,7 +294,7 @@ func reconcileRemovedAndDisabledAllocations(
 			return err
 		}
 		if activeCount > 0 {
-			if _, err := healthcheck.HealthCheck(tx, rt, true, false, job, true); err != nil {
+			if err := healthcheck.HealthCheck(tx, rt, true, job, true); err != nil {
 				return err
 			}
 		}
