@@ -50,7 +50,7 @@ func (ws *DefaultWorkspace) GetWorkers() ([]Worker, error) {
 		return nil, err
 	}
 
-	var rawWorkers []workerJSON
+	var rawWorkers []WorkerRecord
 	if err = json.Unmarshal(data, &rawWorkers); err != nil {
 		return nil, fmt.Errorf("%w: %w", bucket.ErrInvalidWorkerJSON, err)
 	}

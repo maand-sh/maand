@@ -6,17 +6,6 @@ package workspace
 
 import "strings"
 
-// workerJSON is the on-disk workers.json shape (position omitted => array index).
-type workerJSON struct {
-	Host     string            `json:"host"`
-	Hostname string            `json:"hostname,omitempty"`
-	Labels   []string          `json:"labels"`
-	Memory   string            `json:"memory"`
-	CPU      string            `json:"cpu"`
-	Tags     map[string]string `json:"tags"`
-	Position *int              `json:"position"`
-}
-
 // Worker describes a cluster node from workers.json.
 type Worker struct {
 	Host     string            `json:"host"`

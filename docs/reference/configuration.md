@@ -163,6 +163,8 @@ Full guide: [disable and drain](../guides/disable-and-drain.md).
 
 Worker catalog — hosts, labels, capacity, tags. See [concepts.md](../start/concepts.md#worker) and [build.md](cli/build.md#workspaceworkersjson).
 
+To fill **`memory`** and **`cpu`** from live hosts, run **`maand worker_facts`** — see [worker-facts.md](cli/worker-facts.md).
+
 ---
 
 ## `workspace/jobs/<job>/manifest.json`

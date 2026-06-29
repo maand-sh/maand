@@ -84,12 +84,13 @@ Workers are declared in **`workspace/workers.json`**:
 | Event | What happens |
 |-------|----------------|
 | Add host to `workers.json` + **build** | New row in `worker` table |
+| **`maand worker_facts`** | Probe host over SSH; update **`memory`** / **`cpu`** in `workers.json` (then **`maand build`** to sync catalog) |
 | **Deploy** | Creates `/opt/worker/<bucket_id>/`, syncs jobs |
 | Remove host from `workers.json` + **build** | Allocations marked **`removed`**; worker row dropped from catalog |
 | **Deploy** after removal | Stop job; remove deployed files; keep `data/` and `logs/`; clear allocation hash on deploy (redeploy starts fresh, reuses data/logs) |
 | **GC** | Delete worker `data/`/`logs/`/`bin/`; purge removed allocation rows and KV |
 
-Workers do not run a maand agent. Deploy and `maand job` invoke **`runner.py`** over SSH; `maand run_command` runs arbitrary shell commands over SSH.
+Workers do not run a maand agent. Deploy and `maand job` invoke **`runner.py`** over SSH; **`maand worker_facts`** probes capacity into `workers.json`; **`maand run_command`** runs arbitrary shell commands over SSH.
 
 ---
 
@@ -250,6 +251,7 @@ Details in [cli/build.md](../reference/cli/build.md) and [cli/deploy.md](../refe
 | **Makefile** (`start`/`stop`/`restart`/`reload`) | Worker | Deploy, `maand job` | Process lifecycle |
 | **Job commands** (`command_*`) | CLI host | build/deploy/CLI/health_check | Migrations, KV, hooks |
 | **`maand run_command`** | Worker (raw shell) | Manual | Ops, debugging |
+| **`maand worker_facts`** | Worker (probe) | Manual | Fill `memory` / `cpu` in `workers.json` |
 
 Job commands talk to maand’s **runtime HTTP API** and **KV store** on the CLI host. See [cli/job-command.md](../reference/cli/job-command.md) and [job-command-api.md](../reference/job-command-api.md).
 
@@ -269,6 +271,7 @@ edit workspace/workers.json, workspace/jobs/*
         ├── maand health_check
         ├── maand job restart <job>
         ├── maand jobcommand <cmd> [job]
+        ├── maand worker_facts   # optional: refresh worker capacity
         ├── maand run_command "…"
         └── maand gc     ← after removals
 ```

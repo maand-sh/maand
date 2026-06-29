@@ -180,6 +180,15 @@ worker_ip 10.0.0.1, available memory is 4096.00 MB, required memory is 5120.00 M
 
 Fix by raising worker capacity, lowering a job reservation in `bucket.jobs.conf`, or moving a job to another worker (selectors).
 
+To discover capacity from live hosts:
+
+```bash
+maand worker_facts --dry-run
+maand worker_facts --build
+```
+
+See [worker-facts.md](cli/worker-facts.md).
+
 ---
 
 ## Selectors for different environments

@@ -60,9 +60,12 @@ The same commands run automatically on events: `post_build`, `pre_deploy`, `post
 
 | Command | Summary | Details |
 |---------|---------|---------|
+| `maand worker_facts` | Probe workers and update CPU/memory in `workers.json` | [worker-facts.md](worker-facts.md) |
 | `maand run_command "<shell>"` | Run a command on workers over SSH | [run-command.md](run-command.md) |
 
-Flags: `--workers`, `--labels`, `--concurrency`, `--health_check`.
+Flags for **`worker_facts`**: `--workers`, `--labels`, `--concurrency`, `--dry-run`, `--build`.
+
+Flags for **`run_command`**: `--workers`, `--labels`, `--concurrency`, `--health_check`.
 
 ---
 
@@ -184,6 +187,19 @@ See [run-command.md](run-command.md).
 
 ---
 
+## `maand worker_facts`
+
+```bash
+maand worker_facts [-w ip,...] [-l label,...] [-c N] [--dry-run] [--build]
+```
+
+**Host prerequisites:** `bash`, `ssh`.  
+**Worker prerequisites:** Linux, `bash`, `timeout`, optional `sudo`.
+
+See [worker-facts.md](worker-facts.md).
+
+---
+
 ## `maand gc`
 
 ```bash
@@ -264,7 +280,7 @@ maand init
 maand build
 maand deploy              # or: maand deploy -b
 maand health_check        # optional
-# day-2: maand job *, maand job_command, maand run_command, maand gc
+# day-2: maand job *, maand job_command, maand worker_facts, maand run_command, maand gc
 ```
 
 Operations: [disable and drain](../../guides/disable-and-drain.md), [rolling-deploy](../../guides/rolling-deploy.md), [debugging-deploy.md](../../guides/debugging-deploy.md).

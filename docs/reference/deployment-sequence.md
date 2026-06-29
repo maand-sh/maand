@@ -120,6 +120,7 @@ After the main transaction commits, **`post_build`** hooks run in **sequence ord
 | `maand job_command` (cli) | Selected job only |
 | `maand health_check` | Per `--jobs` flag |
 | `maand run_command` | Unrelated |
+| `maand worker_facts` | Updates `workspace/workers.json` only (no DB until **`maand build`**) |
 
 ---
 

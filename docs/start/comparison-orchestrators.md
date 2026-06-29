@@ -174,7 +174,7 @@ deploy_parallel_count: 1  (or any N)
 
 ### maand
 - **Typical**: 10–100 workers, 1–10 services per worker.
-- **Scaling model**: add workers to `workers.json`, rebuild, redeploy affected jobs.
+- **Scaling model**: add workers to `workers.json`, run **`maand worker_facts`** (optional) to fill capacity, rebuild, redeploy affected jobs.
 - **Overhead**: SQLite catalog, per-worker SSH — starts showing strain above 100s of nodes.
 - **Best for**: manageable clusters (small to mid-size deployments, on-prem or co-lo).
 

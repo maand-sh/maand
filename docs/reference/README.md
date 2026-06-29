@@ -39,5 +39,6 @@ Canonical technical documentation. Guides link here; avoid duplicating full sche
 | [cli/job-command.md](./cli/job-command.md) | Hook events, `maand jobcommand` |
 | [cli/job.md](./cli/job.md) | `maand job` |
 | [cli/run-command.md](./cli/run-command.md) | `maand run_command` |
+| [cli/worker-facts.md](./cli/worker-facts.md) | `maand worker_facts` |
 | [cli/gc.md](./cli/gc.md) | `maand gc` |
 | [cli/info.md](./cli/info.md) | `maand info`, `maand cat` |

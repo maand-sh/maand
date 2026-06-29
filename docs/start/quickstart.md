@@ -77,6 +77,14 @@ ssh -i secrets/worker.key agent@10.0.0.1 echo ok
 ssh -i secrets/worker.key agent@10.0.0.2 echo ok
 ```
 
+Alternatively, add hosts with **`host`** and **`labels`** only, then probe capacity:
+
+```bash
+maand worker_facts --build
+```
+
+See [worker-facts.md](../reference/cli/worker-facts.md).
+
 ---
 
 ## Step 3 — Create a job

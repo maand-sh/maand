@@ -46,9 +46,11 @@ Array of workers (hosts are SSH targets from the maand CLI host):
 
 - **`host`**: Worker IP or hostname (required, unique).
 - **`labels`**: Used for job **selectors** (label matching). The label `worker` is always added automatically.
-- **`memory` / `cpu`**: Parsed to MB / MHz; stored on the worker row and exposed in KV.
+- **`memory` / `cpu`**: Parsed to MB / MHz; stored on the worker row and exposed in KV. Set manually or with **`maand worker_facts`** — [worker-facts.md](worker-facts.md).
 - **`tags`**: Arbitrary key/value strings → namespace `maand/worker/<ip>/tags/<key>`.
 - **`position`**: Ordering field (assigned from array index on read).
+
+Optional fields are omitted from the file when unset (no `null` values).
 
 Workers removed from `workers.json` are marked **`removed`** on allocations (not deleted until deploy/GC).
 

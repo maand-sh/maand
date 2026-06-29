@@ -141,6 +141,15 @@ Console pages: runbooks at `/consoles/runbooks/...`, dashboards at `/consoles/da
 
 ## Ad-hoc commands on workers
 
+**`maand worker_facts`** probes host memory and CPU into **`workspace/workers.json`**:
+
+```bash
+maand worker_facts --dry-run
+maand worker_facts --build
+```
+
+See [worker-facts.md](../reference/cli/worker-facts.md).
+
 **`maand run_command`** runs shell on workers (not job workspaces):
 
 ```bash
