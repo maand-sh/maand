@@ -111,7 +111,6 @@ A version bump can trigger rollout even when file hash is unchanged. Makefile ge
 ```bash
 maand deploy --dry-run
 maand cat deployments
-maand logs show --job api --format human
 ```
 
 Guide: [debugging-deploy.md](../guides/debugging-deploy.md).

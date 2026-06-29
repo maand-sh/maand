@@ -76,7 +76,7 @@ Reference: [job-command-api.md](../reference/job-command-api.md).
 |---|---------|---------|
 | **Makefile** | Worker | Process start/stop, compose, systemd |
 | **Job command** | CLI host | KV, secrets, migrations, custom rollout logic, SSH orchestration |
-| **`maand run_command`** | Worker | Ad-hoc ops, `make logs`, debugging |
+| **`maand run_command`** | Worker | Ad-hoc ops, debugging |
 
 Rule of thumb: if it must mutate **catalog/KV** or coordinate **multiple allocations**, use a job command. If it only touches **local process files** on one host, use Makefile.
 
@@ -97,4 +97,4 @@ CLI: [job-command.md](../reference/cli/job-command.md).
 
 ## Next
 
-[11 — Health, monitoring, and logs](./11-health-monitoring-and-logs.md).
+[11 — Health and monitoring](./11-health-and-monitoring.md).

@@ -76,8 +76,7 @@ Reference: [worker-facts.md](../reference/cli/worker-facts.md).
 └── jobs/<job>/       # synced job tree
     ├── Makefile
     ├── config        # rendered from .tpl
-    ├── data/         # persistent (not rsync'd over)
-    └── logs/         # persistent app logs (not rsync'd over)
+    └── data/         # persistent runtime state (not rsync'd over)
 ```
 
 `update_seq` in `worker.json` increments on each deploy. `maand job` checks it so manual control doesn't run against a stale tree.

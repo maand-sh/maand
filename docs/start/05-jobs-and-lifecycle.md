@@ -32,7 +32,6 @@ Default deploy expects these targets on the **worker** (after rsync):
 | **`restart`** | Upgrade when `restart_policy: always`, or when `restart_globs` match |
 | **`reload`** | Upgrade when `restart_policy: reload` and globs don't force restart |
 | **`status`** | `maand job status` (optional but useful) |
-| **`logs`** | Not called by maand — for operators via `run_command` (below) |
 
 During lifecycle targets, the Makefile receives:
 
@@ -41,11 +40,13 @@ During lifecycle targets, the Makefile receives:
 
 Use them for migrations or version-specific scripts.
 
+You can add other targets (`test`, `backup`, …) for `maand job run` or `maand run_command` — maand only invokes the lifecycle set above during deploy.
+
 ---
 
 ## Docker Compose or systemd behind Make
 
-Maand does not start containers itself. Typical patterns:
+Maand does not start containers or units itself. Your **Makefile** wraps them:
 
 **Compose:**
 
@@ -59,9 +60,6 @@ stop:
 	$(COMPOSE) down
 
 restart: stop start
-
-logs:
-	$(COMPOSE) logs --tail=100 --no-color
 ```
 
 **systemd:**
@@ -75,26 +73,10 @@ start:
 stop:
 	sudo systemctl stop $(UNIT)
 
-logs:
-	journalctl -u $(UNIT) -n 100 --no-pager
+restart: stop start
 ```
 
-Deploy runs `make start` / `restart` / `reload` over SSH. Container stdout goes to Docker or journald unless you also write files under `./logs/`.
-
----
-
-## Application logs (snapshot)
-
-Add a **`logs`** target that prints recent lines and **exits** (no `-f` follow). Fetch via `run_command`:
-
-```bash
-maand run_command "make -s -C jobs/api logs" --workers 10.0.0.1
-maand run_command "make -s -C jobs/api logs LOG_TAIL=500" --workers 10.0.0.1
-```
-
-Working directory on the worker is `/opt/worker/<bucket_id>/`, so `jobs/api` resolves correctly.
-
-For **live follow**, use `run_command` with a follow command or SSH directly — `run_command` uses a remote timeout suited for short commands. See [11-health-monitoring-and-logs.md](./11-health-monitoring-and-logs.md).
+Deploy runs `make start` / `restart` / `reload` over SSH on each allocation.
 
 ---
 
@@ -132,7 +114,7 @@ Build rejects runtime dirs inside the job workspace:
 
 - `data/`, `logs/`, `bin/`
 
-Those are created on workers by your Makefile or application.
+Those are created on workers by your Makefile or application at runtime (and are excluded from rsync on upgrade).
 
 ---
 

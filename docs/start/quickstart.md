@@ -101,9 +101,7 @@ This creates `workspace/jobs/hello/` with `manifest.json` and a minimal **Makefi
 
 ```bash
 cat > workspace/jobs/hello/Makefile <<'EOF'
-.PHONY: start stop restart status logs
-
-LOG_TAIL ?= 50
+.PHONY: start stop restart status
 
 dir:
 	mkdir -p ./data ./logs ./bin
@@ -119,9 +117,6 @@ restart: stop start
 
 status:
 	@cat ./data/status 2>/dev/null || echo not running
-
-logs:
-	@tail -n $(LOG_TAIL) ./logs/start.log 2>/dev/null || echo "no logs yet"
 EOF
 ```
 
@@ -213,7 +208,6 @@ Check remote state with **`maand run_command`**:
 ```bash
 maand run_command "cat /opt/worker/*/jobs/hello/data/status"
 maand run_command "hostname && cat /opt/worker/*/jobs/hello/data/status"
-maand run_command "make -s -C jobs/hello logs" --workers 10.0.0.1
 ```
 
 Or SSH manually:

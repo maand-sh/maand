@@ -13,7 +13,7 @@ If you have operated a small cluster with shell scripts, Ansible, and Makefiles,
 │  workspace/     ← you edit (git)                            │
 │  data/maand.db  ← catalog (maand build)                     │
 │  secrets/       ← SSH key, CA, KV encryption                │
-│  logs/          ← maand's own command logs                  │
+│  tmp/           ← deploy staging                            │
 └───────────────────────────┬─────────────────────────────────┘
                             │  deploy: rsync + ssh
         ┌───────────────────┼───────────────────┐
@@ -25,7 +25,7 @@ If you have operated a small cluster with shell scripts, Ansible, and Makefiles,
 | Location | What happens there |
 |----------|-------------------|
 | **CLI host** | `maand build`, `maand deploy`, job-command scripts (Python/Bun), SQLite catalog |
-| **Workers** | Your app files, Makefile targets (`start`/`stop`/…), `data/` and `logs/` at runtime |
+| **Workers** | Your app files, Makefile targets (`start`/`stop`/…), runtime `data/` on disk |
 
 Maand does **not** replace your process supervisor or container runtime. You express lifecycle in the job **Makefile** (often calling `docker compose` or `systemctl`). Maand calls those targets during deploy and via `maand job`.
 
@@ -75,7 +75,7 @@ maand cat allocations
 - **Ordered multi-job deploys** — job B waits for job A via manifest **demands**
 - **Rolling restarts** with batch size and optional health gates
 - **Drain / disable** a node or allocation without deleting workspace definitions
-- **Inspectable state** — dry-run deploy, `maand cat deployments`, structured logs
+- **Inspectable state** — dry-run deploy, `maand cat deployments`
 
 ---
 
@@ -86,7 +86,6 @@ maand cat allocations
 | Highly available control plane | One bucket directory on one CLI host is the source of truth |
 | A container scheduler | You bring Docker/systemd via Makefile |
 | Dynamic bin-packing | Placement is **label matching** + resource bounds |
-| A log aggregation platform | App logs live on workers; maand logs its own commands |
 
 See [overview.md](./overview.md) for a full capability map and [comparison-orchestrators.md](./comparison-orchestrators.md) for Kubernetes/Nomad contrast.
 

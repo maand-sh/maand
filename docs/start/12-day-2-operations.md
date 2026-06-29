@@ -17,7 +17,6 @@ maand job start api --allocations 10.0.0.2
 maand job restart api --health_check
 
 maand job run api --target reload
-maand job run api --target logs    # if Makefile defines logs
 ```
 
 These invoke **`runner.py`** → **`make <target>`** on workers over SSH.
@@ -31,7 +30,6 @@ Reference: [job.md](../reference/cli/job.md).
 ```bash
 maand run_command "uptime"
 maand run_command "df -h /opt/worker" --workers 10.0.0.1
-maand run_command "make -s -C jobs/api logs" --workers 10.0.0.1
 maand run_command "docker ps" --labels web --concurrency 2
 ```
 
@@ -84,7 +82,7 @@ Worker OS reboot: [worker-reboot.md](../guides/worker-reboot.md).
 | Symptom | Check |
 |---------|-------|
 | Deploy skipped everything | `maand deploy --dry-run`, `maand cat deployments` |
-| One allocation failed | `maand logs show --worker <ip> --job <job> --format human` |
+| One allocation failed | [debugging-deploy.md](../guides/debugging-deploy.md) |
 | SSH errors | `ssh -i secrets/worker.key user@host`, `maand.conf` |
 | Stale manual job cmd | `maand deploy` to refresh `update_seq` |
 | App unhealthy | `maand health_check --jobs <job> --verbose` |

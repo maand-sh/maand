@@ -13,7 +13,6 @@ You already have most prerequisites.
 | `ssh user@host` | Same — all worker access uses `secrets/<ssh_key>` and `ssh_user` from `maand.conf` |
 | Copy files with `rsync` | `maand deploy` rsyncs staged trees to `/opt/worker/<bucket_id>/` |
 | `make start` in a service directory | Job **Makefile**; deploy calls `start` / `restart` / `reload` on the worker |
-| `/var/log` or `journalctl` | App logs on worker under `jobs/<job>/logs/`; use job `make logs` + `maand run_command` (see [chapter 5](./05-jobs-and-lifecycle.md)) |
 | `cron` or manual ops scripts | `maand run_command` for ad-hoc remote shell; job commands for repeatable hooks |
 
 Maand adds a **catalog** (who runs what) and **orchestrated rollouts** on top of SSH + Make.
@@ -46,9 +45,6 @@ start:
 
 stop:
 	docker compose down
-
-logs:
-	docker compose logs --tail=100 --no-color
 ```
 
 Or systemd:
@@ -57,8 +53,8 @@ Or systemd:
 start:
 	sudo systemctl start myapp.service
 
-logs:
-	journalctl -u myapp.service -n 100 --no-pager
+stop:
+	sudo systemctl stop myapp.service
 ```
 
 Deploy runs `make start` once per new allocation and `make restart` or `make reload` on upgrades (depending on `restart_policy` in the manifest). See [05-jobs-and-lifecycle.md](./05-jobs-and-lifecycle.md).
